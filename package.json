@@ -1,0 +1,63 @@
+{
+  "name": "qualitative-text-anonymizer",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local Electron app for reviewing spaCy NER detections in pasted research text.",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && unset ELECTRON_RUN_AS_NODE && ELECTRON_START_URL=http://127.0.0.1:5173 electron .\"",
+    "build": "vite build",
+    "build:ner": ".venv/bin/pyinstaller --noconfirm --clean --onedir --name ner-service --distpath python-dist --workpath python-build --collect-all spacy --collect-all fr_core_news_sm scripts/ner.py",
+    "preview": "vite preview",
+    "pack": "npm run build:ner && npm run build && electron-builder --dir",
+    "dist": "npm run build:ner && npm run build && electron-builder",
+    "dist:mac": "npm run build:ner && npm run build && electron-builder --mac"
+  },
+  "dependencies": {
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "^9.2.1",
+    "electron": "^31.7.7",
+    "electron-builder": "^26.8.1",
+    "vite": "^5.4.21",
+    "wait-on": "^9.0.3"
+  },
+  "optionalDependencies": {
+    "@esbuild/darwin-x64": "^0.21.5",
+    "@rollup/rollup-darwin-x64": "^4.60.3"
+  },
+  "build": {
+    "appId": "com.frenchnlp.qualitative-text-anonymizer",
+    "productName": "Qualitative Text Anonymizer",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "scripts/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "scripts",
+        "to": "scripts"
+      },
+      {
+        "from": "python-dist/ner-service",
+        "to": "bin/ner-service"
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity"
+    }
+  }
+}

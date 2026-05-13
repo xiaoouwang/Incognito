@@ -1,0 +1,9 @@
+node_modules/
+dist/
+release/
+python-build/
+python-dist/
+*.spec
+.DS_Store
+__pycache__/
+.venv/
