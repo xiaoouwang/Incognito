@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+title: Text Data Anonymizer
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: Wang
+    given-names: Xiaoou
+    affiliation: "Maison des Sciences de l'Homme Sud-Est, Université Côte d'Azur"
+    email: xiaoou.wang@univ-cotedazur.fr
+repository-code: "https://github.com/xiaoouwang/anonymizer"
+url: "https://github.com/xiaoouwang/anonymizer"
+abstract: >-
+  Local-first desktop application for reviewing and anonymizing sensitive
+  entities in French qualitative research text, with interactive NER review,
+  batch processing, audit reports, and Label Studio export.
+version: 0.1.0
+date-released: 2026-06-23
+keywords:
+  - anonymization
+  - digital humanities
+  - named entity recognition
+  - qualitative research
+  - French
+  - spaCy
+  - CamemBERT
