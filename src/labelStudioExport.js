@@ -47,12 +47,13 @@ export function entityToLabelStudioResult(entity, index) {
   };
 }
 
-export function createLabelStudioTask({ text, entities, modelName, nerBackend }) {
+export function createLabelStudioTask({ text, entities, modelName, nerBackend, sourceFile = null }) {
   const orderedEntities = [...entities].sort((a, b) => a.start - b.start || a.end - b.end);
 
   return {
     data: {
       text,
+      ...(sourceFile ? { source_file: sourceFile } : {}),
       ner_backend: nerBackend || null,
       ner_model: modelName || null,
       exported_at: new Date().toISOString(),

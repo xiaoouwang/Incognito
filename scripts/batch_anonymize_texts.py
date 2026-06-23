@@ -206,7 +206,7 @@ def create_audit_report(
     return f"""# Anonymization Audit Report
 
 Generated: {generated}
-Tool: Qualitative Text Anonymizer batch processor
+Tool: Text Data Anonymizer batch processor
 Source file: {source_name}
 NER backend: {backend}
 NER engine: {model_name or "Not specified"}

@@ -5,4 +5,6 @@ contextBridge.exposeInMainWorld("nerApi", {
   exportLabelStudio: (payload) => ipcRenderer.invoke("export:labelStudio", payload),
   batchAnonymizeLabelStudio: () => ipcRenderer.invoke("batch:anonymizeLabelStudio"),
   batchProcessTextFolder: (options) => ipcRenderer.invoke("batch:processTextFolder", options),
+  loadTextFolder: () => ipcRenderer.invoke("batch:loadTextFolder"),
+  writeBatchOutputs: (payload) => ipcRenderer.invoke("batch:writeOutputs", payload),
 });

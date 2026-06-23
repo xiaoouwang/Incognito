@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { spawn } = require("node:child_process");
@@ -11,6 +11,45 @@ function log(message) {
   console.log(`[main] ${message}`);
 }
 
+function isAllowedAppUrl(url) {
+  try {
+    const parsed = new URL(url);
+
+    if (parsed.protocol === "file:") {
+      return true;
+    }
+
+    if (isDev && process.env.ELECTRON_START_URL) {
+      const devUrl = new URL(process.env.ELECTRON_START_URL);
+      return parsed.origin === devUrl.origin;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
+function openExternalLink(url) {
+  if (typeof url === "string" && /^https?:\/\//i.test(url)) {
+    void shell.openExternal(url);
+  }
+}
+
+function attachExternalLinkHandlers(webContents) {
+  webContents.setWindowOpenHandler(({ url }) => {
+    openExternalLink(url);
+    return { action: "deny" };
+  });
+
+  webContents.on("will-navigate", (event, url) => {
+    if (!isAllowedAppUrl(url)) {
+      event.preventDefault();
+      openExternalLink(url);
+    }
+  });
+}
+
 function createWindow() {
   log("Creating BrowserWindow");
   mainWindow = new BrowserWindow({
@@ -20,7 +59,7 @@ function createWindow() {
     minHeight: 700,
     show: true,
     backgroundColor: "#f5f1e8",
-    title: "Qualitative Text Anonymizer",
+    title: "Text Data Anonymizer",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -61,6 +100,8 @@ function createWindow() {
   mainWindow.webContents.on("render-process-gone", (_event, details) => {
     console.error(`Renderer process gone: ${details.reason}`);
   });
+
+  attachExternalLinkHandlers(mainWindow.webContents);
 
   const rendererPath = path.join(__dirname, "../dist/index.html");
   if (isDev) {
@@ -136,6 +177,106 @@ ipcMain.handle("batch:anonymizeLabelStudio", async () => {
     outputDialog.filePaths[0],
   );
 });
+
+const TEXT_EXTENSIONS = new Set([".txt", ".text"]);
+const OUTPUT_ARTIFACT_STEMS = ["-anonymized", "-report", "-label-studio"];
+const OUTPUT_ARTIFACT_NAMES = new Set([
+  "batch-summary.json",
+  "label-studio-ner-config.xml",
+]);
+
+function isSourceTextFile(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  if (!TEXT_EXTENSIONS.has(extension)) return false;
+  if (OUTPUT_ARTIFACT_NAMES.has(path.basename(filePath))) return false;
+
+  const stem = path.basename(filePath, extension);
+  return !OUTPUT_ARTIFACT_STEMS.some((suffix) => stem.endsWith(suffix));
+}
+
+function discoverTextFiles(folderPath) {
+  const entries = fs.readdirSync(folderPath, { withFileTypes: true });
+
+  return entries
+    .filter((entry) => entry.isFile() && isSourceTextFile(path.join(folderPath, entry.name)))
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right))
+    .map((name) => {
+      const filePath = path.join(folderPath, name);
+      const extension = path.extname(name);
+      const stem = path.basename(name, extension);
+      return {
+        path: filePath,
+        name,
+        stem,
+        text: fs.readFileSync(filePath, "utf8"),
+      };
+    });
+}
+
+ipcMain.handle("batch:loadTextFolder", async () => {
+  const folderDialog = await dialog.showOpenDialog({
+    title: "Select folder with text files",
+    properties: ["openDirectory"],
+  });
+
+  if (folderDialog.canceled || !folderDialog.filePaths[0]) {
+    return { canceled: true };
+  }
+
+  const folderPath = folderDialog.filePaths[0];
+  const files = discoverTextFiles(folderPath);
+
+  if (!files.length) {
+    throw new Error(
+      "No source text files found. Use plain .txt or .text files and exclude prior anonymized outputs.",
+    );
+  }
+
+  return {
+    canceled: false,
+    folderPath,
+    files,
+  };
+});
+
+ipcMain.handle(
+  "batch:writeOutputs",
+  async (_event, { sourcePath, anonymizedText, auditReport, labelStudioJson, labelStudioConfig }) => {
+    if (typeof sourcePath !== "string" || !sourcePath.trim()) {
+      throw new Error("Expected a source file path for batch output.");
+    }
+    if (typeof anonymizedText !== "string" || typeof auditReport !== "string") {
+      throw new Error("Expected anonymized text and audit report content.");
+    }
+    if (typeof labelStudioJson !== "string") {
+      throw new Error("Expected Label Studio JSON content.");
+    }
+
+    const extension = path.extname(sourcePath);
+    const stem = path.basename(sourcePath, extension);
+    const outputDir = path.dirname(sourcePath);
+    const anonymizedPath = path.join(outputDir, `${stem}-anonymized.txt`);
+    const reportPath = path.join(outputDir, `${stem}-report.md`);
+    const labelStudioPath = path.join(outputDir, `${stem}-label-studio.json`);
+    const labelStudioConfigPath = path.join(outputDir, "label-studio-ner-config.xml");
+
+    fs.writeFileSync(anonymizedPath, anonymizedText, "utf8");
+    fs.writeFileSync(reportPath, auditReport, "utf8");
+    fs.writeFileSync(labelStudioPath, labelStudioJson, "utf8");
+
+    if (typeof labelStudioConfig === "string" && !fs.existsSync(labelStudioConfigPath)) {
+      fs.writeFileSync(labelStudioConfigPath, labelStudioConfig, "utf8");
+    }
+
+    return {
+      anonymizedPath,
+      reportPath,
+      labelStudioPath,
+      labelStudioConfigPath: fs.existsSync(labelStudioConfigPath) ? labelStudioConfigPath : null,
+    };
+  },
+);
 
 ipcMain.handle("batch:processTextFolder", async (_event, options = {}) => {
   const { backend = "spacy-lg", categories = [] } = options;

@@ -1,0 +1,71 @@
+name: Release binaries
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macOS
+            dist: dist:mac
+          - os: windows-latest
+            label: Windows
+            dist: dist:win
+          - os: ubuntu-latest
+            label: Linux
+            dist: dist:linux
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          python -m venv .venv
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            source .venv/Scripts/activate
+          else
+            source .venv/bin/activate
+          fi
+          pip install -r requirements.txt
+          pip install -r requirements-camembert.txt
+          python -m spacy download fr_core_news_sm
+          python -m spacy download fr_core_news_lg
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build standalone release
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            source .venv/Scripts/activate
+          else
+            source .venv/bin/activate
+          fi
+          npm run ${{ matrix.dist }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: text-data-anonymizer-${{ matrix.label }}
+          path: release/*
+          if-no-files-found: error

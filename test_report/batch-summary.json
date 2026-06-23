@@ -1,0 +1,16 @@
+{
+  "input_dir": "/Users/xiwang/Documents/frenchnlp_cursor/test_report",
+  "output_dir": "/Users/xiwang/Documents/frenchnlp_cursor/test_report",
+  "json_files": 1,
+  "tasks_processed": 1,
+  "results": [
+    {
+      "source_file": "project-1-at-2026-06-23-13-08-83ccedc0.json",
+      "task_id": 1,
+      "report_path": "/Users/xiwang/Documents/frenchnlp_cursor/test_report/project-1-at-2026-06-23-13-08-83ccedc0-task-1-report.md",
+      "anonymized_path": "/Users/xiwang/Documents/frenchnlp_cursor/test_report/project-1-at-2026-06-23-13-08-83ccedc0-task-1-anonymized.txt",
+      "span_count": 12
+    }
+  ],
+  "errors": []
+}

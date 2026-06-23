@@ -117,6 +117,7 @@ def detect_entities(text, backend):
 
     entities = list(model_entities)
     entities.extend(detect_with_rules(text))
+    entities = split_entities_at_newlines(text, entities)
 
     return {
         "backend": backend,
@@ -242,6 +243,45 @@ def load_camembert_model():
         tokenizer=tokenizer,
         aggregation_strategy="simple",
     )
+
+
+def split_entities_at_newlines(text, entities):
+    expanded = []
+
+    for entity in entities:
+        start = entity["start"]
+        end = entity["end"]
+        if start >= end or end > len(text):
+            expanded.append(entity)
+            continue
+
+        chunk_start = start
+        split = False
+
+        for index in range(start, end):
+            if text[index] != "\n":
+                continue
+
+            split = True
+            piece = text[chunk_start:index]
+            if piece.strip():
+                expanded.append(
+                    {**entity, "start": chunk_start, "end": index, "text": piece}
+                )
+            chunk_start = index + 1
+
+        if not split:
+            expanded.append(entity)
+            continue
+
+        if chunk_start < end:
+            piece = text[chunk_start:end]
+            if piece.strip():
+                expanded.append(
+                    {**entity, "start": chunk_start, "end": end, "text": piece}
+                )
+
+    return expanded
 
 
 def merge_entities(entities):

@@ -1,0 +1,11 @@
+[PERSON_1], agronome de formation initiale, thèse en sciences sociales, travaille au gré d’un labo mixte [ORG_1] [LOCATION_1] qui est situé à [LOCATION_2] d'accord et dans le projet [ENTITY_1]. Recrutée en post doc sur le volet socio-économique pour travailler sur la question des modèles d'affaires territoriaux qu'on pourrait imaginer pour rendre les solutions qui seront développés.
+[PERSON_2]… 
+
+Interviewé : 7 ans chez [ORG_2], chef de projet en R&D (trichogramme, acarien) puis LMR, responsable de culture, dans les huiles essentielles, en partenariat avec les agriculteurs locaux. Garantir une traçabilité sans faille de l’apport en engrais, pesticides jusqu’aux huiles essentielles ([LOCATION_3] -> 1000 producteurs de roses, [LOCATION_4]). Très varié car producteurs très divers. Seul sur la partie agronomie.
+En [LOCATION_4], pas de grand soucis, culture pérenne (immortelle, rose, lavande, …) – full bio
+À [LOCATION_5], champ expérimental de rose sur 1 hectare (problème de puceron) -> petite partie de production (distillé – marché de niche pour une clientèle particulière) et serre expérimentale. Côté image qui est important. Full bio
+On travaille avec le domaine de [ORG_3], propre production de rose -> il distille toutes les roses. Ne sais pas s’ils sont en bio
+
+Quel est le rôle de votre entreprise dans la lutte contre les ravageurs ?
+
+Soutenabilité et développement durable. On ne travaille qu’avec des produits naturels. Objectif de réduire notre impact sur l’environnement. C’est un devoir car on nous demande une certaine quantité. On reste des acheteurs mais on travaille avec des producteurs en partenariat donc c’est notre devoir de faire le maximum pour réduire au maximum l’utilisation de pesticide/engrais. On va faire des bilans carbones de nos plateformes, des usines. À tous les niveaux, on essaye de réduire notre impact (réduire les engrais, moins consommer en usine, …).
