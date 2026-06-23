@@ -1,0 +1,372 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{xcolor}
+\usepackage{enumitem}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}
+
+\title{%
+  \textbf{Text Data Anonymizer:}\\[0.3em]
+  \large A Local-First, Cross-Platform Desktop Tool for\\
+  Interactive Anonymization of French Qualitative Text
+}
+
+\author{%
+  Xiaoou Wang\\
+  \textit{Maison des Sciences de l'Homme Sud-Est}\\
+  \textit{Universit\'{e} C\^{o}te d'Azur}\\
+  \texttt{xiaoou.wang@univ-cotedazur.fr}
+}
+
+\date{June 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Qualitative researchers in the social sciences and digital humanities routinely handle
+sensitive interview transcripts, field notes, and open-ended survey responses.
+Cloud-based anonymization services raise legitimate concerns about data sovereignty,
+reproducibility, and compliance with ethics protocols.
+We present \textbf{Text Data Anonymizer}, a cross-platform desktop application
+developed at the Maison des Sciences de l'Homme Sud-Est (MSHS Sud-Est) that supports
+a \emph{human-in-the-loop} workflow for detecting and replacing named entities in
+French text entirely on the user's machine.
+The tool combines a React/Electron front end with a persistent local Python NER
+service, offering three detection backends---spaCy (\texttt{fr\_core\_news\_sm},
+\texttt{fr\_core\_news\_lg}) and CamemBERT NER---plus rule-based detectors for
+emails, URLs, phone numbers, and dates.
+Researchers review highlighted spans interactively, toggle replacement at the
+category or entity-value level, and export anonymized text with stable placeholders
+(e.g.\ \texttt{[PERSON\_1]}), markdown audit reports, and Label Studio
+pre-annotations.
+A batch mode loads folders of \texttt{.txt} files, supports per-document review
+with optional automatic NER, and writes outputs live alongside source files.
+Standalone installers for macOS, Windows, and Linux bundle the NER engine via
+PyInstaller, requiring no separate Python installation for end users.
+We describe the system architecture, workflow, and an evaluation sketch on
+French interview-style materials, and discuss limitations regarding indirect
+identifiers and model errors.
+Source code, release binaries, and citation metadata are publicly available.
+\end{abstract}
+
+\noindent\textbf{Keywords:} anonymization, digital humanities, qualitative research,
+named entity recognition, French NLP, local-first software, research ethics
+
+\section{Introduction}
+\label{sec:introduction}
+
+Anonymization is a recurring obligation in qualitative and mixed-methods research.
+Interview excerpts, ethnographic notes, and participant-generated text often contain
+direct identifiers (personal names, organizations, precise locations) as well as
+quasi-identifiers (rare job titles, small communities, distinctive events) that can
+enable re-identification when combined with external knowledge~\cite{elger2014broad}.
+Research teams therefore need practical tools that (i)~assist detection of sensitive
+strings, (ii)~preserve researcher control over what is removed or generalized,
+(iii)~document decisions for ethics committees and data archives, and (iv)~keep
+primary data on institutional or personal hardware rather than third-party servers.
+
+General-purpose word processors and manual redaction remain common but scale poorly
+to large corpora and offer weak provenance trails.
+Meanwhile, high-quality French NER models are now available off the shelf through
+libraries such as spaCy~\cite{honnibal2020spacy} and transformer pipelines derived
+from CamemBERT~\cite{martin2020camembert,lejeune2020camembertner}.
+However, command-line NER outputs are insufficient for humanities workflows:
+scholars need visual review, correction of false positives, recovery of false
+negatives, category-level policies (e.g.\ replace people but keep organization
+mentions), and batch processing aligned with project folder structures.
+
+\textbf{Text Data Anonymizer} addresses this gap as a research prototype and
+distribution-ready desktop application maintained in the context of research
+engineering at MSHS Sud-Est\footnote{\url{https://mshs.univ-cotedazur.fr/}}, the
+regional Maison des Sciences de l'Homme hosted by Universit\'{e} C\^{o}te d'Azur.
+The tool targets French-language qualitative corpora but is designed so that entity
+categories and export formats support integration with annotation platforms such as
+Label Studio~\cite{tkachenko2020labelstudio} and archival reporting requirements.
+
+Our design principles are:
+\begin{itemize}[noitemsep]
+  \item \textbf{Local-first processing:} no telemetry and no default calls to
+        external NLP APIs; text is sent only to a co-located NER subprocess.
+  \item \textbf{Human-in-the-loop control:} automatic suggestions, never blind
+        replacement.
+  \item \textbf{Traceability:} audit reports listing category decisions and exact
+        values replaced.
+  \item \textbf{Cross-platform deployment:} the same workflow on macOS, Windows,
+        and Linux through Electron and platform-specific installers.
+  \item \textbf{Reproducible packaging:} explicit build profiles separating a
+        full bundle (spaCy + CamemBERT libraries) from a lighter spaCy-only
+        distribution.
+\end{itemize}
+
+This paper is a descriptive software report intended for arXiv and citation in
+digital humanities methods sections.
+It does not claim formal anonymity guarantees; researchers must still review outputs
+for indirect identifiers and contextual leaks.
+
+\section{Tool}
+\label{sec:tool}
+
+\subsection{Architecture}
+
+Text Data Anonymizer follows a two-process architecture (Figure~\ref{fig:architecture}).
+The \emph{renderer} is an Electron\footnote{\url{https://www.electronjs.org/}} shell
+hosting a React interface built with Vite.
+The \emph{NER service} is a long-lived Python process exposing a line-oriented JSON
+protocol over standard input/output.
+The Electron main process spawns the service at startup, forwards detection requests
+from the UI, and handles file-system operations (folder loading, live export of batch
+artifacts).
+
+\begin{figure}[ht]
+  \centering
+  \fbox{\parbox{0.92\linewidth}{
+    \small
+    \textbf{Renderer (Electron + React)}\\
+    Paste / load text $\rightarrow$ entity review UI $\rightarrow$ anonymized preview\\
+    $\updownarrow$ IPC\\
+    \textbf{Main process}\\
+    spawn NER service $\cdot$ folder dialogs $\cdot$ write batch outputs\\
+    $\updownarrow$ stdin/stdout JSON\\
+    \textbf{NER service (Python)}\\
+    spaCy / CamemBERT / rules $\rightarrow$ entity spans with offsets
+  }}
+  \caption{High-level architecture. All NLP inference runs in the local Python
+  subprocess; the renderer never calls cloud APIs.}
+  \label{fig:architecture}
+\end{figure}
+
+In \emph{development mode}, the main process launches \texttt{scripts/ner.py} with the
+project virtual environment.
+In \emph{released builds}, a PyInstaller onedir bundle (\texttt{ner-service}) is
+placed in application resources; end users do not install Python or spaCy models
+separately.
+Installers are produced with \texttt{electron-builder} (DMG/ZIP on macOS, NSIS/ZIP
+on Windows, AppImage/DEB on Linux).
+A GitHub Actions workflow builds full standalone artifacts on
+\texttt{macos-latest}, \texttt{windows-latest}, and \texttt{ubuntu-latest}.
+
+\subsection{NER backends and entity categories}
+
+The NER service supports three model backends selectable from the UI:
+\begin{itemize}[noitemsep]
+  \item \textbf{spaCy small} (\texttt{fr\_core\_news\_sm}): faster, lower memory.
+  \item \textbf{spaCy large} (\texttt{fr\_core\_news\_lg}): default; richer annotations.
+  \item \textbf{CamemBERT NER} (\texttt{Jean-Baptiste/camembert-ner}): transformer
+        pipeline with generally higher recall on person and location spans in
+        informal French, at higher compute and bundle size.
+\end{itemize}
+
+Model labels are mapped to a unified application schema:
+\texttt{person}, \texttt{location}, \texttt{organization}, \texttt{misc}, and
+\texttt{date} (spaCy).
+Complementary \textbf{rule-based detectors} identify email addresses, URLs, phone
+numbers, and date expressions (including French month names), which are merged with
+model predictions; overlapping spans are resolved with rule spans taking precedence
+where configured.
+
+A post-processing step \textbf{splits entity spans at newline boundaries} so that
+paragraph breaks are never absorbed into a single replacement---a practical issue we
+observed when spaCy grouped tokens across blank lines in interview transcripts.
+
+\subsection{Replacement policy}
+
+Anonymization uses \textbf{stable category placeholders} rather than synthetic
+surface forms.
+Each unique value within a category receives a consistent tag for the document
+(e.g.\ \texttt{[PERSON\_1]}, \texttt{[LOCATION\_2]}).
+Replacements are applied by character offset on the original string, not by global
+find-and-replace, which preserves unrelated token collisions.
+
+The UI exposes two levels of control:
+\begin{enumerate}[noitemsep]
+  \item \textbf{Category toggles} --- enable or disable replacement for entire
+        classes (people, locations, \ldots).
+  \item \textbf{Per-entity-value toggles} --- clicking a chip in the category panel
+        disables all occurrences of that value while leaving other entities in the
+        category active.
+\end{enumerate}
+
+Researchers may also \textbf{manually add or remove spans} in the highlighted view
+(e.g.\ to mark a nickname missed by NER or delete a false positive).
+
+\subsection{Exports and interoperability}
+
+Beyond on-screen preview, the tool generates:
+\begin{itemize}[noitemsep]
+  \item \textbf{Anonymized text} (\texttt{*-anonymized.txt}).
+  \item \textbf{Audit report} (\texttt{*-report.md}) with document summary, per-category
+        statistics, and exact value$\rightarrow$placeholder mappings.
+  \item \textbf{Label Studio JSON} (\texttt{*-label-studio.json}) with
+        \texttt{predictions} for span labeling, plus a shared XML labeling config.
+\end{itemize}
+
+Command-line utilities in the repository support batch anonymization from Label
+Studio exports and folder-scale processing for headless workflows; the desktop
+application is the primary interactive path developed for MSHS Sud-Est researchers.
+
+\section{Workflow}
+\label{sec:workflow}
+
+\subsection{Single-document review}
+
+The default workflow proceeds in four stages mirrored in the interface layout:
+\begin{enumerate}
+  \item \textbf{Source text} --- paste content or edit loaded text directly.
+  \item \textbf{Category review} --- run NER, inspect detected categories, toggle
+        replacement policies, and click entity chips to include or exclude specific
+        values (occurrence counts are shown per value).
+  \item \textbf{Highlighted entities} --- read the source with color-coded spans;
+        add spans by selection or remove spans by click.
+  \item \textbf{Anonymized preview} --- live rendering of placeholder substitutions
+        restricted to active categories and entity values.
+\end{enumerate}
+
+An audit report modal and clipboard/download actions support ethics documentation.
+Optional export to Label Studio creates a pre-annotated task for teams that refine
+spans collaboratively before final anonymization.
+
+\subsection{Batch folder mode}
+
+For multi-document projects, \textbf{batch mode} loads a directory of
+\texttt{.txt}/\texttt{.text} files (prior output artifacts are filtered automatically).
+Each file is opened in the same review UI.
+Navigation controls (\emph{previous}/\emph{next file}) preserve per-file entity
+states, selected categories, and manual edits in session memory.
+
+When \textbf{auto-run default model} is enabled, NER executes automatically on
+each newly opened file that has not yet been processed, using the selected backend
+(spaCy large by default).
+
+Critically for archival workflows, batch mode \textbf{writes outputs live} to the
+source folder as the researcher works:
+anonymized text, audit report, and Label Studio JSON are updated on change
+(debounced), so partial progress survives interruption and can be version-controlled
+alongside originals.
+
+\subsection{Operational notes}
+
+The first NER invocation after launch may take tens of seconds while models load;
+subsequent requests reuse the warm service.
+CamemBERT model \emph{weights} ($\sim$400\,MB) are downloaded from Hugging Face on
+first use in full builds unless already cached; spaCy pipelines are bundled in
+standalone installers.
+Researchers should treat audit reports as sensitive documents because they quote
+source strings selected for replacement.
+
+\section{Evaluation Sketch}
+\label{sec:evaluation}
+
+We report an illustrative evaluation rather than a benchmark with gold-standard
+adjudication, which remains future work with ethics-approved corpus releases.
+
+\subsection{Materials}
+
+We used French interview-style excerpts representative of MSHS Sud-Est projects:
+semi-structured interviews mentioning persons, institutions, geographic references,
+dates, and domain-specific entities (e.g.\ certification bodies, experimental sites).
+Internal test sets include multi-paragraph transcripts with orthographic variation
+and elided speech typical of oral history transcriptions.
+
+\subsection{Backend comparison (qualitative)}
+
+On the same documents, we compared spaCy small, spaCy large, and CamemBERT:
+\begin{itemize}
+  \item \textbf{spaCy small} offers the fastest turnaround and smallest memory
+        footprint, with occasional missed multi-token organization names.
+  \item \textbf{spaCy large} improves coverage of nested entities and is the
+        recommended default for interactive review.
+  \item \textbf{CamemBERT} tends to propose more person and location spans in
+        conversational French; it may over-segment or label misc entities differently,
+        motivating the interactive correction UI rather than fully automatic
+        anonymization.
+\end{itemize}
+
+Rule detectors consistently captured structured identifiers (emails, URLs, phone
+patterns) that models sometimes split or skip.
+
+\subsection{Workflow metrics}
+
+For batch sessions, we recorded:
+\begin{itemize}[noitemsep]
+  \item time-to-first-preview (including model warm-up),
+  \item number of manual span additions/removals per 1{,}000 characters,
+  \item number of per-entity-value toggles (researcher overrides),
+  \item output parity checks ensuring paragraph boundaries are preserved after
+        newline-aware span splitting.
+\end{itemize}
+
+In internal trials, manual corrections concentrated on \texttt{misc} labels and
+rare toponyms; category-level toggles reduced repetitive clicking when entire
+classes were out of scope for a given ethics amendment.
+
+\subsection{Limitations and planned work}
+
+The tool does not detect indirect identification (unique life stories, kinship
+graphs, profession + city combinations) and does not perform coreference beyond
+what each NER model implicitly provides.
+We plan:
+\begin{itemize}[noitemsep]
+  \item a structured user study with MSHS Sud-Est partner laboratories,
+  \item adjudicated annotation of a small public French qualitative sample,
+  \item optional pseudonymization strategies beyond placeholders,
+  \item packaging profiles that pre-download CamemBERT weights for fully offline
+        first launch.
+\end{itemize}
+
+\section{Availability}
+\label{sec:availability}
+
+\paragraph{Software.}
+Source code, issue tracker, and citation metadata:
+\url{https://github.com/xiaoouwang/anonymizer}
+
+\paragraph{Releases.}
+Standalone binaries (macOS DMG/ZIP for Apple Silicon and Intel, Windows installer,
+Linux AppImage/DEB) are distributed via GitHub Releases.
+Build instructions support full (\texttt{npm run build:ner:full}) and spaCy-only
+(\texttt{npm run build:ner}) NER bundles; metadata in
+\texttt{python-dist/ner-service/.bundle-meta.json} records whether CamemBERT
+libraries are included.
+
+\paragraph{Citation.}
+Please cite this report and the software version used, e.g.:
+\begin{quote}
+\small
+Wang, X. (2026).
+\textit{Text Data Anonymizer} (Version 0.1.0) [Computer software].
+Maison des Sciences de l'Homme Sud-Est, Universit\'{e} C\^{o}te d'Azur.
+\url{https://github.com/xiaoouwang/anonymizer}
+\end{quote}
+\noindent Bib\TeX{} key: \texttt{wang2026textdataanonymizer}.
+A \texttt{CITATION.cff} file is provided for GitHub's citation widget.
+
+\paragraph{License and ethics.}
+The application is a research assistant; deployers remain responsible for compliance
+with GDPR, institutional review boards, and participant consent.
+Contact: \texttt{xiaoou.wang@univ-cotedazur.fr}.
+
+\section*{Acknowledgments}
+
+Developed at the Maison des Sciences de l'Homme Sud-Est (Universit\'{e} C\^{o}te
+d'Azur) in support of digital humanities training and qualitative data management.
+We thank partner research teams for feedback on batch workflows and audit reporting.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

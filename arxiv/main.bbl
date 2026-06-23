@@ -1,0 +1,31 @@
+\begin{thebibliography}{1}
+
+\bibitem{elger2014broad}
+Bernice~S Elger and Arthur~L Caplan.
+\newblock Broad consent for health research on biospecimens: A workshop report.
+\newblock {\em Journal of Empirical Research on Human Research Ethics}, 2014.
+\newblock Illustrative reference on research ethics context.
+
+\bibitem{honnibal2020spacy}
+Matthew Honnibal, Ines Montani, Sofie Van~Landeghem, and Adriane Boyd.
+\newblock {spaCy}: Industrial-strength natural language processing in python.
+\newblock In {\em Proceedings of the Python in Science Conference}, 2020.
+
+\bibitem{lejeune2020camembertner}
+Louis Lejeune.
+\newblock {Jean-Baptiste/camembert-ner}.
+\newblock Hugging Face model hub, 2020.
+
+\bibitem{martin2020camembert}
+Louis Martin, Benjamin Muller, Pedro Javier~Ortiz Su{\'a}rez, et~al.
+\newblock {CamemBERT}: a tasty {F}rench language model.
+\newblock In {\em Proceedings of the 58th Annual Meeting of the Association for
+  Computational Linguistics: Student Research Workshop}, 2020.
+
+\bibitem{tkachenko2020labelstudio}
+Maxim Tkachenko et~al.
+\newblock {Label Studio}: Data labeling software for machine learning.
+\newblock In {\em Proceedings of the 2020 Conference on Empirical Methods in
+  Natural Language Processing: System Demonstrations}, 2020.
+
+\end{thebibliography}
