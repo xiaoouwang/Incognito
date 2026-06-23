@@ -2,7 +2,7 @@
 
 **Anonymisez vos corpus qualitatifs en local — sans envoyer vos données dans le cloud.**
 
-Application de bureau pour les sciences humaines et sociales : entretiens, notes de terrain, réponses ouvertes. Détectez les entités sensibles, contrôlez ce qui est remplacé, exportez un texte anonymisé et une trace de vos décisions.
+Application de bureau **multiplateforme** (macOS, Windows, Linux) pour les sciences humaines et sociales : entretiens, notes de terrain, réponses ouvertes. Détectez les entités sensibles, contrôlez ce qui est remplacé, exportez un texte anonymisé et une trace de vos décisions.
 
 Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Humanités Numériques · [MSHS Sud-Est](https://mshs.univ-cotedazur.fr/) · [Université Côte d'Azur](https://univ-cotedazur.fr/)
 
@@ -13,6 +13,7 @@ Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Hu
 |                              |                                                                        |
 | ---------------------------- | ---------------------------------------------------------------------- |
 | 🏠 **100 % local**            | Aucun appel à une API externe. Vos textes restent sur votre machine.   |
+| 🌍 **Multiplateforme**        | Même workflow sur macOS, Windows et Linux — installateurs autonomes.   |
 | 🇫🇷 **Pensé pour le français** | Modèles spaCy et CamemBERT adaptés aux textes qualitatifs en français. |
 | 👁️ **Contrôle humain**        | Vous validez, corrigez et désactivez entité par entité avant l'export. |
 | 📋 **Traçabilité**            | Rapport d'audit et exports prêts pour l'archivage ou Label Studio.     |
@@ -43,9 +44,24 @@ Placeholders stables du type `[PERSON_1]`, `[LOCATION_2]`, `[EMAIL_1]`.
 
 ---
 
+## ⚙️ Stack & pipeline
+
+Interface **Electron** + **React** (Vite), moteur NER **Python** embarqué (PyInstaller), modèles **spaCy** et **CamemBERT** / Transformers. Chaîne de build **electron-builder** → installateurs `.dmg`, `.exe`, `.AppImage` / `.deb`, avec CI **GitHub Actions** pour les trois systèmes.
+
+| Couche | Outils |
+| ------ | ------ |
+| 🖥️ Bureau | Electron, React |
+| 🧠 NER | Python 3.12, spaCy, CamemBERT (Hugging Face) |
+| 📦 Release | PyInstaller, electron-builder |
+| 🔄 CI | GitHub Actions (`macos` / `windows` / `ubuntu`) |
+
+Même code, mêmes exports — quel que soit l'OS de l'équipe.
+
+---
+
 ## 💾 Téléchargement
 
-Binaires autonomes pour **macOS**, **Windows** et **Linux** → [GitHub Releases](https://github.com/xiaoouwang/anonymizer/releases)
+🌍 **Cross-platform** — binaires autonomes pour **macOS**, **Windows** et **Linux** → [GitHub Releases](https://github.com/xiaoouwang/anonymizer/releases)
 
 | Plateforme              | Fichier typique                        |
 | ----------------------- | -------------------------------------- |
