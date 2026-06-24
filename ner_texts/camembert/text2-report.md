@@ -1,7 +1,7 @@
 # Anonymization Audit Report
 
 Generated: 2026-06-23 15:54:53 CEST
-Tool: Qualitative Text Anonymizer batch processor
+Tool: Incognito batch processor
 Source file: text2.txt
 NER backend: camembert
 NER engine: Jean-Baptiste/camembert-ner

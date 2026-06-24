@@ -50,6 +50,44 @@ function attachExternalLinkHandlers(webContents) {
   });
 }
 
+function getAppIcon() {
+  const candidates = [
+    path.join(__dirname, "..", "dist", "logo.png"),
+    path.join(__dirname, "..", "build", "icon.png"),
+    path.join(__dirname, "..", "public", "logo.png"),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
+function getTitleBarOptions() {
+  if (process.platform === "darwin") {
+    return {
+      titleBarStyle: "hiddenInset",
+      trafficLightPosition: { x: 16, y: 16 },
+    };
+  }
+
+  if (process.platform === "win32" || process.platform === "linux") {
+    return {
+      titleBarStyle: "hidden",
+      titleBarOverlay: {
+        color: "#f5f1e8",
+        symbolColor: "#203a5f",
+        height: 44,
+      },
+    };
+  }
+
+  return {};
+}
+
 function createWindow() {
   log("Creating BrowserWindow");
   mainWindow = new BrowserWindow({
@@ -59,7 +97,9 @@ function createWindow() {
     minHeight: 700,
     show: true,
     backgroundColor: "#f5f1e8",
-    title: "Text Data Anonymizer",
+    title: "Incognito",
+    icon: getAppIcon(),
+    ...getTitleBarOptions(),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,

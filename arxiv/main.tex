@@ -19,7 +19,7 @@
 }
 
 \title{%
-  \textbf{Text Data Anonymizer:}\\[0.3em]
+  \textbf{Incognito:}\\[0.3em]
   \large A Local-First, Cross-Platform Desktop Tool for\\
   Interactive Anonymization of French Qualitative Text
 }
@@ -35,6 +35,11 @@
 
 \begin{document}
 
+\begin{center}
+  \includegraphics[width=2.2cm]{logo.png}
+\end{center}
+\vspace{-0.75em}
+
 \maketitle
 
 \begin{abstract}
@@ -42,7 +47,7 @@ Qualitative researchers in the social sciences and digital humanities routinely 
 sensitive interview transcripts, field notes, and open-ended survey responses.
 Cloud-based anonymization services raise legitimate concerns about data sovereignty,
 reproducibility, and compliance with ethics protocols.
-We present \textbf{Text Data Anonymizer}, a cross-platform desktop application
+We present \textbf{Incognito}, a cross-platform desktop application
 developed at the Maison des Sciences de l'Homme Sud-Est (MSHS Sud-Est) that supports
 a \emph{human-in-the-loop} workflow for detecting and replacing named entities in
 French text entirely on the user's machine.
@@ -90,7 +95,7 @@ scholars need visual review, correction of false positives, recovery of false
 negatives, category-level policies (e.g.\ replace people but keep organization
 mentions), and batch processing aligned with project folder structures.
 
-\textbf{Text Data Anonymizer} addresses this gap as a research prototype and
+\textbf{Incognito} addresses this gap as a research prototype and
 distribution-ready desktop application maintained in the context of research
 engineering at MSHS Sud-Est\footnote{\url{https://mshs.univ-cotedazur.fr/}}, the
 regional Maison des Sciences de l'Homme hosted by Universit\'{e} C\^{o}te d'Azur.
@@ -123,7 +128,7 @@ for indirect identifiers and contextual leaks.
 
 \subsection{Architecture}
 
-Text Data Anonymizer follows a two-process architecture (Figure~\ref{fig:architecture}).
+Incognito follows a two-process architecture (Figure~\ref{fig:architecture}).
 The \emph{renderer} is an Electron\footnote{\url{https://www.electronjs.org/}} shell
 hosting a React interface built with Vite.
 The \emph{NER service} is a long-lived Python process exposing a line-oriented JSON
@@ -157,6 +162,8 @@ placed in application resources; end users do not install Python or spaCy models
 separately.
 Installers are produced with \texttt{electron-builder} (DMG/ZIP on macOS, NSIS/ZIP
 on Windows, AppImage/DEB on Linux).
+Released builds ship with a consistent application identity: logo in the integrated
+title bar and window icon, plus in-app branding in the review header.
 A GitHub Actions workflow builds full standalone artifacts on
 \texttt{macos-latest}, \texttt{windows-latest}, and \texttt{ubuntu-latest}.
 
@@ -348,11 +355,11 @@ Please cite this report and the software version used, e.g.:
 \begin{quote}
 \small
 Wang, X. (2026).
-\textit{Text Data Anonymizer} (Version 0.1.0) [Computer software].
+\textit{Incognito} (Version 0.2.0) [Computer software].
 Maison des Sciences de l'Homme Sud-Est, Universit\'{e} C\^{o}te d'Azur.
 \url{https://github.com/xiaoouwang/anonymizer}
 \end{quote}
-\noindent Bib\TeX{} key: \texttt{wang2026textdataanonymizer}.
+\noindent Bib\TeX{} key: \texttt{wang2026incognito}.
 A \texttt{CITATION.cff} file is provided for GitHub's citation widget.
 
 \paragraph{License and ethics.}

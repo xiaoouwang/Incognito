@@ -1,8 +1,8 @@
 {
-  "name": "qualitative-text-anonymizer",
+  "name": "incognito",
   "private": true,
-  "version": "0.1.0",
-  "description": "Local Electron app for reviewing spaCy NER detections in pasted research text.",
+  "version": "0.2.0",
+  "description": "Incognito — local Electron app for reviewing NER detections and anonymizing qualitative research text.",
   "author": {
     "name": "Xiaoou Wang",
     "email": "xiaoou.wang@univ-cotedazur.fr"

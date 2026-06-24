@@ -46,8 +46,9 @@ function nerBundleResource() {
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
-  appId: "com.frenchnlp.qualitative-text-anonymizer",
-  productName: "Text Data Anonymizer",
+  appId: "com.frenchnlp.incognito",
+  productName: "Incognito",
+  icon: "build/icon.png",
   directories: {
     output: "release",
   },

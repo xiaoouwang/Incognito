@@ -206,7 +206,7 @@ def create_audit_report(
     return f"""# Anonymization Audit Report
 
 Generated: {generated}
-Tool: Text Data Anonymizer batch processor
+Tool: Incognito batch processor
 Source file: {source_name}
 NER backend: {backend}
 NER engine: {model_name or "Not specified"}
@@ -278,7 +278,7 @@ def create_label_studio_export(
             },
             "predictions": [
                 {
-                    "model_version": model_name or backend or "qualitative-text-anonymizer",
+                    "model_version": model_name or backend or "incognito",
                     "result": [
                         entity_to_label_studio_result(entity, index)
                         for index, entity in enumerate(ordered)

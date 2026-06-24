@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: Text Data Anonymizer
+title: Incognito
 message: "If you use this software, please cite it as below."
 type: software
 authors:
@@ -13,7 +13,7 @@ abstract: >-
   Local-first desktop application for reviewing and anonymizing sensitive
   entities in French qualitative research text, with interactive NER review,
   batch processing, audit reports, and Label Studio export.
-version: 0.1.0
+version: 0.2.0
 date-released: 2026-06-23
 keywords:
   - anonymization

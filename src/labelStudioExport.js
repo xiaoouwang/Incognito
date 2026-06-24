@@ -60,7 +60,7 @@ export function createLabelStudioTask({ text, entities, modelName, nerBackend, s
     },
     predictions: [
       {
-        model_version: modelName || nerBackend || "qualitative-text-anonymizer",
+        model_version: modelName || nerBackend || "incognito",
         result: orderedEntities.map((entity, index) => entityToLabelStudioResult(entity, index)),
       },
     ],

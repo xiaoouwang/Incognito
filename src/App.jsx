@@ -550,10 +550,41 @@ export default function App() {
   }
 
   return (
-    <main className="app">
+    <>
+      {window.appMeta?.isElectron ? (
+        <header
+          className={`window-titlebar window-titlebar--${window.appMeta.platform}`}
+          aria-label="Incognito"
+        >
+          <div className="window-titlebar-brand">
+            <img
+              className="window-titlebar-logo"
+              src="./logo.png"
+              alt=""
+              width={22}
+              height={22}
+            />
+            <span className="window-titlebar-name">Incognito</span>
+          </div>
+        </header>
+      ) : null}
+      <main className="app">
       <header className="hero">
         <div>
-          <h1>Text Data Anonymizer</h1>
+          <div className="hero-brand">
+            <img
+              className="hero-logo"
+              src="./logo.png"
+              alt=""
+              width={72}
+              height={72}
+            />
+            <div className="hero-brand-text">
+              <h1>Incognito</h1>
+              <p className="hero-tagline">Privacy-first qualitative data anonymization</p>
+            </div>
+          </div>
+
           <p>
             🔒 Anonymize your textual data with complete confidentiality<br />
             🕵️‍♂️ Detect named entities<br />
@@ -854,6 +885,7 @@ export default function App() {
         />
       )}
     </main>
+    </>
   );
 }
 
@@ -1348,7 +1380,7 @@ function createAuditReport({
   return `# Anonymization Audit Report
 
 Generated: ${new Date().toLocaleString()}
-Tool: Text Data Anonymizer${batchMode ? " batch review" : " prototype"}
+Tool: Incognito${batchMode ? " batch review" : ""}
 NER engine: ${modelName || "Not run"}${nerBackend ? ` (${nerBackend})` : ""}
 ${sourceFile ? `Source file: ${sourceFile}` : ""}
 

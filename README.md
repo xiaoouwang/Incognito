@@ -1,10 +1,16 @@
-# ✨ Text Data Anonymizer
+<p align="center">
+  <img src="logos/logo_app.png" alt="Incognito" width="128" />
+</p>
+
+# ✨ Incognito
 
 **Anonymisez vos corpus qualitatifs en local — sans envoyer vos données dans le cloud.**
 
 Application de bureau **multiplateforme** (macOS, Windows, Linux) pour les sciences humaines et sociales : entretiens, notes de terrain, réponses ouvertes. Détectez les entités sensibles, contrôlez ce qui est remplacé, exportez un texte anonymisé et une trace de vos décisions.
 
 Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Humanités Numériques · [MSHS Sud-Est](https://mshs.univ-cotedazur.fr/) · [Université Côte d'Azur](https://univ-cotedazur.fr/)
+
+**Version actuelle : 0.2.0** — identité visuelle (logo, barre de titre intégrée), renommage *Incognito*.
 
 ---
 
@@ -65,10 +71,10 @@ Même code, mêmes exports — quel que soit l'OS de l'équipe.
 
 | Plateforme              | Fichier typique                        |
 | ----------------------- | -------------------------------------- |
-| 🍎 macOS (Apple Silicon) | `Text Data Anonymizer-0.1.0-arm64.dmg` |
-| 🍎 macOS (Intel)         | `Text Data Anonymizer-0.1.0.dmg`       |
-| 🪟 Windows               | `Text Data Anonymizer Setup 0.1.0.exe` |
-| 🐧 Linux                 | `Text Data Anonymizer-0.1.0.AppImage`  |
+| 🍎 macOS (Apple Silicon) | `Incognito-0.2.0-arm64.dmg` |
+| 🍎 macOS (Intel)         | `Incognito-0.2.0.dmg`       |
+| 🪟 Windows               | `Incognito Setup 0.2.0.exe` |
+| 🐧 Linux                 | `Incognito-0.2.0.AppImage`  |
 
 Premier lancement CamemBERT : connexion internet une fois (~400 Mo, téléchargement du modèle Hugging Face).
 
@@ -108,24 +114,24 @@ CI multi-plateforme : workflow **Release binaries** dans `.github/workflows/rele
 
 ## 📚 Citer cet outil
 
-Si vous utilisez **Text Data Anonymizer** dans un article, un rapport, un protocole ou un jeu de données, merci de citer :
+Si vous utilisez **Incognito** dans un article, un rapport, un protocole ou un jeu de données, merci de citer :
 
-> Wang, X. (2026). *Text Data Anonymizer* (Version 0.1.0) [Logiciel]. Maison des Sciences de l'Homme Sud-Est / Université Côte d'Azur. https://github.com/xiaoouwang/anonymizer
+> Wang, X. (2026). *Incognito* (Version 0.2.0) [Logiciel]. Maison des Sciences de l'Homme Sud-Est / Université Côte d'Azur. https://github.com/xiaoouwang/anonymizer
 
-**Clé LaTeX** — `wang2026textdataanonymizer`
+**Clé LaTeX** — `wang2026incognito`
 
 ```latex
-\cite{wang2026textdataanonymizer}
+\cite{wang2026incognito}
 ```
 
 **BibTeX**
 
 ```bibtex
-@software{wang2026textdataanonymizer,
+@software{wang2026incognito,
   author  = {Wang, Xiaoou},
-  title   = {Text Data Anonymizer},
+  title   = {Incognito},
   year    = {2026},
-  version = {0.1.0},
+  version = {0.2.0},
   url     = {https://github.com/xiaoouwang/anonymizer},
   note    = {Local desktop application for qualitative text anonymization.
              Maison des Sciences de l'Homme Sud-Est, Universit{\'e} C{\^o}te d'Azur}
@@ -134,7 +140,7 @@ Si vous utilisez **Text Data Anonymizer** dans un article, un rapport, un protoc
 
 **APA (7e éd.)**
 
-> Wang, X. (2026). *Text Data Anonymizer* (Version 0.1.0) [Computer software]. Maison des Sciences de l'Homme Sud-Est, Université Côte d'Azur. https://github.com/xiaoouwang/anonymizer
+> Wang, X. (2026). *Incognito* (Version 0.2.0) [Computer software]. Maison des Sciences de l'Homme Sud-Est, Université Côte d'Azur. https://github.com/xiaoouwang/anonymizer
 
 Un fichier [`CITATION.cff`](CITATION.cff) est aussi disponible pour l'onglet **Cite this repository** sur GitHub.
 

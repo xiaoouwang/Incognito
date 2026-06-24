@@ -14,6 +14,42 @@ body {
   margin: 0;
 }
 
+.window-titlebar {
+  -webkit-app-region: drag;
+  background: #f5f1e8;
+  border-bottom: 1px solid rgba(32, 58, 95, 0.08);
+  height: 44px;
+  position: sticky;
+  top: 0;
+  user-select: none;
+  z-index: 200;
+}
+
+.window-titlebar-brand {
+  -webkit-app-region: drag;
+  align-items: center;
+  display: flex;
+  gap: 0.55rem;
+  left: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.window-titlebar-logo {
+  border-radius: 0.35rem;
+  flex-shrink: 0;
+  height: 22px;
+  width: 22px;
+}
+
+.window-titlebar-name {
+  color: #203a5f;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
 button,
 textarea,
 input {
@@ -58,6 +94,34 @@ code {
   display: grid;
   gap: 1rem;
   grid-template-columns: minmax(0, 1fr) 360px;
+}
+
+.hero-brand {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.7rem;
+}
+
+.hero-logo {
+  border-radius: 1rem;
+  box-shadow: 0 10px 28px rgba(32, 58, 95, 0.12);
+  flex-shrink: 0;
+  height: 72px;
+  width: 72px;
+}
+
+.hero-brand-text h1 {
+  margin-bottom: 0.35rem;
+}
+
+.hero-tagline {
+  color: #697386;
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.4;
+  margin: 0;
+  max-width: 760px;
 }
 
 .eyebrow {
