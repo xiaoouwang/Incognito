@@ -15,13 +15,13 @@ Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Hu
 ## 🔒 Pourquoi cet outil ?
 
 
-|                                 |                                                                        |
-| ------------------------------- | ---------------------------------------------------------------------- |
-| 🏠 **100 % local**              | Aucun appel à une API externe. Vos textes restent sur votre machine.   |
-| 🌍 **Multiplateforme**          | Même workflow sur macOS, Windows et Linux — installateurs autonomes.   |
+|                              |                                                                        |
+| ---------------------------- | ---------------------------------------------------------------------- |
+| 🏠 **100 % local**            | Aucun appel à une API externe. Vos textes restent sur votre machine.   |
+| 🌍 **Multiplateforme**        | Même workflow sur macOS, Windows et Linux — installateurs autonomes.   |
 | 🇫🇷 **Pensé pour le français** | Modèles spaCy et CamemBERT adaptés aux textes qualitatifs en français. |
-| 👁️ **Contrôle humain**         | Vous validez, corrigez et désactivez entité par entité avant l'export. |
-| 📋 **Traçabilité**              | Rapport d'audit et exports prêts pour l'archivage ou Label Studio.     |
+| 👁️ **Contrôle humain**        | Vous validez, corrigez et désactivez entité par entité avant l'export. |
+| 📋 **Traçabilité**            | Rapport d'audit et exports prêts pour l'archivage ou Label Studio.     |
 
 
 > ⚠️ Assistant d'anonymisation, pas une garantie d'anonymat total. Relisez toujours le résultat avant diffusion.
@@ -55,9 +55,9 @@ Placeholders stables du type `[PERSON_1]`, `[LOCATION_2]`, `[EMAIL_1]`.
 Interface **Electron** + **React** (Vite), moteur NER **Python** embarqué (PyInstaller), modèles **spaCy** et **CamemBERT** / Transformers. Chaîne de build **electron-builder** → installateurs `.dmg`, `.exe`, `.AppImage` / `.deb`, avec CI **GitHub Actions** pour les trois systèmes.
 
 
-| Couche     | Outils                                          |
-| ---------- | ----------------------------------------------- |
-| 🖥️ Bureau | Electron, React                                 |
+| Couche    | Outils                                          |
+| --------- | ----------------------------------------------- |
+| 🖥️ Bureau  | Electron, React                                 |
 | 🧠 NER     | Python 3.12, spaCy, CamemBERT (Hugging Face)    |
 | 📦 Release | PyInstaller, electron-builder                   |
 | 🔄 CI      | GitHub Actions (`macos` / `windows` / `ubuntu`) |
@@ -72,8 +72,8 @@ Même code, mêmes exports — quel que soit l'OS de l'équipe.
 🌍 **Cross-platform** — binaires autonomes pour **macOS**, **Windows** et **Linux** → [GitHub Releases](https://github.com/xiaoouwang/anonymizer/releases)
 
 
-| Plateforme               | Fichier typique             |
-| ------------------------ | --------------------------- |
+| Plateforme              | Fichier typique             |
+| ----------------------- | --------------------------- |
 | 🍎 macOS (Apple Silicon) | `Incognito-0.2.0-arm64.dmg` |
 | 🍎 macOS (Intel)         | `Incognito-0.2.0.dmg`       |
 | 🪟 Windows               | `Incognito Setup 0.2.0.exe` |
@@ -160,7 +160,7 @@ Si vous utilisez **Incognito** dans un article, un rapport, un protocole ou un j
   year    = {2026},
   version = {0.2.0},
   url     = {https://github.com/xiaoouwang/anonymizer},
-  note    = {Local desktop application for qualitative text anonymization.
+  note    = {Privacy-first desktop application for reviewing and anonymizing sensitive entities.
              Maison des Sciences de l'Homme Sud-Est, Universit{\'e} C{\^o}te d'Azur}
 }
 ```
@@ -178,6 +178,32 @@ Un fichier `[CITATION.cff](CITATION.cff)` est aussi disponible pour l'onglet **C
 Les rapports d'audit peuvent contenir des valeurs sensibles : manipulez-les comme vos données sources.
 
 **Contact** — [xiaoou.wang@univ-cotedazur.fr](mailto:xiaoou.wang@univ-cotedazur.fr)
+
+---
+
+## 📄 License
+
+Copyright (c) 2026 Xiaoou Wang
+
+**Incognito** (v0.2.0) is free and open-source software released under the [GNU Affero General Public License v3.0 (AGPLv3)](LICENSE).
+
+You are free to use, study, modify, and redistribute this software under the terms of the AGPLv3 license.
+
+If you distribute a modified version of Incognito, or make it available to users over a network, you must also make the corresponding source code available under the same license.
+
+The full license text is available in the [LICENSE](LICENSE) file included with this repository.
+
+### Citation
+
+If you use Incognito in academic research, please cite the project and acknowledge its use in publications whenever appropriate.
+
+### Copyright and Authorship
+
+Incognito was designed and developed by Xiaoou Wang.
+
+Copyright remains with the original author. The AGPLv3 license grants users the rights to use, modify, and redistribute the software under the conditions specified by the license.
+
+© 2026 Xiaoou Wang. All rights reserved except as granted under the AGPLv3 license.
 
 ---
 
