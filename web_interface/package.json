@@ -1,0 +1,22 @@
+{
+  "name": "incognito-web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Incognito Web — client-side qualitative text anonymization with Transformers.js ONNX NER.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "jszip": "^3.10.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.7.0",
+    "vite": "^5.4.21"
+  }
+}
