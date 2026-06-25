@@ -10,7 +10,7 @@ Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Hu
 
 **Version actuelle : 0.2.0**
 
-**🌐 Nouveau —** [**Incognito Web**](https://xiaoouwang.github.io/Incognito/) : même workflow de revue dans le navigateur, sans installation. Voir la section [Version web](#-version-web) ci-dessous.
+**🌐 Nouveau —** [**Incognito Web**](https://xiaoouwang.github.io/Incognito/) : même workflow de revue dans le navigateur, sans installation (ou en **PWA**). *Tout s'exécute localement — vos données ne quittent pas votre ordinateur.* Voir la section [Version web](#-version-web) ci-dessous.
 
 ![Demo](demo.gif)
 
@@ -21,7 +21,7 @@ Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Hu
 
 |                              |                                                                        |
 | ---------------------------- | ---------------------------------------------------------------------- |
-| 🏠 **100 % local**            | Bureau : aucun appel à une API externe. Web : traitement dans l'onglet (seuls les poids du modèle sont téléchargés). |
+| 🏠 **100 % local**            | Bureau : aucun appel à une API externe. Web : *tout s'exécute localement dans le navigateur* — seuls les poids du modèle sont téléchargés, jamais vos textes. |
 | 🌍 **Multiplateforme**        | Installateurs bureau macOS / Windows / Linux, ou **[Incognito Web](https://xiaoouwang.github.io/Incognito/)** dans le navigateur. |
 | 🇫🇷 **Pensé pour le français** | Modèles spaCy et CamemBERT adaptés aux textes qualitatifs en français. |
 | 👁️ **Contrôle humain**        | Vous validez, corrigez et désactivez entité par entité avant l'export. |
@@ -34,10 +34,10 @@ Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Hu
 
 ## 🚀 En bref
 
-1. **Importez** un texte ou un dossier de fichiers `.txt`
+1. **Importez** un texte, un dossier, ou des fichiers sélectionnés (`.txt`, `.docx` sur le web)
 2. **Lancez** la détection d'entités (NER) en un clic
 3. **Affinez** catégories et occurrences (personnes, lieux, organisations, dates, e-mails…)
-4. **Exportez** texte anonymisé, rapport et JSON Label Studio — dossier `outputs-YYYYMMDD-HHMMSS` en mode lot
+4. **Exportez** texte anonymisé, rapport et JSON Label Studio — dossier `outputs-YYYYMMDD-HHMMSS` (bureau) ou ZIP (web)
 
 Placeholders stables du type `[PERSON_1]`, `[LOCATION_2]`, `[EMAIL_1]`.
 
@@ -49,7 +49,7 @@ Disponibles dans les **deux interfaces** (bureau et web), avec des moteurs NER a
 
 - 🔍 **NER configurable** — bureau : spaCy (petit / grand) et CamemBERT ; web : CamemBERT (+ dates), BERT anglais, modèle Hugging Face personnalisé
 - 🖍️ **Revue interactive** — surlignage, ajout/suppression de spans, bascule par entité, catégories personnalisées
-- 📁 **Mode lot** — traitement automatique de tout le dossier, navigation Précédent/Suivant, saut par n° ou nom de fichier
+- 📁 **Mode lot** — bureau : dossier `.txt` sur disque ; web : **dossier entier** ou **fichiers choisis** (`.txt`, `.docx`), navigation Précédent/Suivant, saut par n° ou nom, barres de progression
 - 📄 **Exports automatiques** — `*-anonymized.txt`, `*-report.md`, `*-label-studio.json` (variante `*_modified` après changement de fichier)
 - 🏷️ **Label Studio** — pré-annotations + configuration XML
 - 📊 **Rapport d'audit** — provenance (NER automatique vs revue humaine), positions de caractères, index complet des spans
@@ -93,16 +93,19 @@ Même logique de revue et d'export — bureau ou navigateur, selon les besoins d
 
 **[Incognito Web](https://xiaoouwang.github.io/Incognito/)** — interface autonome pour anonymiser des corpus qualitatifs **dans le navigateur**. Aucun Electron, aucun Python : le NER s'exécute localement via [Transformers.js](https://huggingface.co/docs/transformers.js) et ONNX Runtime WASM.
 
-👉 **[Essayer en ligne](https://xiaoouwang.github.io/Incognito/)** · [Code source](web_interface/) · [Déploiement](web_interface/README.md#deploy-to-github-pages)
+**Message clé pour les utilisateurs :** *Everything runs locally — your data never leaves your computer.* (affiché dans l'interface.)
+
+👉 **[Essayer en ligne](https://xiaoouwang.github.io/Incognito/)** · [Code source](web_interface/) · [PWA](web_interface/README.md#install-as-an-app-pwa) · [Déploiement](web_interface/README.md#deploy-to-github-pages)
 
 
 |                              | Version web                                                            | Application de bureau (ci-dessous)                    |
 | ---------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------- |
-| 🔒 **Confidentialité**        | Texte traité dans l'onglet ; seuls les poids du modèle sont téléchargés | 100 % local, hors ligne après installation du modèle  |
+| 🔒 **Confidentialité**        | Analyse dans le navigateur ; seul le modèle est téléchargé une fois     | 100 % local, hors ligne après installation du modèle  |
 | 🧠 **NER**                    | CamemBERT (+ dates), BERT anglais, modèle Hugging Face personnalisé     | spaCy (sm/lg) + CamemBERT                             |
-| 📁 **Mode lot**               | Dossier → revue → ZIP à télécharger                                    | Écriture automatique dans `outputs-YYYYMMDD-HHMMSS/`  |
+| 📁 **Mode lot**               | Dossier **ou** fichiers choisis (`.txt`, `.docx`) → revue → ZIP         | Dossier `.txt` → écriture dans `outputs-YYYYMMDD-HHMMSS/` |
+| 📊 **Progression**            | Barres visuelles (téléchargement modèle, chargement lot, NER lot)        | Statut texte dans l'interface                         |
 | 🏷️ **Label Studio**           | Export JSON + config XML                                               | Idem + import lot                                     |
-| 💾 **Installation**           | Aucune — ouvrir l'URL                                                  | Installateurs macOS / Windows / Linux                 |
+| 💾 **Installation**           | URL ou **PWA** (Chrome / Edge) — voir [instructions](web_interface/README.md#install-as-an-app-pwa) | Installateurs macOS / Windows / Linux                 |
 
 
 Déployé sur **GitHub Pages** à chaque push sur `main` qui modifie `web_interface/` (workflow [`.github/workflows/deploy-web.yml`](.github/workflows/deploy-web.yml) — les changements hors de ce dossier ne redéploient pas le site).
@@ -258,6 +261,10 @@ Historique des évolutions fonctionnelles, avec date et fonctions concernées da
 - **Incognito** n'est plus limité au bureau : ajout de l'interface **[web_interface/](web_interface/)** — React + Vite + Transformers.js, revue interactive, rapport d'audit, export Label Studio, mode lot (ZIP).
 - Déploiement automatique sur **[GitHub Pages](https://xiaoouwang.github.io/Incognito/)** via `.github/workflows/deploy-web.yml`.
 - Liens croisés bureau ↔ web dans les deux interfaces.
+- **PWA** — installation depuis Chrome / Edge (`manifest.webmanifest`, `sw.js`).
+- **Confidentialité** — message visible : *Everything runs locally — your data never leaves your computer.*
+- **Mode lot web** — dossier entier ou fichiers choisis ; formats `.txt` et `.docx` (mammoth) ; barres de progression (modèle, chargement, NER).
+- Composants : `ModelProgress`, `BatchJobProgress`, `InstallAppBanner`, `batchLoad.js`.
 
 ### 2026-06-24 — Mode lot, navigation et sorties
 

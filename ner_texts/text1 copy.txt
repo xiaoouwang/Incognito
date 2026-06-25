@@ -1,0 +1,5 @@
+Extrait d'entretien :
+
+La docteure Marie Dupont a rencontré Jean Martin à Paris le 12 mars 2022.
+Marie travaille avec l'Université de Lyon. Son email est marie.dupont@example.com.
+La participante a aussi mentionné +33 6 12 34 56 78 et https://example.org/project.

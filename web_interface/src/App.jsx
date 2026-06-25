@@ -4,11 +4,19 @@ import CategoryReview from "./components/CategoryReview.jsx";
 import EntityEditMenu from "./components/EntityEditMenu.jsx";
 import HighlightedText from "./components/HighlightedText.jsx";
 import ModelProgress from "./components/ModelProgress.jsx";
+import BatchJobProgress from "./components/BatchJobProgress.jsx";
+import InstallAppBanner from "./components/InstallAppBanner.jsx";
 import { useNerWorker } from "./hooks/useNerWorker.js";
 import { createLabelStudioExport } from "./labelStudioExport.js";
 import { createAuditReport } from "./lib/auditReport.js";
 import { downloadBatchZip, downloadLabelStudioBundle } from "./lib/batchZip.js";
-import { readTextFilesFromDirectoryPicker, readTextFilesFromInput } from "./lib/batchLoad.js";
+import {
+  BATCH_EMPTY_MESSAGE,
+  batchSourceLabel,
+  readDocumentsFromDirectoryPicker,
+  readDocumentsFromFilePicker,
+  readDocumentsFromFolderInput,
+} from "./lib/batchLoad.js";
 import { NER_BACKENDS, SAMPLE_TEXT } from "./lib/constants.js";
 import { backendDisplayLabel, CUSTOM_MODEL_EXAMPLE } from "./lib/modelRegistry.js";
 import {
@@ -35,6 +43,7 @@ import {
 export default function App() {
   const { detectEntities: detectEntitiesInWorker, progressItems, modelReady } = useNerWorker();
   const folderInputRef = useRef(null);
+  const filesInputRef = useRef(null);
   const fileStatesRef = useRef({});
   const batchCustomCategoriesRef = useRef({});
   const entityMenuRef = useRef(null);
@@ -49,6 +58,7 @@ export default function App() {
   const [reportOpen, setReportOpen] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [isBatchLoading, setIsBatchLoading] = useState(false);
+  const [batchJobProgress, setBatchJobProgress] = useState(null);
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
   const [batchFolderLabel, setBatchFolderLabel] = useState(null);
@@ -60,7 +70,7 @@ export default function App() {
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [autoRunNer, setAutoRunNer] = useState(true);
   const [status, setStatus] = useState(
-    "Paste text, choose a NER model, then run detection. Models run locally in your browser via Transformers.js.",
+    "Paste or load your text, choose a model, then run detection. Everything stays on your computer.",
   );
   const [error, setError] = useState("");
   const [entityMenu, setEntityMenu] = useState(null);
@@ -288,11 +298,23 @@ export default function App() {
 
   async function processInitialBatchFolder(files, backend) {
     setIsDetecting(true);
+    setBatchJobProgress({
+      phase: "detecting",
+      current: 0,
+      total: files.length,
+      fileName: files[0]?.name || "",
+    });
 
     try {
       for (let index = 0; index < files.length; index += 1) {
         const file = files[index];
-        setStatus(`Initial processing: ${index + 1} of ${files.length} — ${file.name}...`);
+        setBatchJobProgress({
+          phase: "detecting",
+          current: index + 1,
+          total: files.length,
+          fileName: file.name,
+        });
+        setStatus(`Detecting entities: ${index + 1} of ${files.length} — ${file.name}`);
 
         const result = await detectEntitiesInWorker(file.text, backend, customModelId);
         const normalized = normalizeEntities(result.entities || [], file.text);
@@ -310,6 +332,7 @@ export default function App() {
       }
     } finally {
       setIsDetecting(false);
+      setBatchJobProgress(null);
     }
   }
 
@@ -374,12 +397,10 @@ export default function App() {
     await goToFile(index);
   }
 
-  async function loadBatchFiles(files, folderLabel) {
+  async function loadBatchFiles(files, sourceLabel) {
     if (!files.length) {
-      setError("No .txt or .text files found in the selected folder.");
-      setStatus(
-        "Folder opened, but no text files matched. Choose a folder that contains .txt or .text files.",
-      );
+      setError(BATCH_EMPTY_MESSAGE);
+      setStatus("No documents were loaded. Pick a folder or individual files to continue.");
       return;
     }
 
@@ -388,7 +409,7 @@ export default function App() {
     fileStatesRef.current = {};
     batchCustomCategoriesRef.current = {};
     setBatchMode(true);
-    setBatchFolderLabel(folderLabel);
+    setBatchFolderLabel(sourceLabel);
     setBatchOutputLabel(outputLabel);
     setBatchFiles(files);
     setCurrentFileIndex(0);
@@ -420,16 +441,15 @@ export default function App() {
 
     setError("");
     setIsBatchLoading(true);
-    setStatus("Reading text files from the selected folder...");
+    setBatchJobProgress({ phase: "loading", current: 0, total: 0, fileName: "" });
+    setStatus("Reading documents from the selected folder...");
 
     try {
-      const files = await readTextFilesFromInput(fileList);
+      const files = await readDocumentsFromFolderInput(fileList, setBatchJobProgress);
       if (!files.length) {
-        setError(
-          `No .txt or .text files found among the ${fileList.length} item(s) in that folder.`,
-        );
+        setError(BATCH_EMPTY_MESSAGE);
         setStatus(
-          "Folder opened, but no text files matched. Choose a folder that contains .txt or .text files.",
+          `Folder opened, but none of the ${fileList.length} item(s) matched .txt or .docx.`,
         );
         return;
       }
@@ -444,6 +464,39 @@ export default function App() {
       setStatus("Batch folder loading failed.");
     } finally {
       setIsBatchLoading(false);
+      setBatchJobProgress(null);
+      input.value = "";
+    }
+  }
+
+  async function handleBatchFilesChange(event) {
+    const input = event.target;
+    const fileList = input.files;
+
+    if (!fileList?.length) {
+      return;
+    }
+
+    setError("");
+    setIsBatchLoading(true);
+    setBatchJobProgress({ phase: "loading", current: 0, total: 0, fileName: "" });
+    setStatus("Reading selected documents...");
+
+    try {
+      const files = await readDocumentsFromFilePicker(fileList, setBatchJobProgress);
+      if (!files.length) {
+        setError(BATCH_EMPTY_MESSAGE);
+        setStatus("No .txt or .docx files were selected.");
+        return;
+      }
+
+      await loadBatchFiles(files, batchSourceLabel(files));
+    } catch (caughtError) {
+      setError(caughtError.message);
+      setStatus("Batch file loading failed.");
+    } finally {
+      setIsBatchLoading(false);
+      setBatchJobProgress(null);
       input.value = "";
     }
   }
@@ -453,20 +506,19 @@ export default function App() {
 
     if (window.showDirectoryPicker) {
       setIsBatchLoading(true);
-      setStatus("Choose a folder with text files...");
+      setBatchJobProgress({ phase: "loading", current: 0, total: 0, fileName: "" });
+      setStatus("Choose a folder with .txt or .docx documents...");
 
       try {
-        const result = await readTextFilesFromDirectoryPicker();
+        const result = await readDocumentsFromDirectoryPicker(setBatchJobProgress);
         if (!result) {
           folderInputRef.current?.click();
           return;
         }
 
         if (!result.files.length) {
-          setError("No .txt or .text files found in the selected folder.");
-          setStatus(
-            "Folder opened, but no text files matched. Choose a folder that contains .txt or .text files.",
-          );
+          setError(BATCH_EMPTY_MESSAGE);
+          setStatus("Folder opened, but no .txt or .docx files were found inside.");
           return;
         }
 
@@ -483,10 +535,16 @@ export default function App() {
         return;
       } finally {
         setIsBatchLoading(false);
+        setBatchJobProgress(null);
       }
     }
 
     folderInputRef.current?.click();
+  }
+
+  function openBatchFilePicker() {
+    setError("");
+    filesInputRef.current?.click();
   }
 
   async function downloadAllBatchOutputs() {
@@ -714,14 +772,16 @@ export default function App() {
           <div className="hero-brand">
             <img className="hero-logo" src="./logo.png" alt="" width={72} height={72} />
             <div className="hero-brand-text">
-              <h1>Incognito Web</h1>
-              <p className="hero-tagline">Client-side qualitative data anonymization</p>
+              <h1>Incognito</h1>
+              <p className="hero-tagline">Privacy-first text anonymization in your browser</p>
+              <p className="privacy-promise">
+                Everything runs locally — your data never leaves your computer.
+              </p>
             </div>
           </div>
 
           <p>
-            🔒 Anonymize your textual data with complete confidentiality<br />
-            🕵️‍♂️ Detect named entities<br />
+            🕵️‍♂️ Detect named entities in your text<br />
             👀 Review the identified occurrences<br />
             📄 Generate an anonymized audit report
           </p>
@@ -764,22 +824,24 @@ export default function App() {
               🔒
             </span>
             <div>
-              <strong style={{ fontSize: "1.1em" }}>100% client-side</strong>
-              <br />
-              <div style={{ fontSize: "0.95em", marginTop: 2 }}>
-                Your text is processed locally in a Web Worker with ONNX Runtime WASM.
-                <br />
-                <span style={{ color: "#555" }}>
-                  The only network traffic is a one-time download of model weights from Hugging
-                  Face — your documents are never uploaded.
-                </span>
+              <strong style={{ fontSize: "1.1em" }}>
+                Everything runs locally — your data never leaves your computer.
+              </strong>
+              <div style={{ fontSize: "0.95em", marginTop: 6 }}>
+                Your text is analyzed inside the browser, not on a remote server. The only
+                internet connection is a one-time download of the detection model — your
+                documents are never uploaded.
               </div>
             </div>
           </div>
         </aside>
       </header>
 
+      <InstallAppBanner />
+
       <ModelProgress progressItems={progressItems} modelReady={modelReady} />
+
+      <BatchJobProgress progress={batchJobProgress} />
 
       <section className="controls">
         <label className="backend-select">
@@ -868,24 +930,32 @@ export default function App() {
           </>
         ) : null}
         <button className="secondary" onClick={clearSession} disabled={isBatchLoading}>
-          {batchMode ? "Close folder" : "Clear"}
+          {batchMode ? "Close batch" : "Clear"}
         </button>
         <span className="status">{status}</span>
       </section>
 
       <section className="batch-panel panel">
-        <div className="panel-header">
-          <div>
-            <h2>Batch text folder</h2>
-            <p className="batch-description">
-              Select a folder of <code>.txt</code> or <code>.text</code> files. The app runs NER on
-              every file, lets you review each document, then download a timestamped{" "}
-              <code>outputs-YYYYMMDD-HHMMSS.zip</code> with anonymized text, audit reports, and
-              Label Studio JSON.
-            </p>
-          </div>
+        <div className="batch-panel-intro">
+          <h2>Batch processing</h2>
+          <p className="batch-description">
+            Anonymize several qualitative documents in one session. Load a whole folder or pick
+            specific <code>.txt</code> / <code>.docx</code> files, run named-entity detection,
+            review and correct each text interactively, then download a ZIP with anonymized versions,
+            audit reports, and Label Studio exports.
+          </p>
+        </div>
+
+        <div className="batch-load-actions">
           <button onClick={openBatchFolderPicker} disabled={isDetecting || isBatchLoading}>
-            {isBatchLoading ? "Loading folder..." : batchMode ? "Load another folder" : "Load text folder"}
+            {isBatchLoading ? "Loading…" : "Choose folder"}
+          </button>
+          <button
+            className="secondary"
+            onClick={openBatchFilePicker}
+            disabled={isDetecting || isBatchLoading}
+          >
+            Choose files…
           </button>
         </div>
 
@@ -899,73 +969,84 @@ export default function App() {
           onChange={handleBatchFolderChange}
         />
 
+        <input
+          ref={filesInputRef}
+          type="file"
+          multiple
+          accept=".txt,.text,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+          style={{ display: "none" }}
+          onChange={handleBatchFilesChange}
+        />
+
         {batchMode ? (
           <>
             <div className="batch-navigation">
-              <button
-                onClick={() => goToFile(currentFileIndex - 1)}
-                disabled={currentFileIndex === 0 || isBatchLoading || isDetecting}
-              >
-                Previous file
-              </button>
-              <div className="batch-file-indicator">
-                <strong>
-                  {currentFileIndex + 1} / {batchFiles.length}
-                </strong>
-                <span>{currentFile?.name}</span>
-                <small>{batchFolderLabel}</small>
-                {batchOutputLabel ? <small>{batchOutputLabel}.zip</small> : null}
+              <div className="batch-navigation-main">
+                <button
+                  onClick={() => goToFile(currentFileIndex - 1)}
+                  disabled={currentFileIndex === 0 || isBatchLoading || isDetecting}
+                >
+                  Previous file
+                </button>
+                <div className="batch-file-indicator">
+                  <strong>
+                    {currentFileIndex + 1} / {batchFiles.length}
+                  </strong>
+                  <span>{currentFile?.name}</span>
+                  <small>{batchFolderLabel}</small>
+                  {batchOutputLabel ? <small>{batchOutputLabel}.zip</small> : null}
+                </div>
+                <button
+                  onClick={() => goToFile(currentFileIndex + 1)}
+                  disabled={currentFileIndex >= batchFiles.length - 1 || isBatchLoading || isDetecting}
+                >
+                  Next file
+                </button>
               </div>
-              <button
-                onClick={() => goToFile(currentFileIndex + 1)}
-                disabled={currentFileIndex >= batchFiles.length - 1 || isBatchLoading || isDetecting}
-              >
-                Next file
-              </button>
-            </div>
 
-            <div className="batch-jump-controls">
-              <form className="batch-jump-field" onSubmit={handleJumpToFileNumber}>
-                <label htmlFor="batch-jump-number">Go to file #</label>
-                <div className="batch-jump-row">
-                  <input
-                    id="batch-jump-number"
-                    type="number"
-                    min={1}
-                    max={batchFiles.length}
-                    value={jumpFileNumber}
-                    onChange={(event) => setJumpFileNumber(event.target.value)}
-                    disabled={isBatchLoading || isDetecting}
-                  />
-                  <button type="submit" disabled={isBatchLoading || isDetecting}>
-                    Go
-                  </button>
-                </div>
-              </form>
+              <div className="batch-jump-controls">
+                <form className="batch-jump-field" onSubmit={handleJumpToFileNumber}>
+                  <label htmlFor="batch-jump-number">Go to file #</label>
+                  <div className="batch-jump-row">
+                    <input
+                      id="batch-jump-number"
+                      type="number"
+                      min={1}
+                      max={batchFiles.length}
+                      value={jumpFileNumber}
+                      onChange={(event) => setJumpFileNumber(event.target.value)}
+                      disabled={isBatchLoading || isDetecting}
+                    />
+                    <button type="submit" disabled={isBatchLoading || isDetecting}>
+                      Go
+                    </button>
+                  </div>
+                </form>
 
-              <form className="batch-jump-field" onSubmit={handleJumpToFileName}>
-                <label htmlFor="batch-jump-name">Go to file name</label>
-                <div className="batch-jump-row">
-                  <input
-                    id="batch-jump-name"
-                    list="batch-file-list"
-                    value={jumpFileName}
-                    onChange={(event) => setJumpFileName(event.target.value)}
-                    placeholder="Type or pick a file name"
-                    disabled={isBatchLoading || isDetecting}
-                  />
-                  <datalist id="batch-file-list">
-                    {batchFiles.map((file, index) => (
-                      <option key={file.id} value={file.name}>
-                        {index + 1}. {file.name}
-                      </option>
-                    ))}
-                  </datalist>
-                  <button type="submit" disabled={isBatchLoading || isDetecting}>
-                    Go
-                  </button>
-                </div>
-              </form>
+                <form className="batch-jump-field" onSubmit={handleJumpToFileName}>
+                  <label htmlFor="batch-jump-name">Go to file name</label>
+                  <div className="batch-jump-row">
+                    <input
+                      id="batch-jump-name"
+                      list="batch-file-list"
+                      value={jumpFileName}
+                      onChange={(event) => setJumpFileName(event.target.value)}
+                      placeholder="File name"
+                      disabled={isBatchLoading || isDetecting}
+                    />
+                    <datalist id="batch-file-list">
+                      {batchFiles.map((file, index) => (
+                        <option key={file.id} value={file.name}>
+                          {index + 1}. {file.name}
+                        </option>
+                      ))}
+                    </datalist>
+                    <button type="submit" disabled={isBatchLoading || isDetecting}>
+                      Go
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           </>
         ) : null}

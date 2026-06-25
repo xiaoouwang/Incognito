@@ -24,12 +24,22 @@ export function useNerWorker() {
         switch (progress.status) {
           case "initiate":
             setModelReady(false);
-            setProgressItems((current) => [...current, progress]);
+            setProgressItems((current) => {
+              const exists = current.some(
+                (item) => item.file === progress.file || item.name === progress.name,
+              );
+              if (exists) {
+                return current;
+              }
+              return [...current, { ...progress, progress: 0 }];
+            });
             break;
           case "progress":
             setProgressItems((current) =>
               current.map((item) =>
-                item.file === progress.file ? { ...item, ...progress } : item,
+                item.file === progress.file || item.name === progress.name
+                  ? { ...item, ...progress }
+                  : item,
               ),
             );
             break;
