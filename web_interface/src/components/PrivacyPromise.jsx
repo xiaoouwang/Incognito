@@ -10,13 +10,18 @@ export function PrivacyDetailsLink({ onOpen }) {
   );
 }
 
-export function PrivacyPromise({ onOpenDetails, className = "privacy-promise" }) {
+export function PrivacyPromise({ className = "version-announcement" }) {
   const { t } = useUiLocale();
 
   return (
     <p className={className}>
-      {t("privacyPromise")}{" "}
-      <PrivacyDetailsLink onOpen={onOpenDetails} />
+      <span className="version-announcement-badge" aria-hidden="true">
+        ✨ v{t("versionNumber")}
+      </span>
+      <span className="version-announcement-text">
+        🎯 {t("versionFeatureLead")}{" "}
+        <strong>{t("versionFeatureHighlight")}</strong>
+      </span>
     </p>
   );
 }

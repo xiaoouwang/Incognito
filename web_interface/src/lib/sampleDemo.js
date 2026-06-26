@@ -20,9 +20,6 @@ const DEMO_ENTITY_SPECS = [
   { label: "organization", text: "Floralis", start: 592, end: 600 },
   { label: "location", text: "France", start: 662, end: 668 },
   { label: "location", text: "Espagne", start: 675, end: 682 },
-  { label: "location", text: "Andalousie", start: 935, end: 945 },
-  { label: "organization", text: "GlobalG.A.P.", start: 1085, end: 1097 },
-  { label: "location", text: "Perpignan", start: 1101, end: 1110 },
 ];
 
 export function buildSampleDemoState() {

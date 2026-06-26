@@ -308,7 +308,7 @@ All annotated spans in source order with exact character positions.
 ${formatSection(spanIndexLines, "- None")}
 
 ## Replacement Method
-Selected entity categories were replaced with stable category placeholders, for example [PERSON_1], [LOCATION_1], [DATE_1], and [EMAIL_1]. Replacements are applied consistently for each unique value within the current text. Each line above records span counts, character offsets, and whether spans came from automatic detection or human manual review.
+Selected entity categories were replaced with stable category placeholders, for example [PER_1], [LOC_1], [DAT_1], and [EMA_1]. Replacements are applied consistently for each unique value within the current text. Each line above records span counts, character offsets, and whether spans came from automatic detection or human manual review.
 
 ## Categories Replaced
 ${selected.map((category) => `- ${getCategoryLabel(category, customCategories)}`).join("\n") || "- None"}

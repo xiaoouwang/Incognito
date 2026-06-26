@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
     exclude: ["@huggingface/transformers"],
+    include: ["gliner"],
   },
   worker: {
     format: "es",

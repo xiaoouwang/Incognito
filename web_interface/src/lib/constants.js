@@ -2,11 +2,7 @@ export const SAMPLE_TEXT = `Claire, ingénieure agronome de formation, doctorat 
 
 Julien…
 
-Interviewé : 5 ans chez AgroNova, responsable expérimentation terrain sur les cultures maraîchères (tomate, courgette, poivron), puis coordinateur technique chez Floralis. Travaille avec des coopératives agricoles dans le sud de la France et en Espagne. Assure le suivi des itinéraires techniques et la traçabilité des interventions culturales depuis les semis jusqu'à la commercialisation des produits. Très forte diversité d'exploitations partenaires. Responsable d'une équipe de trois techniciens.
-
-En Andalousie, peu de problèmes sanitaires majeurs ces dernières années, mais forte pression hydrique. Cultures sous serre principalement. Certification GlobalG.A.P.
-
-À Perpignan, station expérimentale sur deux hectares consacrée aux essais de biocontrôle (aleurodes, thrips). Une partie de la production est valorisée auprès d'un réseau local de distributeurs spécialisés dans l'agriculture biologique.`;
+Interviewé : 5 ans chez AgroNova, responsable expérimentation terrain sur les cultures maraîchères (tomate, courgette, poivron), puis coordinateur technique chez Floralis. Travaille avec des coopératives agricoles dans le sud de la France et en Espagne. Assure le suivi des itinéraires techniques et la traçabilité des interventions culturales depuis les semis jusqu'à la commercialisation des produits. Très forte diversité d'exploitations partenaires. Responsable d'une équipe de trois techniciens.`;
 
 export const CATEGORY_LABELS = {
   person: "People",

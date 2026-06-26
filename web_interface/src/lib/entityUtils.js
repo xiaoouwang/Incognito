@@ -1,7 +1,6 @@
 import {
   BUILTIN_CATEGORY_IDS,
   CATEGORY_LABELS,
-  CATEGORY_PREFIXES,
 } from "./constants.js";
 import { mergeEntities } from "./ruleDetection.js";
 
@@ -26,17 +25,18 @@ export function formatCategoryDisplayName(categoryId) {
     .join(" ");
 }
 
-function categoryPrefixFromLabel(label) {
-  const prefix = label
-    .trim()
-    .toUpperCase()
+export function placeholderPrefixFromCategory(categoryId) {
+  const letters = String(categoryId)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^A-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 24);
+    .toUpperCase()
+    .replace(/[^A-Z]/g, "");
 
-  return prefix || "CUSTOM";
+  return letters.slice(0, 3) || "ENT";
+}
+
+function categoryPrefixFromLabel(label) {
+  return placeholderPrefixFromCategory(label);
 }
 
 export function createCustomCategoryId(displayName, customCategories) {
@@ -83,12 +83,8 @@ export function getCategoryLabel(categoryId, customCategories) {
   return buildCategoryLabels(customCategories)[categoryId] || categoryId;
 }
 
-export function getCategoryPrefix(categoryId, customCategories) {
-  if (CATEGORY_PREFIXES[categoryId]) {
-    return CATEGORY_PREFIXES[categoryId];
-  }
-
-  return categoryPrefixFromLabel(getCategoryLabel(categoryId, customCategories));
+export function getCategoryPrefix(categoryId, customCategories = {}) {
+  return placeholderPrefixFromCategory(categoryId);
 }
 
 export function getCategoryChipClass(categoryId) {
@@ -294,8 +290,24 @@ export function finalizeDetectedEntities(text, entities) {
   return normalizeEntities(mergeEntities([...expandedModel, ...ruleEntities]), text);
 }
 
-export function removeEntityById(entities, entityId) {
-  return entities.filter((entity) => entity.id !== entityId);
+export function removeEntityById(entities, entityId, entity = null) {
+  if (entityId) {
+    return entities.filter((item) => item.id !== entityId);
+  }
+
+  if (entity) {
+    return entities.filter(
+      (item) =>
+        !(
+          item.start === entity.start &&
+          item.end === entity.end &&
+          item.label === entity.label &&
+          item.text === entity.text
+        ),
+    );
+  }
+
+  return entities;
 }
 
 export function groupEntities(entities) {

@@ -1,23 +1,43 @@
-import { useRef } from "react";
+import { forwardRef, useRef } from "react";
 import {
   getCategoryHighlightClass,
   getSelectionOffsets,
   isEntityActive,
 } from "../lib/entityUtils.js";
 
-export default function HighlightedText({
-  text,
-  segments,
-  categoryLabels,
-  selectedCategories,
-  excludedEntityKeys,
-  onAddSelection,
-  onEntityClick,
-}) {
+function mergeRefs(...refs) {
+  return (node) => {
+    for (const ref of refs) {
+      if (typeof ref === "function") {
+        ref(node);
+      } else if (ref) {
+        ref.current = node;
+      }
+    }
+  };
+}
+
+const HighlightedText = forwardRef(function HighlightedText(
+  {
+    text,
+    segments,
+    categoryLabels,
+    selectedCategories,
+    excludedEntityKeys,
+    onAddSelection,
+    onEntityClick,
+    getHighlightClass = getCategoryHighlightClass,
+  },
+  forwardedRef,
+) {
   const containerRef = useRef(null);
 
   if (!text) {
-    return <div className="empty-state">Paste text and run detection to highlight entities.</div>;
+    return (
+      <div className="empty-state" ref={forwardedRef}>
+        Paste text and run detection to highlight entities.
+      </div>
+    );
   }
 
   const displaySegments =
@@ -41,13 +61,13 @@ export default function HighlightedText({
   return (
     <div
       className="highlighted-text interactive-highlight"
-      ref={containerRef}
+      ref={mergeRefs(containerRef, forwardedRef)}
       onMouseUp={handleMouseUp}
     >
       {displaySegments.map((segment, index) =>
         segment.entity ? (
           <mark
-            className={`highlight ${getCategoryHighlightClass(segment.entity.label)} ${
+            className={`highlight ${getHighlightClass(segment.entity.label)} ${
               isEntityActive(segment.entity, selectedCategories, excludedEntityKeys)
                 ? "selected"
                 : "ignored"
@@ -71,4 +91,6 @@ export default function HighlightedText({
       )}
     </div>
   );
-}
+});
+
+export default HighlightedText;
