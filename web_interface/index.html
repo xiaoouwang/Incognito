@@ -3,19 +3,174 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Incognito — Privacy-first text anonymization in the browser</title>
+    <meta
+      name="description"
+      content="Anonymize qualitative interviews and field notes locally in your browser. Basic CamemBERT and advanced GLiNER modes, interactive review, audit reports, and Label Studio export — your data never leaves your computer."
+    />
+    <meta
+      name="keywords"
+      content="text anonymization, qualitative research, NER, CamemBERT, GLiNER, privacy, GDPR, interview anonymization, Label Studio, social sciences, French NLP, browser NER"
+    />
+    <meta name="author" content="Xiaoou Wang" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="googlebot" content="index, follow" />
     <meta name="theme-color" content="#203a5f" />
-    <meta name="description" content="Privacy-first qualitative text anonymization in the browser." />
+    <meta name="color-scheme" content="light" />
+    <meta name="application-name" content="Incognito" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Incognito" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <title>Incognito</title>
+    <link rel="canonical" href="https://xiaoouwang.github.io/Incognito/" />
+    <link rel="alternate" hreflang="en" href="https://xiaoouwang.github.io/Incognito/" />
+    <link rel="alternate" hreflang="fr" href="https://xiaoouwang.github.io/Incognito/" />
+    <link rel="alternate" hreflang="x-default" href="https://xiaoouwang.github.io/Incognito/" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Incognito" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="fr_FR" />
+    <meta property="og:url" content="https://xiaoouwang.github.io/Incognito/" />
+    <meta
+      property="og:title"
+      content="Incognito — Privacy-first text anonymization in the browser"
+    />
+    <meta
+      property="og:description"
+      content="Anonymize qualitative interviews and field notes locally. CamemBERT and GLiNER detection, interactive review, audit reports — data never leaves your computer."
+    />
+    <meta property="og:image" content="https://xiaoouwang.github.io/Incognito/pwa-512.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="Incognito app icon" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary" />
+    <meta
+      name="twitter:title"
+      content="Incognito — Privacy-first text anonymization in the browser"
+    />
+    <meta
+      name="twitter:description"
+      content="Anonymize qualitative interviews and field notes locally in your browser. Your data never leaves your computer."
+    />
+    <meta name="twitter:image" content="https://xiaoouwang.github.io/Incognito/pwa-512.png" />
+    <meta name="twitter:image:alt" content="Incognito app icon" />
+
     <link rel="icon" type="image/png" href="./logo.png" />
     <link rel="apple-touch-icon" href="./pwa-192.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebApplication",
+            "@id": "https://xiaoouwang.github.io/Incognito/#app",
+            "name": "Incognito",
+            "alternateName": "Incognito Web",
+            "url": "https://xiaoouwang.github.io/Incognito/",
+            "description": "Privacy-first qualitative text anonymization in the browser. Detect named entities with CamemBERT or GLiNER, review interactively, and export anonymized text with an audit report — processing stays on your device.",
+            "applicationCategory": "UtilitiesApplication",
+            "applicationSubCategory": "Text anonymization",
+            "operatingSystem": "Any",
+            "browserRequirements": "Requires JavaScript and a modern browser with WebAssembly support",
+            "inLanguage": ["en", "fr"],
+            "isAccessibleForFree": true,
+            "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+            "image": "https://xiaoouwang.github.io/Incognito/pwa-512.png",
+            "screenshot": "https://xiaoouwang.github.io/Incognito/pwa-512.png",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "EUR"
+            },
+            "featureList": [
+              "Local browser-based named-entity recognition",
+              "Basic anonymization with CamemBERT",
+              "Advanced anonymization with GLiNER",
+              "Interactive category and span review",
+              "Audit report and Label Studio export",
+              "Batch processing for .txt and .docx files"
+            ],
+            "creator": {
+              "@type": "Person",
+              "name": "Xiaoou Wang",
+              "url": "https://xiaoouwang.github.io/"
+            },
+            "publisher": {
+              "@type": "Organization",
+              "name": "Maison des Sciences de l'Homme Sud-Est",
+              "url": "https://mshs.univ-cotedazur.fr/"
+            },
+            "about": [
+              { "@type": "Thing", "name": "Text anonymization" },
+              { "@type": "Thing", "name": "Qualitative research" },
+              { "@type": "Thing", "name": "Named-entity recognition" },
+              { "@type": "Thing", "name": "Data privacy" }
+            ]
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://xiaoouwang.github.io/Incognito/#website",
+            "url": "https://xiaoouwang.github.io/Incognito/",
+            "name": "Incognito",
+            "description": "Privacy-first qualitative text anonymization in the browser.",
+            "inLanguage": ["en", "fr"],
+            "publisher": {
+              "@type": "Person",
+              "name": "Xiaoou Wang",
+              "url": "https://xiaoouwang.github.io/"
+            }
+          },
+          {
+            "@type": "SoftwareSourceCode",
+            "@id": "https://github.com/xiaoouwang/Incognito#code",
+            "name": "Incognito",
+            "codeRepository": "https://github.com/xiaoouwang/Incognito",
+            "url": "https://github.com/xiaoouwang/Incognito",
+            "programmingLanguage": ["JavaScript", "Python"],
+            "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+            "runtimePlatform": ["Browser", "Electron"]
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <main>
+        <h1>Incognito</h1>
+        <p>
+          Privacy-first qualitative text anonymization in your browser. Detect named entities,
+          review highlights, and export anonymized text with an audit report — your data never
+          leaves your computer.
+        </p>
+        <p>
+          Enable JavaScript to use the full Incognito Web interface (basic CamemBERT anonymization
+          and advanced GLiNER anonymization).
+        </p>
+        <p>
+          Source code:
+          <a href="https://github.com/xiaoouwang/Incognito">github.com/xiaoouwang/Incognito</a>
+        </p>
+      </main>
+      <div class="statcounter">
+        <a title="Web Analytics" href="https://statcounter.com/" target="_blank" rel="noreferrer">
+          <img
+            class="statcounter"
+            src="https://c.statcounter.com/13320863/0/19baae53/1/"
+            alt="Web Analytics"
+            referrerpolicy="no-referrer-when-downgrade"
+          />
+        </a>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
     <!-- Default Statcounter code for Incognito https://xiaoouwang.github.io/Incognito/ -->
     <script type="text/javascript">
@@ -28,18 +183,6 @@
       src="https://www.statcounter.com/counter/counter.js"
       async
     ></script>
-    <noscript>
-      <div class="statcounter">
-        <a title="Web Analytics" href="https://statcounter.com/" target="_blank" rel="noreferrer">
-          <img
-            class="statcounter"
-            src="https://c.statcounter.com/13320863/0/19baae53/1/"
-            alt="Web Analytics"
-            referrerpolicy="no-referrer-when-downgrade"
-          />
-        </a>
-      </div>
-    </noscript>
     <!-- End of Statcounter Code -->
   </body>
 </html>

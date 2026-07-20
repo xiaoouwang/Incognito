@@ -1,13 +1,17 @@
 {
-  "name": "Incognito",
+  "name": "Incognito — Privacy-first text anonymization",
   "short_name": "Incognito",
-  "description": "Privacy-first qualitative text anonymization in the browser.",
+  "description": "Anonymize qualitative interviews and field notes locally in your browser. CamemBERT and GLiNER detection with interactive review — your data never leaves your computer.",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "./",
   "scope": "./",
+  "id": "./",
   "display": "standalone",
   "background_color": "#f5f1e8",
   "theme_color": "#203a5f",
   "orientation": "any",
+  "categories": ["utilities", "productivity", "education"],
   "icons": [
     {
       "src": "./pwa-192.png",

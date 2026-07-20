@@ -1,7 +1,15 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { translate, UI_LOCALES } from "../lib/uiStrings.js";
 
 const UiLocaleContext = createContext(null);
+
+function applyDocumentLocale(locale) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  document.documentElement.lang = locale;
+}
 
 export function UiLocaleProvider({ children }) {
   const [locale, setLocaleState] = useState(() => {
@@ -12,6 +20,10 @@ export function UiLocaleProvider({ children }) {
     const stored = window.localStorage.getItem("incognito-ui-locale");
     return UI_LOCALES.includes(stored) ? stored : "en";
   });
+
+  useEffect(() => {
+    applyDocumentLocale(locale);
+  }, [locale]);
 
   const setLocale = useCallback((nextLocale) => {
     if (!UI_LOCALES.includes(nextLocale)) {
