@@ -284,6 +284,7 @@ Historique des évolutions fonctionnelles, avec date et fonctions concernées da
 - **Mise en page** — catégories · texte surligné · graphe · aperçu anonymisé (plein largeur en bas).
 - Composants / libs — `PersonGraphCard`, `PersonFocusChips`, `usePersonGraphPanel`, `basicPersonGraph.js`, `depWorker.js`, `personGraphCsv.js`, `GenerativeWorkflowSection`, `GenerativeRelationView`.
 - Déploiement : [GitHub Pages](https://xiaoouwang.github.io/Incognito/) · voir [`web_interface/README.md`](web_interface/README.md).
+- Journal détaillé design / code / motifs (jour 1 → 1.0.0) : [`docs/WEB_INTERFACE_EVOLUTION.md`](docs/WEB_INTERFACE_EVOLUTION.md).
 
 ### 2026-06-25 — v0.4.0 — Anonymisation avancée (GLiNER) et interface web
 
