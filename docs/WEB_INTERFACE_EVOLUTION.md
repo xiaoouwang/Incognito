@@ -281,6 +281,90 @@ Export the graph for analysis/archiving; mark the release as a **major** version
 
 ---
 
+## Exact date change log
+
+Calendar dates and clock times below are **authoritative where a git commit or chat timestamp exists**. Timezone is **Europe/Paris (UTC+2)** unless noted. Source tags:
+
+- **git** — `git log` author date on `main` (or noted branch)
+- **chat** — working-session timestamp ([Incognito web evolution](ac144e07-78b7-4d8e-93a1-1dae8a212c26)); used when several design steps landed in one release commit
+- **inferred** — same calendar day as surrounding git/chat evidence; no finer clock time
+
+Phases 5–9 (generative, person graph, Related to, CSV, 1.0.0) were developed and shipped on **2026-10-02**; earlier web history is mostly **2026-06-25 → 2026-06-26**, with SEO on **2026-07-20**.
+
+### 2026-06-25 — Birth of the web UI through i18n / PWA cleanup
+
+| Time | Change | Reason | Source |
+| ---- | ------ | ------ | ------ |
+| ~morning (before 13:23) | Product decision: fork a **client-side** `web_interface/` (Vite + React + Transformers.js/ONNX) from the mature desktop app | Local browser anonymization without Electron/Python for many users | chat + inferred |
+| 13:23 | **`6137a1a`** — first `web_interface/` tree + GitHub Pages deploy workflow; `package.json` **0.1.0** | Ship a standalone browser app | git |
+| 13:23 | **`a321268`** — README: Incognito = desktop + web; repo URL fixes | Positioning and citations | git |
+| 13:23 | **`6371c28`** — longer citation title; path-filtered web deploy triggers | Avoid redeploying Pages on pure desktop commits | git |
+| 13:36 | **`cb8f01e`** — version / privacy banner | Visible product identity and privacy promise | git |
+| afternoon (same day, before batch commit) | Model registry hardening; CamemBERT+dates as default; English NER option; custom HF ONNX URL; privacy copy clarifications (download ≠ upload text) | Wrong ONNX paths failed; dates model qualitatively best; researchers need clear privacy language | chat + inferred |
+| 15:07 | **`e21be02`** — progress bars, `.docx` (mammoth), folder **or** file open modes; PWA assets/SW | Batch UX and loading feedback for real corpora | git |
+| 15:40 | **`28f9f7c`** — simpler interface wording (“Run Anonymization”, researcher-facing copy) | Drop NER jargon | git |
+| 15:50 | **`cf7f7ef`** — manipulable toy demo (Claire / Julien) | Explore review UI before downloading models | git |
+| 17:06 | **`9a67ddb`** — FR/EN UI (`uiStrings`, locale context, privacy details) | Bilingual chrome for FR/EN users | git |
+| 17:26 | **`70de9b5`** — remove install-as-app / PWA clutter | Install ≠ offline forever; reduce UI noise | git |
+
+### 2026-06-26 — Basic 0.3.0 and Advanced 0.4.0 (GLiNER)
+
+| Time | Change | Reason | Source |
+| ---- | ------ | ------ | ------ |
+| 10:59 | **`6e93ae6`** — expand NER highlights to **all occurrences** of a value | Bug: only the first span was highlighted | git |
+| 11:30 | **`b1be9ae`** — release **0.3.0** (was 0.1.0) | Basic CamemBERT anonymization considered stable | git |
+| same day (pre-merge) | Decoder / generative Transformers.js experiment tried then **abandoned** | Outputs unusable for controlled anonymization | chat + inferred |
+| 16:56 | **`cd85522`** — **Advanced anonymization (GLiNER)** dual-mode UI; CamemBERT extracted to `CamembertWorkflowSection`; regex email/URL/phone; synced scroll; placeholders; layout/copy overhaul | Finer labels (nationality, disease, diploma, job…); keep Basic intact | git |
+| 17:00 | **`c92f3c0`** (branch history) — parallel “advance anonymization / GLiNER” interface note | Same Advanced track | git |
+| 17:02 | **`055ae10`** — READMEs; `package.json` **0.4.0** | Document Advanced mode and bump version | git |
+
+*(Root README historically labeled 0.3.0 / 0.4.0 under 2026-06-25; git author dates for those releases are **2026-06-26**.)*
+
+### 2026-07-20 — SEO only
+
+| Time | Change | Reason | Source |
+| ---- | ------ | ------ | ------ |
+| 16:16 | Request: SEO without changing visible UI copy | Discoverability for the public Pages site | chat |
+| 16:19 | **`9b9571d`** — `index.html` meta, `robots.txt`, `sitemap.xml`, manifest tweaks | Implement SEO request | git |
+
+### 2026-10-02 — Generative Albert, person graph, layout 3+1, Related to, CSV, **1.0.0**
+
+All of the following were built in one working session and landed in release commit **`7d1a6da`** at **20:01**. Times are chat timestamps for *when the decision/work was driven*; code first appeared on `main` at the release commit.
+
+| Time | Change | Reason | Source |
+| ---- | ------ | ------ | ------ |
+| 14:45 | Local Vite preview for Generative work | Iterate Albert mode without waiting on Pages | chat |
+| 14:55–15:59 | Albert key/model wiring; longer sample; CORS → Vite **proxy**; JSON truncation → **compact entity/graph JSON** + client replace; raise `max_tokens`; `scripts/benchmark_albert.py` | Direct browser→Albert blocked/truncated; need reliable person-centric graph | chat |
+| 15:24 | Isolated **`generativeWorkflow.css`** | Shared CSS classes blanked the page | chat |
+| 16:12–16:55 | Relation highlighting in paste text; hide inter-person arrows | Show person graph in text; reduce visual noise | chat |
+| 17:02–17:45 | Sync scroll; soft-exclude gray-out; Categories & entities parity; panel sizing; graph click vs soft-exclude bugs | Manual edit parity with Basic | chat |
+| 17:49–18:17 | **Person graph for Basic** via **UDPipe WASM** + `buildBasicPersonGraph` (governor-share + proximity) | Person-wise editing without Albert | chat |
+| 18:17–18:39 | Graph sparse / preview click bugs; person **underline focus** (not recolor) | Category colors already used for NER; improve focus UX | chat |
+| 18:47–18:58 | **GLiNER → same person graph** (`LABEL_TO_ATTR`, `usePersonGraphPanel`); taller graph | Richer Advanced spans should feed the graph | chat |
+| 19:00–19:07 | Layout → four columns, then **3+1**: Categories · Highlighted · Graph on one row; anonymized preview full-width below | Preview is secondary; categories and graph must not share one sidebar | chat |
+| 19:23–19:38 | Manual **Related to** (Basic/Advanced, then Generative); paste title → Highlighted when relation view on | Users must fix wrong automatic attachments | chat |
+| 19:40–19:48 | Person **chips = focus only**; soft-exclude must still change anonymized text (restore after over-aggressive visual-only); nested-alias guard for `[PER_1] Martin` | Focus ≠ exclude; aliases must not keep replacing after full-name exclude | chat |
+| 19:41–19:58 | **Export CSV** + **Export CSV by person** on all modes | Archive / analyze the person graph | chat |
+| 19:59–20:01 | Version **1.0.0** (README, `package.json`, `uiStrings`); push **`7d1a6da`** | Major: graph + generative + relations first-class; exit 0.x | chat + git |
+| 20:02–20:04 | **`docs/WEB_INTERFACE_EVOLUTION.md`** + README pointer; push **`0c52f09`** | Journal of design/code/reasons from day one | chat + git |
+
+### Date ↔ phase map
+
+| Date(s) | Phase(s) in this doc |
+| ------- | -------------------- |
+| 2026-06-25 (pre-commit → 17:26) | Phase 0–3 (framing, birth, deploy/i18n/PWA, batch/demo start) |
+| 2026-06-26 | Phase 3 end (**0.3.0**) + Phase 4 (**0.4.0** GLiNER) |
+| 2026-07-20 | Phase 4 follow-up (SEO) |
+| 2026-10-02 | Phases 5–9 (Generative, UDPipe/GLiNER graph, layout 3+1, Related to / chips / soft-exclude, CSV, **1.0.0**, this journal) |
+
+### Gaps (honest)
+
+- Early June chat turns (models, privacy, spaCy, batch “folder does nothing”) have **no embedded clock timestamps** in the transcript; they are dated by the **2026-06-25** git commits they produced.
+- Decoder experiments were **not** kept as separate `main` commits; only the GLiNER outcome is dated precisely (**2026-06-26 16:56**).
+- Between **2026-07-20** and **2026-10-02** there were **no** `web_interface/` commits on `main`.
+
+---
+
 ## Chronological index of user-driven milestones
 
 Condensed from the working chat (paraphrased; API keys omitted).
@@ -356,8 +440,9 @@ web_interface/
 
 When shipping a meaningful UX or workflow change:
 
-1. Add a short dated bullet under a new phase (or extend Phase 9+).  
-2. Update root `README.md` / `web_interface/README.md` if user-facing.  
-3. Bump `web_interface/package.json` + `uiStrings.versionNumber` when the release warrants it.
+1. Add a row (or hourly block) under **Exact date change log** with `YYYY-MM-DD`, time if known, reason, and `git` / `chat` source.  
+2. Extend or add a phase section if the change is large enough to need Intent / Design / Code narrative.  
+3. Update root `README.md` / `web_interface/README.md` if user-facing.  
+4. Bump `web_interface/package.json` + `uiStrings.versionNumber` when the release warrants it.
 
-*Last updated: 2026-10-02 — Incognito Web 1.0.0.*
+*Last updated: 2026-10-02 — exact date change log added (git + chat timestamps).*
