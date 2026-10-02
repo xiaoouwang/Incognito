@@ -8,9 +8,9 @@ Outil pour les sciences humaines et sociales — entretiens, notes de terrain, r
 
 Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Humanités Numériques · [MSHS Sud-Est](https://mshs.univ-cotedazur.fr/) · [Université Côte d'Azur](https://univ-cotedazur.fr/)
 
-**Version actuelle : 0.4.0** (interface web) · **0.3.0** (application de bureau — installateurs sur [Releases](https://github.com/xiaoouwang/Incognito/releases))
+**Version actuelle : 1.0.0** (interface web) · **0.3.0** (application de bureau — installateurs sur [Releases](https://github.com/xiaoouwang/Incognito/releases))
 
-**🌐 [Incognito Web](https://xiaoouwang.github.io/Incognito/)** — anonymisation **de base** (CamemBERT) et **avancée** (GLiNER, étiquettes personnalisées : santé, diplômes, fonctions, nationalité…). Détection locale, relecture interactive, export. *Tout s'exécute localement — vos données ne quittent pas votre ordinateur.* Voir la section [Version web](#-version-web).
+**🌐 [Incognito Web](https://xiaoouwang.github.io/Incognito/)** — **trois modes** : anonymisation **de base** (CamemBERT), **avancée** (GLiNER) et **générative** (Albert) ; **graphe de personnes** (relations, focus, soft-exclude, export CSV) ; détection locale, relecture interactive. *Tout s'exécute localement — vos données ne quittent pas votre ordinateur* (sauf appel Albert en mode génératif, avec votre clé API). Voir la section [Version web](#-version-web).
 
 ![Demo](demo.gif)
 
@@ -41,11 +41,12 @@ Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Hu
 
 Placeholders stables du type `[PER_1]`, `[PER_2]`, `[LOC_1]`, `[ORG_1]`, `[EMA_1]` — trois lettres de catégorie + numéro ; la **première valeur distincte** d'une catégorie devient `_1`, la suivante `_2`, etc.
 
-> **v0.4.0 (web)** — **anonymisation avancée** (GLiNER) : étiquettes fines au choix (santé, diplômes, nationalité…). **v0.3.0** — anonymisation de base (CamemBERT) stabilisée. Pas une garantie d'anonymat total ; relisez toujours avant diffusion.
+> **v1.0.0 (web)** — première version majeure : **graphe de personnes** (UDPipe), édition manuelle des relations, focus par pastilles, export CSV, et mode **génératif** (Albert). **v0.4.0** — anonymisation avancée (GLiNER). **v0.3.0** — anonymisation de base (CamemBERT). Pas une garantie d'anonymat total ; relisez toujours avant diffusion.
 
 Disponibles dans les **deux interfaces** (bureau et web), avec des moteurs NER adaptés à chaque plateforme :
 
-- 🔍 **NER configurable** — bureau : spaCy (petit / grand) et CamemBERT ; web : **anonymisation de base** (CamemBERT + dates, BERT anglais, modèle Hugging Face personnalisé) et **anonymisation avancée** (GLiNER multi-étiquettes, expérimental)
+- 🔍 **NER configurable** — bureau : spaCy (petit / grand) et CamemBERT ; web : **de base** (CamemBERT + dates, BERT anglais, modèle Hugging Face personnalisé), **avancée** (GLiNER multi-étiquettes) et **générative** (Albert API)
+- 🕸️ **Graphe de personnes (web)** — aliases / attributs liés via UDPipe (ou proximité) ; soft-exclude synchronisé ; « Related to » ; pastilles de focus ; export CSV (long ou une ligne par personne)
 - 📧 **Règles regex (web, mode avancé)** — e-mails, URL et numéros de téléphone détectés par expressions régulières (prioritaires sur GLiNER)
 - 🖍️ **Revue interactive** — surlignage, ajout/suppression de spans, bascule par entité, catégories personnalisées
 - 📁 **Mode lot** — bureau : dossier `.txt` sur disque ; web : **dossier entier** ou **fichiers choisis** (`.txt`, `.docx`), navigation Précédent/Suivant, saut par n° ou nom, barres de progression
@@ -79,8 +80,8 @@ Interface **React** (Vite) + **Transformers.js** (ONNX dans un Web Worker), dép
 
 | Couche   | Outils                                              |
 | -------- | --------------------------------------------------- |
-| 🌐 Web   | React, Vite, Transformers.js, ONNX Runtime WASM, GLiNER (ONNX) |
-| 🧠 NER   | CamemBERT, BERT anglais, GLiNER multi-v2.1, modèles ONNX personnalisés |
+| 🌐 Web   | React, Vite, Transformers.js, ONNX Runtime WASM, GLiNER (ONNX), UDPipe WASM, Albert (mode génératif) |
+| 🧠 NER   | CamemBERT, BERT anglais, GLiNER multi-v2.1, modèles ONNX personnalisés ; graphe personnes (French-GSD) |
 | 📦 Release | `npm run build` → GitHub Actions (`deploy-web.yml`) |
 
 
@@ -90,24 +91,27 @@ Même logique de revue et d'export — bureau ou navigateur, selon les besoins d
 
 ## 🌐 Version web
 
-**[Incognito Web](https://xiaoouwang.github.io/Incognito/)** — interface autonome pour anonymiser des corpus qualitatifs **dans le navigateur**. Aucun Electron, aucun Python : le NER s'exécute localement via [Transformers.js](https://huggingface.co/docs/transformers.js) et ONNX Runtime WASM ; le mode **avancé** ajoute [GLiNER](https://github.com/urchade/GLiNER) (ONNX ~472 Mo, mis en cache après le premier téléchargement).
+**[Incognito Web](https://xiaoouwang.github.io/Incognito/)** — interface autonome pour anonymiser des corpus qualitatifs **dans le navigateur**. Aucun Electron, aucun Python : le NER s'exécute localement via [Transformers.js](https://huggingface.co/docs/transformers.js) et ONNX Runtime WASM ; le mode **avancé** ajoute [GLiNER](https://github.com/urchade/GLiNER) (ONNX ~472 Mo, mis en cache) ; le mode **génératif** appelle [Albert](https://albert.api.etalab.gouv.fr/) avec votre clé (texte envoyé à l'API uniquement dans ce mode).
 
-**Deux modes** (boutons *Basic anonymization* / *Advanced anonymization*) :
+**Trois modes** (boutons *Basic* / *Advanced* / *Generative*) :
 
 | Mode | Moteur | Usage typique |
 | ---- | ------ | ------------- |
-| **De base** | CamemBERT (+ dates), BERT anglais, modèle custom | Personnes, lieux, organisations, dates — entretiens et notes de terrain en français |
-| **Avancé** (bêta) | GLiNER + regex (e-mail, URL, téléphone) | Protocoles plus fins : santé, diplômes, fonctions, nationalité, étiquettes personnalisées |
+| **De base** | CamemBERT (+ dates), BERT anglais, modèle custom | Personnes, lieux, organisations, dates — entretiens et notes de terrain en français. |
+| **Avancé** | GLiNER + regex (e-mail, URL, téléphone) | Protocoles plus fins : santé, diplômes, fonctions, nationalité, étiquettes personnalisées. |
+| **Génératif** | Albert (API) | Graphe de personnes / relations proposé par le LLM, avec revue et soft-exclude. |
 
-**Interface :** démos préchargées pour chaque mode ; trois colonnes (catégories · texte surligné · aperçu anonymisé) ; défilement synchronisé entre surlignage et aperçu ; interface **FR/EN**.
+**Graphe de personnes (tous les modes web)** — après détection (ou run Albert), Incognito construit un graphe (aliases, attributs, relations) via **UDPipe** French-GSD (~23 Mo, CC BY-NC-SA, mis en cache) ou proximité. Soft-exclude synchronisé catégories ↔ graphe ; pastilles de focus au-dessus du texte ; édition « Related to » ; **Export CSV** / **Export CSV by person**.
+
+**Interface :** démos préchargées ; mise en page catégories · texte surligné · graphe · aperçu anonymisé (plein largeur en bas) ; défilement synchronisé ; interface **FR/EN**.
 
 👉 **[Essayer en ligne](https://xiaoouwang.github.io/Incognito/)** · [Code source](web_interface/) · [Déploiement](web_interface/README.md#deploy-to-github-pages)
 
 
 |                              | Version web                                                            | Application de bureau (ci-dessous)                    |
 | ---------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------- |
-| 🔒 **Confidentialité**        | Analyse dans le navigateur ; seul le modèle est téléchargé une fois     | 100 % local, hors ligne après installation du modèle  |
-| 🧠 **NER**                    | **De base :** CamemBERT (+ dates), BERT anglais, modèle HF custom. **Avancé :** GLiNER (étiquettes au choix) + regex e-mail / URL / téléphone | spaCy (sm/lg) + CamemBERT                             |
+| 🔒 **Confidentialité**        | Analyse dans le navigateur ; seul le modèle est téléchargé une fois (sauf Albert en mode génératif) | 100 % local, hors ligne après installation du modèle  |
+| 🧠 **NER**                    | De base / avancé / génératif + graphe personnes (UDPipe) | spaCy (sm/lg) + CamemBERT                             |
 | 📁 **Mode lot**               | Dossier **ou** fichiers choisis (`.txt`, `.docx`) → revue → ZIP         | Dossier `.txt` → écriture dans `outputs-YYYYMMDD-HHMMSS/` |
 | 📊 **Progression**            | Barres visuelles (téléchargement modèle, segments GLiNER, chargement lot) | Statut texte dans l'interface                         |
 | 🏷️ **Label Studio**           | Export JSON + config XML                                               | Idem + import lot                                     |
@@ -271,6 +275,15 @@ Copyright remains with the original author. The AGPLv3 license grants users the 
 ## 📝 Mises à jour
 
 Historique des évolutions fonctionnelles, avec date et fonctions concernées dans le code.
+
+### 2026-10-02 — v1.0.0 — Graphe de personnes, relations et anonymisation générative
+
+- **Version 1.0.0 (web)** — première version majeure (sortie de la série 0.x) : le parcours web intègre un **graphe de personnes** et un mode **génératif**.
+- **Graphe de personnes** (modes de base, avancé et génératif) — construction via **UDPipe** French-GSD (WASM) ou proximité ; soft-exclude synchronisé avec les catégories ; pastilles de focus au-dessus du texte surligné ; édition manuelle **Related to** ; exports **CSV** (une ligne par surface) et **CSV by person** (une ligne par personne).
+- **Anonymisation générative** — revue Albert (graphe / relations), soft-exclude, pastilles de focus, export CSV.
+- **Mise en page** — catégories · texte surligné · graphe · aperçu anonymisé (plein largeur en bas).
+- Composants / libs — `PersonGraphCard`, `PersonFocusChips`, `usePersonGraphPanel`, `basicPersonGraph.js`, `depWorker.js`, `personGraphCsv.js`, `GenerativeWorkflowSection`, `GenerativeRelationView`.
+- Déploiement : [GitHub Pages](https://xiaoouwang.github.io/Incognito/) · voir [`web_interface/README.md`](web_interface/README.md).
 
 ### 2026-06-25 — v0.4.0 — Anonymisation avancée (GLiNER) et interface web
 

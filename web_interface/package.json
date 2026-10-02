@@ -1,8 +1,8 @@
 {
   "name": "incognito-web",
   "private": true,
-  "version": "0.4.0",
-  "description": "Incognito Web — browser interface for qualitative text anonymization (CamemBERT + GLiNER), companion to the Incognito desktop app.",
+  "version": "1.0.0",
+  "description": "Incognito Web — browser interface for qualitative text anonymization (Basic, Advanced, Generative) with person-graph review, companion to the Incognito desktop app.",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -15,7 +15,8 @@
     "jszip": "^3.10.1",
     "mammoth": "^1.12.0",
     "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react-dom": "^19.2.3",
+    "udpipe-wasm": "^0.1.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",

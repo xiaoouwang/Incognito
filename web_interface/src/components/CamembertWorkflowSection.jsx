@@ -5,9 +5,12 @@ import EntityEditMenu from "./EntityEditMenu.jsx";
 import HighlightedText from "./HighlightedText.jsx";
 import ModelProgress from "./ModelProgress.jsx";
 import BatchJobProgress from "./BatchJobProgress.jsx";
+import PersonGraphCard from "./PersonGraphCard.jsx";
+import PersonGraphExportButton from "./PersonGraphExportButton.jsx";
 import WorkflowSectionHeader from "./WorkflowSectionHeader.jsx";
 import { useUiLocale } from "../context/UiLocaleContext.jsx";
 import { useNerWorker } from "../hooks/useNerWorker.js";
+import { useDepWorker } from "../hooks/useDepWorker.js";
 import { useSyncedScroll } from "../hooks/useSyncedScroll.js";
 import { createLabelStudioExport } from "../labelStudioExport.js";
 import { createAuditReport } from "../lib/auditReport.js";
@@ -22,6 +25,12 @@ import {
 import { NER_BACKENDS } from "../lib/constants.js";
 import { buildSampleDemoState } from "../lib/sampleDemo.js";
 import { backendDisplayLabel, CUSTOM_MODEL_EXAMPLE } from "../lib/modelRegistry.js";
+import { buildBasicPersonGraph, applyRelationOverrides, isPersonLabel } from "../lib/basicPersonGraph.js";
+import { buildPersonFocusRanges } from "../lib/personFocus.js";
+import {
+  surfaceExcludeKey,
+  toggleSurfaceExcluded,
+} from "../lib/albertEdit.js";
 import {
   addEntitySpans,
   buildCategoryLabels,
@@ -42,9 +51,29 @@ import {
   removeEntityById,
   replaceSelectedCategories,
 } from "../lib/entityUtils.js";
+import "./generativeWorkflow.css";
+
+function guessSurfaceCategory(entities, surface, attrKey = "") {
+  const lower = String(surface || "").toLocaleLowerCase();
+  const hit = entities.find((entity) => entity.text.toLocaleLowerCase() === lower);
+  if (hit?.label) {
+    return hit.label;
+  }
+  if (attrKey === "loc") return "location";
+  if (attrKey === "org") return "organization";
+  if (attrKey === "dob") return "date";
+  if (attrKey === "em") return "email";
+  if (attrKey === "tel") return "phone";
+  return "misc";
+}
 
 export default function CamembertWorkflowSection() {
   const { detectEntities: detectEntitiesInWorker, progressItems, modelReady } = useNerWorker();
+  const {
+    parseDependencies,
+    progressItems: depProgressItems,
+    modelReady: depModelReady,
+  } = useDepWorker();
   const { t } = useUiLocale();
   const folderInputRef = useRef(null);
   const filesInputRef = useRef(null);
@@ -82,12 +111,156 @@ export default function CamembertWorkflowSection() {
   const [entityMenu, setEntityMenu] = useState(null);
   const [customCategories, setCustomCategories] = useState({});
   const [isEditingSource, setIsEditingSource] = useState(false);
+  const [persons, setPersons] = useState([]);
+  const [excludedPlaceholders, setExcludedPlaceholders] = useState({});
+  const [excludedSurfaces, setExcludedSurfaces] = useState({});
+  const [personGraphNote, setPersonGraphNote] = useState("");
+  const [hoveredPersonPlaceholder, setHoveredPersonPlaceholder] = useState(null);
+  const [pinnedPersonPlaceholder, setPinnedPersonPlaceholder] = useState(null);
+  const relationOverridesRef = useRef({});
 
   const showSourceHighlight = entities.length > 0 && !isEditingSource;
 
   useSyncedScroll(sourceScrollRef, previewScrollRef, showSourceHighlight);
 
   const currentFile = batchFiles[currentFileIndex] || null;
+
+  function rebuildPersonGraph(sourceText, nextEntities, depResult = null, { resetExclusions = true } = {}) {
+    if (resetExclusions) {
+      relationOverridesRef.current = {};
+      setExcludedPlaceholders({});
+      setExcludedSurfaces({});
+      setPinnedPersonPlaceholder(null);
+      setHoveredPersonPlaceholder(null);
+    }
+    const graph = buildBasicPersonGraph(sourceText, nextEntities, depResult);
+    setPersons(applyRelationOverrides(graph.persons, relationOverridesRef.current));
+    setPersonGraphNote(
+      graph.usedDependencyParse
+        ? t("personGraphDepReady")
+        : t("personGraphProximityFallback"),
+    );
+    return graph;
+  }
+
+  async function enrichWithDependencyGraph(sourceText, nextEntities) {
+    try {
+      setPersonGraphNote(t("personGraphDepLoading"));
+      const depResult = await parseDependencies(sourceText);
+      rebuildPersonGraph(sourceText, nextEntities, depResult, { resetExclusions: false });
+    } catch (caughtError) {
+      rebuildPersonGraph(sourceText, nextEntities, null, { resetExclusions: false });
+      setPersonGraphNote(
+        `${t("personGraphProximityFallback")} (${caughtError instanceof Error ? caughtError.message : String(caughtError)})`,
+      );
+    }
+  }
+
+  function setEntityKeyExcluded(nextKeys, category, surface, excluded) {
+    const key = getEntityValueKey(category, surface);
+    if (excluded) {
+      nextKeys[key] = true;
+    } else {
+      delete nextKeys[key];
+    }
+  }
+
+  /** Exclude/restore every NER span whose text matches (any category). */
+  function applySurfaceToExcludedKeys(nextKeys, surface, excluding, preferredCategory = null) {
+    const lower = String(surface || "").toLocaleLowerCase();
+    if (!lower) {
+      return;
+    }
+    let matched = false;
+    for (const entity of entities) {
+      if (entity.text.toLocaleLowerCase() !== lower) {
+        continue;
+      }
+      matched = true;
+      setEntityKeyExcluded(nextKeys, entity.label, entity.text, excluding);
+    }
+    if (!matched && preferredCategory) {
+      setEntityKeyExcluded(nextKeys, preferredCategory, surface, excluding);
+    }
+  }
+
+  function handleTogglePerson(placeholder) {
+    const person = persons.find((item) => item.placeholder === placeholder);
+    if (!person) {
+      return;
+    }
+    const excluding = !excludedPlaceholders[placeholder];
+    const nameSurfaces = [person.name, ...(person.aliases || []), ...(person.corefs || [])];
+
+    setExcludedPlaceholders((current) => {
+      const next = { ...current };
+      if (excluding) {
+        next[placeholder] = true;
+      } else {
+        delete next[placeholder];
+      }
+      return next;
+    });
+
+    setExcludedEntityKeys((current) => {
+      const next = { ...current };
+      for (const surface of nameSurfaces) {
+        applySurfaceToExcludedKeys(next, surface, excluding, "person");
+      }
+      for (const attr of person.attrs || []) {
+        applySurfaceToExcludedKeys(
+          next,
+          attr.value,
+          excluding,
+          attr.entityLabel || guessSurfaceCategory(entities, attr.value, attr.key),
+        );
+      }
+      return next;
+    });
+
+    setExcludedSurfaces((current) => {
+      const next = { ...current };
+      for (const surface of nameSurfaces) {
+        const key = surfaceExcludeKey(placeholder, surface);
+        if (excluding) {
+          next[key] = true;
+        } else {
+          delete next[key];
+        }
+      }
+      for (const attr of person.attrs || []) {
+        const key = surfaceExcludeKey(attr.placeholder || placeholder, attr.value);
+        if (excluding) {
+          next[key] = true;
+        } else {
+          delete next[key];
+        }
+      }
+      return next;
+    });
+  }
+
+  function handleToggleGraphSurface(placeholder, surface, attrKey = "", entityLabel = "") {
+    const person = persons.find((item) => item.placeholder === placeholder);
+    const isNameSurface =
+      Boolean(person) &&
+      (person.name === surface ||
+        (person.aliases || []).includes(surface) ||
+        (person.corefs || []).includes(surface));
+    const preferredCategory = isNameSurface
+      ? "person"
+      : entityLabel || guessSurfaceCategory(entities, surface, attrKey);
+
+    const surfaceKey = surfaceExcludeKey(placeholder, surface);
+    const willExclude = !excludedSurfaces[surfaceKey];
+
+    setExcludedSurfaces((current) => toggleSurfaceExcluded(current, placeholder, surface));
+    setExcludedEntityKeys((current) => {
+      const next = { ...current };
+      applySurfaceToExcludedKeys(next, surface, willExclude, preferredCategory);
+      return next;
+    });
+  }
 
   function syncCustomCategories(next, batchScoped = batchMode) {
     setCustomCategories(next);
@@ -115,6 +288,13 @@ export default function CamembertWorkflowSection() {
   }, [entityMenu]);
 
   useEffect(() => {
+    rebuildPersonGraph(initialDemo.text, initialDemo.entities, null);
+    void enrichWithDependencyGraph(initialDemo.text, initialDemo.entities);
+    // Initial demo graph only once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     if (!batchMode || !currentFile) {
       return;
     }
@@ -135,6 +315,15 @@ export default function CamembertWorkflowSection() {
   const highlightedSegments = useMemo(
     () => createHighlightSegments(text, entities),
     [text, entities],
+  );
+  const focusedPersonPlaceholder = pinnedPersonPlaceholder || hoveredPersonPlaceholder;
+  const focusedPerson = useMemo(
+    () => persons.find((person) => person.placeholder === focusedPersonPlaceholder) || null,
+    [persons, focusedPersonPlaceholder],
+  );
+  const personFocusRanges = useMemo(
+    () => buildPersonFocusRanges(text, focusedPerson),
+    [text, focusedPerson],
   );
   const anonymizedText = useMemo(
     () =>
@@ -270,6 +459,8 @@ export default function CamembertWorkflowSection() {
       setModelName(result.model);
       setIsDemoMode(false);
       setIsEditingSource(false);
+      rebuildPersonGraph(textToAnalyze, normalized, null);
+      void enrichWithDependencyGraph(textToAnalyze, normalized);
 
       const uniqueCount = Object.values(
         normalized.reduce((groups, entity) => {
@@ -619,6 +810,8 @@ export default function CamembertWorkflowSection() {
     setError("");
     setIsDemoMode(true);
     setIsEditingSource(false);
+    rebuildPersonGraph(demo.text, demo.entities, null);
+    void enrichWithDependencyGraph(demo.text, demo.entities);
     setStatus(t("statusDemoRestored"));
   }
 
@@ -651,6 +844,11 @@ export default function CamembertWorkflowSection() {
 
     setText("");
     setEntities([]);
+    setPersons([]);
+    relationOverridesRef.current = {};
+    setExcludedPlaceholders({});
+    setExcludedSurfaces({});
+    setPersonGraphNote("");
     setSelectedCategories({});
     setExcludedEntityKeys({});
     setModelName(null);
@@ -691,10 +889,42 @@ export default function CamembertWorkflowSection() {
     const key = getEntityValueKey(category, entityText);
     setExcludedEntityKeys((current) => {
       const next = { ...current };
-      if (next[key]) {
-        delete next[key];
-      } else {
+      const excluding = !next[key];
+      if (excluding) {
         next[key] = true;
+      } else {
+        delete next[key];
+      }
+      return next;
+    });
+
+    setExcludedSurfaces((current) => {
+      const next = { ...current };
+      const excluding = !excludedEntityKeys[key];
+      for (const person of persons) {
+        const nameMatch =
+          person.name === entityText ||
+          (person.aliases || []).includes(entityText) ||
+          (person.corefs || []).includes(entityText);
+        if (category === "person" && nameMatch) {
+          const surfaceKey = surfaceExcludeKey(person.placeholder, entityText);
+          if (excluding) {
+            next[surfaceKey] = true;
+          } else {
+            delete next[surfaceKey];
+          }
+        }
+        for (const attr of person.attrs || []) {
+          if (attr.value !== entityText) {
+            continue;
+          }
+          const surfaceKey = surfaceExcludeKey(attr.placeholder || person.placeholder, attr.value);
+          if (excluding) {
+            next[surfaceKey] = true;
+          } else {
+            delete next[surfaceKey];
+          }
+        }
       }
       return next;
     });
@@ -730,6 +960,35 @@ export default function CamembertWorkflowSection() {
     setEntityMenu(null);
   }
 
+  function handleRelateEntityToPerson(personPlaceholder) {
+    const menu = entityMenuRef.current;
+    const entity = menu?.entity;
+    if (!entity?.text || !personPlaceholder) {
+      return;
+    }
+    const target = persons.find((person) => person.placeholder === personPlaceholder);
+    if (!target) {
+      return;
+    }
+    const lower = entity.text.toLocaleLowerCase();
+    const entry = {
+      placeholder: personPlaceholder,
+      surface: entity.text,
+      entityLabel: entity.label || "misc",
+      asAlias: isPersonLabel(entity.label),
+    };
+    const nextOverrides = { ...relationOverridesRef.current, [lower]: entry };
+    relationOverridesRef.current = nextOverrides;
+    setPersons((current) => applyRelationOverrides(current, nextOverrides));
+    closeEntityMenu();
+    setStatus(
+      t(entry.asAlias ? "entityMenuAliasStatus" : "entityMenuRelatedStatus", {
+        text: entity.text,
+        person: target.name,
+      }),
+    );
+  }
+
   function setEntityMenuScope(scope) {
     setEntityMenu((current) => {
       if (!current) {
@@ -759,6 +1018,8 @@ export default function CamembertWorkflowSection() {
       ...current,
       [categoryId]: current[categoryId] ?? true,
     }));
+    rebuildPersonGraph(text, next, null);
+    void enrichWithDependencyGraph(text, next);
     closeEntityMenu();
     const count = spans.length;
     const scopeNote =
@@ -792,6 +1053,8 @@ export default function CamembertWorkflowSection() {
 
     const next = removeEntityById(entities, entityMenu.entity.id, entityMenu.entity);
     setEntities(next);
+    rebuildPersonGraph(text, next, null);
+    void enrichWithDependencyGraph(text, next);
     closeEntityMenu();
     setStatus(`Removed entity "${entityMenu.entity.text}".`);
   }
@@ -806,7 +1069,10 @@ export default function CamembertWorkflowSection() {
         badge={t("camembertBadge")}
       />
 
-      <ModelProgress progressItems={progressItems} modelReady={modelReady} />
+      <ModelProgress
+        progressItems={[...progressItems, ...depProgressItems]}
+        modelReady={modelReady && depModelReady !== false}
+      />
 
       <BatchJobProgress progress={batchJobProgress} />
 
@@ -1047,8 +1313,8 @@ export default function CamembertWorkflowSection() {
         </section>
       ) : null}
 
-      <section className="workspace workspace-three-col">
-        <div className="panel workspace-sidebar">
+      <section className="workspace workspace-four-col gen-workspace">
+        <div className="panel workspace-sidebar gen-sidebar">
           <div className="panel-header">
             <h2>{t("panel2Title")}</h2>
             <span>
@@ -1110,6 +1376,10 @@ export default function CamembertWorkflowSection() {
               categoryLabels={categoryLabels}
               selectedCategories={selectedCategories}
               excludedEntityKeys={excludedEntityKeys}
+              focusRanges={personFocusRanges}
+              persons={persons}
+              pinnedPlaceholder={pinnedPersonPlaceholder}
+              onPinPerson={setPinnedPersonPlaceholder}
               onAddSelection={(selection) => {
                 const nextMenu = {
                   mode: "add",
@@ -1135,6 +1405,11 @@ export default function CamembertWorkflowSection() {
               onChange={(event) => {
                 setText(event.target.value);
                 setEntities([]);
+                setPersons([]);
+                relationOverridesRef.current = {};
+                setExcludedPlaceholders({});
+                setExcludedSurfaces({});
+                setPersonGraphNote("");
                 setSelectedCategories({});
                 setExcludedEntityKeys({});
                 setModelName(null);
@@ -1145,6 +1420,67 @@ export default function CamembertWorkflowSection() {
               placeholder={t("textPlaceholder")}
             />
           )}
+        </div>
+
+        <div className="panel workspace-graph">
+          <div className="panel-header">
+            <h2>{t("generativeGraphTitle")}</h2>
+            <div className="panel-header-actions">
+              <PersonGraphExportButton
+                persons={persons}
+                excludedPlaceholders={excludedPlaceholders}
+                excludedSurfaces={excludedSurfaces}
+                onExported={(mode) =>
+                  setStatus(
+                    t(mode === "byPerson" ? "personGraphExportByPersonDone" : "personGraphExportDone"),
+                  )
+                }
+              />
+            </div>
+            <span>
+              {personGraphNote || t("generativeGraphHint", { count: persons.length })}
+            </span>
+          </div>
+          <div className="workspace-graph-body">
+            {persons.length ? (
+              <div className="gen-graph-list gen-graph-list-sidebar">
+                {persons.map((person, personIndex) => (
+                  <PersonGraphCard
+                    key={`${person.placeholder}-${person.name}-${personIndex}`}
+                    person={person}
+                    excluded={Boolean(excludedPlaceholders[person.placeholder])}
+                    excludedSurfaces={excludedSurfaces}
+                    focused={focusedPersonPlaceholder === person.placeholder}
+                    pinned={pinnedPersonPlaceholder === person.placeholder}
+                    onHoverPerson={setHoveredPersonPlaceholder}
+                    onPinPerson={(placeholder) => {
+                      setPinnedPersonPlaceholder((current) =>
+                        current === placeholder ? null : placeholder,
+                      );
+                    }}
+                    onTogglePerson={handleTogglePerson}
+                    onToggleSurface={handleToggleGraphSurface}
+                    onToggleAttr={(placeholder, value) => {
+                      const personMatch = persons.find((item) =>
+                        (item.attrs || []).some((attr) => attr.value === value),
+                      );
+                      const attr = personMatch?.attrs?.find((item) => item.value === value);
+                      handleToggleGraphSurface(
+                        placeholder || personMatch?.placeholder,
+                        value,
+                        attr?.key,
+                        attr?.entityLabel,
+                      );
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="gen-maps-empty">{t("generativeGraphEmpty")}</p>
+            )}
+            <p className="category-hint">{t("personGraphFocusHint")}</p>
+            <p className="category-hint">{t("personGraphLicenseHint")}</p>
+          </div>
         </div>
 
         <div className="panel workspace-preview">
@@ -1164,9 +1500,11 @@ export default function CamembertWorkflowSection() {
           sourceText={text}
           menuCategories={menuCategories}
           categoryLabels={categoryLabels}
+          persons={persons}
           onScopeChange={setEntityMenuScope}
           onAdd={handleAddEntity}
           onAddCustom={handleAddCustomCategory}
+          onRelateToPerson={handleRelateEntityToPerson}
           onRemove={handleRemoveEntity}
           onClose={closeEntityMenu}
         />

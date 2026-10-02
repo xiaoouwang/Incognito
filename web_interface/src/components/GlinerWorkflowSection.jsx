@@ -5,9 +5,13 @@ import EntityEditMenu from "./EntityEditMenu.jsx";
 import GlinerJobProgress from "./GlinerJobProgress.jsx";
 import HighlightedText from "./HighlightedText.jsx";
 import BatchJobProgress from "./BatchJobProgress.jsx";
+import PersonGraphCard from "./PersonGraphCard.jsx";
+import PersonGraphExportButton from "./PersonGraphExportButton.jsx";
 import WorkflowSectionHeader from "./WorkflowSectionHeader.jsx";
 import { useUiLocale } from "../context/UiLocaleContext.jsx";
 import { useGlinerWorker } from "../hooks/useGlinerWorker.js";
+import { useDepWorker } from "../hooks/useDepWorker.js";
+import { usePersonGraphPanel } from "../hooks/usePersonGraphPanel.js";
 import { useSyncedScroll } from "../hooks/useSyncedScroll.js";
 import { createLabelStudioExport } from "../labelStudioExport.js";
 import { createAuditReport } from "../lib/auditReport.js";
@@ -49,9 +53,11 @@ import {
   isEntityActive,
   removeEntityById,
 } from "../lib/entityUtils.js";
+import "./generativeWorkflow.css";
 
 export default function GlinerWorkflowSection() {
   const { detectEntities: detectEntitiesWithGliner, jobProgress } = useGlinerWorker();
+  const { parseDependencies } = useDepWorker();
   const { t } = useUiLocale();
   const folderInputRef = useRef(null);
   const filesInputRef = useRef(null);
@@ -90,9 +96,37 @@ export default function GlinerWorkflowSection() {
   const [customCategories, setCustomCategories] = useState({});
   const [isEditingSource, setIsEditingSource] = useState(false);
 
+  const {
+    persons,
+    excludedPlaceholders,
+    excludedSurfaces,
+    personGraphNote,
+    pinnedPersonPlaceholder,
+    focusedPersonPlaceholder,
+    personFocusRanges,
+    setHoveredPersonPlaceholder,
+    setPinnedPersonPlaceholder,
+    refreshPersonGraph,
+    clearPersonGraph,
+    handleTogglePerson,
+    handleToggleGraphSurface,
+    syncEntityChipToGraph,
+    relateEntityToPerson,
+  } = usePersonGraphPanel({
+    text,
+    entities,
+    t,
+    parseDependencies,
+  });
+
   const showSourceHighlight = entities.length > 0 && !isEditingSource;
 
   useSyncedScroll(sourceScrollRef, previewScrollRef, showSourceHighlight);
+
+  useEffect(() => {
+    refreshPersonGraph(initialDemo.text, initialDemo.entities, { resetExclusions: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const currentFile = batchFiles[currentFileIndex] || null;
 
@@ -243,6 +277,13 @@ export default function GlinerWorkflowSection() {
     setReportOpen(false);
     setError("");
     setIsEditingSource(nextEntities.length === 0);
+
+    const nextText = savedState?.text ?? file.text;
+    if (nextEntities.length) {
+      refreshPersonGraph(nextText, nextEntities, { resetExclusions: true });
+    } else {
+      clearPersonGraph();
+    }
   }
 
   async function runGlinerDetection({
@@ -279,6 +320,7 @@ export default function GlinerWorkflowSection() {
       setModelName(GLINER_MODEL_ID);
       setIsDemoMode(false);
       setIsEditingSource(false);
+      refreshPersonGraph(textToAnalyze, normalized, { resetExclusions: true });
 
       const uniqueCount = Object.values(
         normalized.reduce((groups, entity) => {
@@ -634,6 +676,7 @@ export default function GlinerWorkflowSection() {
     setError("");
     setIsDemoMode(true);
     setIsEditingSource(false);
+    refreshPersonGraph(demo.text, demo.entities, { resetExclusions: true });
     setStatus(t("glinerStatusDemoRestored"));
   }
 
@@ -666,6 +709,7 @@ export default function GlinerWorkflowSection() {
 
     setText("");
     setEntities([]);
+    clearPersonGraph();
     setSelectedCategories({});
     setExcludedEntityKeys({});
     setModelName(null);
@@ -716,15 +760,17 @@ export default function GlinerWorkflowSection() {
 
   function toggleEntityValue(category, entityText) {
     const key = getEntityValueKey(category, entityText);
+    const excluding = !excludedEntityKeys[key];
     setExcludedEntityKeys((current) => {
       const next = { ...current };
-      if (next[key]) {
-        delete next[key];
-      } else {
+      if (excluding) {
         next[key] = true;
+      } else {
+        delete next[key];
       }
       return next;
     });
+    syncEntityChipToGraph(category, entityText, excluding);
   }
 
   function copyAnonymizedText() {
@@ -757,6 +803,24 @@ export default function GlinerWorkflowSection() {
     setEntityMenu(null);
   }
 
+  function handleRelateEntityToPerson(personPlaceholder) {
+    const entity = entityMenuRef.current?.entity;
+    if (!entity?.text || !personPlaceholder) {
+      return;
+    }
+    const personName = relateEntityToPerson(entity, personPlaceholder);
+    if (!personName) {
+      return;
+    }
+    closeEntityMenu();
+    setStatus(
+      t(entity.label === "person" ? "entityMenuAliasStatus" : "entityMenuRelatedStatus", {
+        text: entity.text,
+        person: personName,
+      }),
+    );
+  }
+
   function setEntityMenuScope(scope) {
     setEntityMenu((current) => {
       if (!current) {
@@ -786,6 +850,7 @@ export default function GlinerWorkflowSection() {
       ...current,
       [categoryId]: current[categoryId] ?? true,
     }));
+    refreshPersonGraph(text, next, { resetExclusions: false });
     closeEntityMenu();
     const count = spans.length;
     const scopeNote =
@@ -819,6 +884,7 @@ export default function GlinerWorkflowSection() {
 
     const next = removeEntityById(entities, entityMenu.entity.id, entityMenu.entity);
     setEntities(next);
+    refreshPersonGraph(text, next, { resetExclusions: false });
     closeEntityMenu();
     setStatus(`Removed entity "${entityMenu.entity.text}".`);
   }
@@ -1061,8 +1127,8 @@ export default function GlinerWorkflowSection() {
         </section>
       ) : null}
 
-      <section className="workspace workspace-three-col">
-        <div className="panel workspace-sidebar">
+      <section className="workspace workspace-four-col gen-workspace">
+        <div className="panel workspace-sidebar gen-sidebar">
           <div className="panel-header">
             <h2>{t("panel2Title")}</h2>
             <span>
@@ -1119,6 +1185,10 @@ export default function GlinerWorkflowSection() {
               categoryLabels={categoryLabels}
               selectedCategories={selectedCategories}
               excludedEntityKeys={excludedEntityKeys}
+              focusRanges={personFocusRanges}
+              persons={persons}
+              pinnedPlaceholder={pinnedPersonPlaceholder}
+              onPinPerson={setPinnedPersonPlaceholder}
               getHighlightClass={getGlinerLabelHighlightClass}
               onAddSelection={(selection) => {
                 const nextMenu = {
@@ -1145,6 +1215,7 @@ export default function GlinerWorkflowSection() {
               onChange={(event) => {
                 setText(event.target.value);
                 setEntities([]);
+                clearPersonGraph();
                 setSelectedCategories({});
                 setExcludedEntityKeys({});
                 setModelName(null);
@@ -1155,6 +1226,78 @@ export default function GlinerWorkflowSection() {
               placeholder={t("textPlaceholder")}
             />
           )}
+        </div>
+
+        <div className="panel workspace-graph">
+          <div className="panel-header">
+            <h2>{t("generativeGraphTitle")}</h2>
+            <div className="panel-header-actions">
+              <PersonGraphExportButton
+                persons={persons}
+                excludedPlaceholders={excludedPlaceholders}
+                excludedSurfaces={excludedSurfaces}
+                onExported={(mode) =>
+                  setStatus(
+                    t(mode === "byPerson" ? "personGraphExportByPersonDone" : "personGraphExportDone"),
+                  )
+                }
+              />
+            </div>
+            <span>
+              {personGraphNote || t("generativeGraphHint", { count: persons.length })}
+            </span>
+          </div>
+          <div className="workspace-graph-body">
+            {persons.length ? (
+              <div className="gen-graph-list gen-graph-list-sidebar">
+                {persons.map((person, personIndex) => (
+                  <PersonGraphCard
+                    key={`${person.placeholder}-${person.name}-${personIndex}`}
+                    person={person}
+                    excluded={Boolean(excludedPlaceholders[person.placeholder])}
+                    excludedSurfaces={excludedSurfaces}
+                    focused={focusedPersonPlaceholder === person.placeholder}
+                    pinned={pinnedPersonPlaceholder === person.placeholder}
+                    onHoverPerson={setHoveredPersonPlaceholder}
+                    onPinPerson={(placeholder) => {
+                      setPinnedPersonPlaceholder((current) =>
+                        current === placeholder ? null : placeholder,
+                      );
+                    }}
+                    onTogglePerson={(placeholder) =>
+                      handleTogglePerson(placeholder, setExcludedEntityKeys)
+                    }
+                    onToggleSurface={(placeholder, surface, attrKey, entityLabel) =>
+                      handleToggleGraphSurface(
+                        placeholder,
+                        surface,
+                        setExcludedEntityKeys,
+                        attrKey,
+                        entityLabel,
+                      )
+                    }
+                    onToggleAttr={(placeholder, value) => {
+                      const personMatch = persons.find((item) =>
+                        (item.attrs || []).some((attr) => attr.value === value),
+                      );
+                      const attr = personMatch?.attrs?.find((item) => item.value === value);
+                      handleToggleGraphSurface(
+                        placeholder || personMatch?.placeholder,
+                        value,
+                        setExcludedEntityKeys,
+                        attr?.key,
+                        attr?.entityLabel,
+                      );
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="gen-maps-empty">{t("generativeGraphEmpty")}</p>
+            )}
+            <p className="category-hint">{t("personGraphFocusHint")}</p>
+            <p className="category-hint">{t("personGraphLicenseHint")}</p>
+          </div>
         </div>
 
         <div className="panel workspace-preview">
@@ -1174,9 +1317,11 @@ export default function GlinerWorkflowSection() {
           sourceText={text}
           menuCategories={menuCategories}
           categoryLabels={categoryLabels}
+          persons={persons}
           onScopeChange={setEntityMenuScope}
           onAdd={handleAddEntity}
           onAddCustom={handleAddCustomCategory}
+          onRelateToPerson={handleRelateEntityToPerson}
           onRemove={handleRemoveEntity}
           onClose={closeEntityMenu}
         />

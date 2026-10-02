@@ -1,26 +1,28 @@
 # Incognito Web
 
-**Version 0.4.0** — standalone, **client-side** web interface for [Incognito](../README.md). One of two ways to anonymize qualitative text (alongside the desktop app). NER runs entirely in the browser — no Python, no Electron, no server.
+**Version 1.0.0** — standalone, **client-side** web interface for [Incognito](../README.md). One of two ways to anonymize qualitative text (alongside the desktop app). NER runs in the browser — no Python, no Electron, no server (except optional Albert API calls in Generative mode).
 
 **Live app:** [https://xiaoouwang.github.io/Incognito/](https://xiaoouwang.github.io/Incognito/)
 
 > **Everything runs locally — your data never leaves your computer.**
-> Your text is analyzed in the browser, not on a remote server. The only internet use is a one-time download of detection models; your documents are never uploaded.
+> Your text is analyzed in the browser, not on a remote server. The only internet use is a one-time download of detection models; your documents are never uploaded. *(Generative mode is the exception: text is sent to Albert with your API key.)*
 
-## Two anonymization modes
+## Three anonymization modes
 
 Use the toggle at the top of the workflow:
 
 | Mode | Engine | Best for |
 | ---- | ------ | -------- |
 | **Basic anonymization** (default) | CamemBERT (+ dates), BERT English, custom Hugging Face ONNX | People, places, organisations, dates in French qualitative text |
-| **Advanced anonymization** (beta) | [GLiNER](https://github.com/urchade/GLiNER) multi-label NER | Finer protocols — health, diplomas, job titles, nationality, and other custom labels |
+| **Advanced anonymization** | [GLiNER](https://github.com/urchade/GLiNER) multi-label NER | Finer protocols — health, diplomas, job titles, nationality, custom labels |
+| **Generative anonymization** | [Albert](https://albert.api.etalab.gouv.fr/) chat API | LLM-built person graph / relations, then the same review tools |
 
-Both modes share the same review workflow:
+All three modes share the **person graph** review layer:
 
-1. **Detect** named entities in your text
-2. **Review** the identified occurrences (toggle categories, exclude values, add/remove spans)
-3. **Export** anonymized text, audit report, and Label Studio bundle
+1. **Detect** (or run Albert)
+2. **Review** categories, soft-exclude values, edit spans, attach surfaces with **Related to**
+3. **Focus** person chips above the highlighted text (focus only — does not change anonymization)
+4. **Export** anonymized text, audit / Label Studio (Basic & Advanced), and person-graph **CSV** / **CSV by person**
 
 Replacements use **short stable placeholders**: three letters from the category + number — e.g. `[PER_1]`, `[PER_2]`, `[LOC_1]`, `[ORG_1]`, `[EMA_1]`, `[NAT_1]`.
 
@@ -43,17 +45,31 @@ This is an **anonymization assistant**, not a guarantee of full anonymization. A
 - **Pre-loaded demo** — Jean Dupont biography with example spans (explore labels without downloading the model)
 - **Score threshold** — adjustable GLiNER confidence (default 0.2)
 
-### Shared (both modes)
+### Generative anonymization (Albert)
 
-- **Three-column layout** — categories & entities · highlighted source · anonymized preview (scroll synced between highlight and preview)
+- **API key + model** — paste your Albert key; choose a chat model
+- **Person / relation graph** from the model response, then soft-exclude and Related to like the other modes
+- **Sample text** for a first run without your own corpus
+
+### Person graph (all web modes)
+
+- Built after detection via French **UDPipe** (WASM, French-GSD ~23 MB, **CC BY-NC-SA**, cached) or proximity fallback
+- Soft-exclude sync between category chips and graph cards (updates anonymized preview)
+- Person chips above highlighted text for focus/underline only
+- Manual **Related to** from entity click menus
+- **Export CSV** (one row per surface) and **Export CSV by person** (one row per person)
+
+### Shared review & export
+
+- **Layout** — categories · highlighted text · person graph · anonymized preview (full-width bottom row)
 - **Interactive review** — category toggles, per-value exclusion, manual span add/remove, custom categories
-- **Audit report** — Markdown traceability with provenance (automatic vs manual)
-- **Label Studio export** — pre-annotations JSON + labeling config XML
-- **Batch processing** — choose a **whole folder** or **hand-picked files** (`.txt`, `.docx`); review each document; download a timestamped ZIP
+- **Audit report** — Markdown traceability with provenance (automatic vs manual) — Basic & Advanced
+- **Label Studio** — JSON pre-annotations + XML config download — Basic & Advanced
+- **Batch mode** — choose a folder or pick files (`.txt`, `.docx`); Previous / Next; jump by number or name; ZIP download with anonymized text, report, and Label Studio JSON
 - **Visible progress** — model download, GLiNER segment detection, batch loading, and batch detection
-- **UI in English or French** — language toggle next to the title
+- **FR / EN UI** — language toggle in the header
 
-## Quick start
+## Quick start (local)
 
 ```bash
 cd web_interface
@@ -61,14 +77,15 @@ npm install
 npm run dev
 ```
 
-Open the URL shown in the terminal (typically http://127.0.0.1:5173).
+Open the URL printed by Vite (default `http://127.0.0.1:5173`).
 
-The app opens in **Basic anonymization** with a pre-loaded sample demo. Switch to **Advanced anonymization** to explore GLiNER.
+The app opens in **Basic anonymization** with a pre-loaded sample demo. Switch to **Advanced** or **Generative** as needed.
 
 **First run on your own text:**
 
-- **Basic** — CamemBERT ONNX downloads from Hugging Face (~100–400 MB depending on model) and is cached in the browser.
-- **Advanced** — GLiNER ONNX (`model_q4f16.onnx`, ~472 MB) downloads once and is cached (browser Cache API + in-memory session).
+- **Basic** — CamemBERT ONNX downloads from Hugging Face (~100–400 MB depending on model) and is cached in the browser. After detection, the person graph may download UDPipe French-GSD (~23 MB).
+- **Advanced** — GLiNER ONNX (`model_q4f16.onnx`, ~472 MB) downloads once and is cached; then the same person graph / focus underlines as Basic.
+- **Generative** — requires an Albert API key; no local NER model download.
 
 Progress bars show download and detection status.
 
@@ -79,20 +96,29 @@ Progress bars show download and detection status.
 1. Explore the **pre-loaded demo** or paste your own text.
 2. Choose a **NER backend** (French CamemBERT + dates by default).
 3. Click **Run Anonymization**.
-4. Review categories and spans in the three-column panel.
-5. Copy anonymized text, open the **audit report**, or **export to Label Studio**.
+4. Review **Categories & entities** and the **Person graph**. Soft-exclude stays in sync; use person chips only to focus.
+5. Copy anonymized text, open the **audit report**, **export to Label Studio**, or export the graph as CSV.
 
-Key files: `src/lib/sampleDemo.js` · `src/components/CamembertWorkflowSection.jsx`
+Key files: `src/lib/sampleDemo.js` · `src/lib/basicPersonGraph.js` · `src/hooks/usePersonGraphPanel.js` · `src/depWorker.js` · `src/components/CamembertWorkflowSection.jsx`
 
 ### Advanced mode
 
 1. Select **entity labels** to detect (chips above the batch panel).
 2. Paste text or use the **Jean Dupont** sample demo.
 3. Click **Run GLiNER detection**.
-4. Review highlights; manual additions use your **selected labels** as categories.
+4. Review **Categories & entities** and the **Person graph** (GLiNER labels map to attributes).
 5. Export as in basic mode.
 
 Key files: `src/lib/glinerRuntime.js` · `src/lib/glinerSampleDemo.js` · `src/components/GlinerWorkflowSection.jsx`
+
+### Generative mode
+
+1. Enter your **Albert API key** and choose a model.
+2. Paste text or use the sample, then run generative anonymization.
+3. Review the person graph / highlights; soft-exclude and Related to as needed.
+4. Export person-graph CSVs; copy anonymized text.
+
+Key files: `src/lib/albertClient.js` · `src/lib/albertEdit.js` · `src/components/GenerativeWorkflowSection.jsx`
 
 ## Batch processing
 
@@ -128,11 +154,11 @@ This repo includes [`.github/workflows/deploy-web.yml`](../.github/workflows/dep
 
 | Desktop (Electron)                | Web                                                           |
 | --------------------------------- | ------------------------------------------------------------- |
-| spaCy + CamemBERT (Python)        | CamemBERT + BERT NER ONNX (Transformers.js) + GLiNER (advanced) |
+| spaCy + CamemBERT (Python)        | CamemBERT + BERT NER ONNX + GLiNER + Generative (Albert) + person graph |
 | Batch: folder of `.txt` on disk   | Batch: folder **or** selected `.txt` / `.docx` → ZIP download |
 | Writes batch outputs to disk      | Downloads batch outputs as ZIP                                |
 | Label Studio batch anonymization  | Not included (export only)                                    |
-| Fully offline after model install | Requires network once per model for download                  |
+| Fully offline after model install | Requires network once per model for download (and Albert if generative) |
 | Installers (.dmg, .exe, AppImage) | Browser URL — no installer                                    |
 
 ## Stack
@@ -140,6 +166,8 @@ This repo includes [`.github/workflows/deploy-web.yml`](../.github/workflows/dep
 - React 19 + Vite
 - `@huggingface/transformers` (ONNX in Web Worker) — basic mode
 - `gliner` (ONNX Runtime WASM) — advanced mode
+- `udpipe-wasm` — French dependency parse for the person graph
+- Albert HTTP API — generative mode
 - [mammoth](https://www.npmjs.com/package/mammoth) — `.docx` text extraction
 - JSZip for batch export
 

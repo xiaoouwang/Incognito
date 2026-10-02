@@ -1,0 +1,741 @@
+/* Scoped styles for Generative anonymization — avoid shared .panel / textarea rules. */
+
+.gen-workflow {
+  border-top: 1px solid rgba(32, 58, 95, 0.12);
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+}
+
+.gen-workflow .workflow-badge,
+.gen-workflow-badge {
+  background: #fff4e8;
+  border-color: rgba(196, 92, 38, 0.22);
+  color: #a34a1c;
+}
+
+.gen-privacy {
+  background: #fff8f0;
+  border: 1px solid rgba(196, 92, 38, 0.28);
+  border-radius: 0.85rem;
+  color: #4b5563;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.9rem 1rem;
+}
+
+.gen-privacy strong {
+  color: #a34a1c;
+}
+
+.gen-privacy p {
+  margin: 0;
+}
+
+.gen-privacy a {
+  color: #203a5f;
+}
+
+.gen-toolbar {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.gen-field {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 12rem;
+}
+
+.gen-field span {
+  color: #374151;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.gen-field input,
+.gen-field select {
+  background: #fffdf8;
+  border: 1px solid rgba(32, 58, 95, 0.16);
+  border-radius: 0.65rem;
+  color: #1f2937;
+  font: inherit;
+  min-height: 2.6rem;
+  padding: 0.45rem 0.7rem;
+}
+
+.gen-field-key {
+  flex: 1 1 260px;
+  min-width: 240px;
+}
+
+.gen-field-key input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  width: 100%;
+}
+
+.gen-status {
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.gen-notes {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(32, 58, 95, 0.12);
+  border-radius: 1.25rem;
+  box-shadow: 0 18px 48px rgba(32, 58, 95, 0.08);
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem 1rem;
+}
+
+.gen-notes-label {
+  color: #374151;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.gen-notes-input {
+  background: #fffdf8 !important;
+  border: 1px solid rgba(32, 58, 95, 0.12) !important;
+  border-radius: 0.75rem;
+  color: #1f2937;
+  font: inherit;
+  line-height: 1.5;
+  min-height: 4.5rem !important;
+  outline: none;
+  padding: 0.75rem 0.9rem;
+  resize: vertical;
+  width: 100%;
+}
+
+.gen-error {
+  background: rgba(255, 245, 245, 0.95);
+  border: 1px solid rgba(179, 56, 56, 0.3);
+  border-radius: 1rem;
+  color: #7f1d1d;
+  padding: 1rem;
+}
+
+.gen-error p {
+  margin: 0.45rem 0 0;
+}
+
+.gen-boards {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.gen-workspace.workspace-three-col,
+.gen-workspace.workspace-four-col {
+  grid-template-columns: minmax(200px, 0.85fr) minmax(0, 1.45fr) minmax(250px, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  margin-top: 0.25rem;
+}
+
+.gen-workspace.workspace-three-col > .panel,
+.gen-workspace.workspace-four-col > .panel {
+  min-height: 0;
+}
+
+.gen-workspace.workspace-three-col > .workspace-preview,
+.gen-workspace.workspace-four-col > .workspace-preview {
+  grid-column: 1 / -1;
+  max-height: min(34vh, 300px);
+}
+
+.gen-sidebar {
+  min-height: 0;
+}
+
+.gen-sidebar .category-list,
+.gen-sidebar .empty-state {
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0.75rem 0.85rem;
+}
+
+.workspace-graph .gen-maps-empty {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.gen-graph-list-sidebar,
+.gen-maps-list-sidebar {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: 1fr;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+}
+
+.gen-workspace .gen-board {
+  box-shadow: none;
+}
+
+.gen-workspace .gen-rel-shell {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+.gen-workspace .gen-rel-scroll,
+.gen-workspace .gen-board-input,
+.gen-workspace .gen-board-output {
+  flex: 1 1 auto;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  resize: none;
+}
+
+.gen-board {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(32, 58, 95, 0.12);
+  border-radius: 1.25rem;
+  box-shadow: 0 18px 48px rgba(32, 58, 95, 0.08);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.gen-board-header {
+  align-items: center;
+  border-bottom: 1px solid rgba(32, 58, 95, 0.1);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.9rem 1rem;
+}
+
+.gen-board-header .secondary {
+  min-height: 2rem;
+  padding: 0.25rem 0.7rem;
+}
+
+.gen-board-header h2 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.gen-board-header span {
+  color: #697386;
+  font-size: 0.85rem;
+}
+
+/* Explicit height — do not rely on flex fill for <textarea>. */
+.gen-board-input,
+.gen-board-output {
+  background: #fffdf8 !important;
+  border: 0 !important;
+  border-radius: 0;
+  box-sizing: border-box;
+  color: #1f2937;
+  display: block;
+  font: inherit;
+  font-size: 1rem;
+  height: 32rem !important;
+  line-height: 1.7;
+  margin: 0;
+  max-height: none !important;
+  min-height: 32rem !important;
+  outline: none;
+  overflow: auto;
+  padding: 1rem 1.15rem;
+  resize: vertical;
+  white-space: pre-wrap;
+  width: 100%;
+}
+
+.gen-board-empty {
+  color: #697386;
+  margin: 0;
+  min-height: 8rem;
+  padding: 1rem 1.15rem;
+}
+
+.gen-rel-shell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 32rem !important;
+  min-height: 32rem !important;
+}
+
+.gen-graph-edges li.is-excluded,
+.gen-graph-root strong.is-excluded {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.gen-graph-remove.is-restore {
+  color: #047857;
+}
+
+.gen-rel-toolbar {
+  align-items: center;
+  border-bottom: 1px solid rgba(32, 58, 95, 0.1);
+  display: flex;
+  gap: 0.65rem;
+  justify-content: space-between;
+  padding: 0.55rem 0.75rem;
+}
+
+.gen-rel-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.gen-rel-chip {
+  background: #fff;
+  border: 1px solid rgba(32, 58, 95, 0.16);
+  border-radius: 999px;
+  color: #1f2937;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.55rem;
+}
+
+.gen-rel-chip.is-active {
+  box-shadow: inset 0 0 0 1px currentColor;
+  font-weight: 600;
+}
+
+.gen-rel-chip.is-excluded {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.gen-rel-edit {
+  flex: 0 0 auto;
+  min-height: 2rem;
+  padding: 0.25rem 0.7rem;
+}
+
+.gen-rel-scroll {
+  overflow: auto;
+  padding: 1rem 1.15rem;
+  position: relative;
+}
+
+.gen-rel-text {
+  color: #1f2937;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.7;
+  position: relative;
+  white-space: pre-wrap;
+  word-break: break-word;
+  z-index: 1;
+}
+
+.gen-rel-mark {
+  border-radius: 0.25rem;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  padding: 0.05rem 0.12rem;
+  transition: opacity 120ms ease;
+}
+
+.gen-rel-mark.is-dim {
+  opacity: 0.28;
+}
+
+.gen-rel-kind-attr {
+  border-bottom: 1.5px dashed currentColor;
+  font-style: italic;
+}
+
+.gen-person-0 {
+  background: rgba(37, 99, 235, 0.18);
+  color: #1d4ed8;
+}
+.gen-person-1 {
+  background: rgba(5, 150, 105, 0.18);
+  color: #047857;
+}
+.gen-person-2 {
+  background: rgba(217, 119, 6, 0.2);
+  color: #b45309;
+}
+.gen-person-3 {
+  background: rgba(219, 39, 119, 0.16);
+  color: #be185d;
+}
+.gen-person-4 {
+  background: rgba(79, 70, 229, 0.16);
+  color: #4338ca;
+}
+.gen-person-5 {
+  background: rgba(13, 148, 136, 0.18);
+  color: #0f766e;
+}
+.gen-person-6 {
+  background: rgba(185, 28, 28, 0.14);
+  color: #b91c1c;
+}
+.gen-person-7 {
+  background: rgba(71, 85, 105, 0.18);
+  color: #334155;
+}
+
+.gen-rel-chip.gen-person-0 { border-color: rgba(37, 99, 235, 0.35); color: #1d4ed8; }
+.gen-rel-chip.gen-person-1 { border-color: rgba(5, 150, 105, 0.35); color: #047857; }
+.gen-rel-chip.gen-person-2 { border-color: rgba(217, 119, 6, 0.4); color: #b45309; }
+.gen-rel-chip.gen-person-3 { border-color: rgba(219, 39, 119, 0.35); color: #be185d; }
+.gen-rel-chip.gen-person-4 { border-color: rgba(79, 70, 229, 0.35); color: #4338ca; }
+.gen-rel-chip.gen-person-5 { border-color: rgba(13, 148, 136, 0.35); color: #0f766e; }
+.gen-rel-chip.gen-person-6 { border-color: rgba(185, 28, 28, 0.35); color: #b91c1c; }
+.gen-rel-chip.gen-person-7 { border-color: rgba(71, 85, 105, 0.35); color: #334155; }
+
+.gen-rel-arrows {
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 2;
+}
+
+.gen-rel-arrow {
+  height: 0;
+  pointer-events: none;
+  position: absolute;
+  transform-origin: 0 50%;
+}
+
+.gen-rel-arrow.is-dim {
+  opacity: 0.12;
+}
+
+.gen-rel-arrow.is-on {
+  opacity: 0.9;
+}
+
+.gen-rel-arrow-shaft {
+  background: currentColor;
+  display: block;
+  height: 2px;
+  margin-top: -1px;
+  opacity: 0.75;
+  width: 100%;
+}
+
+.gen-rel-arrow-head {
+  border-bottom: 5px solid transparent;
+  border-left: 9px solid currentColor;
+  border-top: 5px solid transparent;
+  display: block;
+  height: 0;
+  position: absolute;
+  right: -1px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+}
+
+.gen-rel-arrow-label {
+  background: rgba(255, 253, 248, 0.92);
+  border: 1px solid rgba(32, 58, 95, 0.12);
+  border-radius: 0.3rem;
+  color: #374151;
+  font-size: 0.68rem;
+  font-weight: 600;
+  left: 50%;
+  line-height: 1;
+  padding: 0.12rem 0.3rem;
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+}
+
+.gen-rel-color-0 { color: #2563eb; }
+.gen-rel-color-1 { color: #059669; }
+.gen-rel-color-2 { color: #d97706; }
+.gen-rel-color-3 { color: #db2777; }
+.gen-rel-color-4 { color: #4f46e5; }
+.gen-rel-color-5 { color: #0d9488; }
+.gen-rel-color-6 { color: #b91c1c; }
+.gen-rel-color-7 { color: #475569; }
+
+.gen-graph-card.is-excluded,
+.gen-map-card.is-excluded {
+  opacity: 0.55;
+}
+
+.gen-graph-card.is-focused {
+  border-color: rgba(32, 58, 95, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(32, 58, 95, 0.18);
+}
+
+.gen-graph-card.is-pinned {
+  border-color: rgba(32, 58, 95, 0.7);
+}
+
+.gen-graph-focus-name {
+  background: transparent;
+  border: 0;
+  color: #1f2937;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.98rem;
+  font-weight: 700;
+  padding: 0;
+  text-align: left;
+}
+
+.gen-graph-focus-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.gen-graph-focus-name.is-excluded {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.gen-graph-remove {
+  background: transparent;
+  border: 0;
+  color: #9aa4b2;
+  cursor: pointer;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+}
+
+.gen-graph-remove:hover {
+  color: #b91c1c;
+}
+
+.gen-graph-remove.is-restore:hover {
+  color: #047857;
+}
+
+.gen-graph-toggle {
+  cursor: pointer;
+  border: 0;
+}
+
+.gen-graph-toggle.is-off {
+  background: #e5e7eb;
+  color: #6b7280;
+  text-decoration: line-through;
+}
+
+.gen-rel-chip.is-excluded,
+.gen-rel-mark.is-excluded {
+  opacity: 0.35;
+  text-decoration: line-through;
+}
+
+.gen-edit-menu .entity-menu-category code {
+  margin-left: 0.35rem;
+  opacity: 0.75;
+}
+
+.gen-maps {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(32, 58, 95, 0.12);
+  border-radius: 1.25rem;
+  box-shadow: 0 18px 48px rgba(32, 58, 95, 0.08);
+  overflow: hidden;
+}
+
+.gen-maps-header {
+  align-items: center;
+  border-bottom: 1px solid rgba(32, 58, 95, 0.1);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 0.9rem 1rem;
+}
+
+.gen-maps-header h2 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.gen-maps-header span {
+  color: #697386;
+  font-size: 0.85rem;
+}
+
+.gen-maps-empty {
+  color: #697386;
+  margin: 0;
+  min-height: 6rem;
+  padding: 1rem;
+}
+
+.gen-maps-list {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  max-height: 18rem;
+  overflow-y: auto;
+  padding: 0.85rem;
+}
+
+.gen-maps-secondary {
+  margin-top: 0;
+}
+
+.gen-graph-list {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  max-height: 28rem;
+  overflow-y: auto;
+  padding: 0.85rem;
+}
+
+.gen-graph-card {
+  background: #fffdf8;
+  border: 1px solid rgba(32, 58, 95, 0.12);
+  border-radius: 0.75rem;
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.75rem 0.85rem;
+}
+
+.gen-graph-root {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.gen-graph-root strong {
+  color: #1f2937;
+  font-size: 0.98rem;
+}
+
+.gen-graph-edges {
+  color: #374151;
+  display: grid;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  gap: 0.2rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gen-graph-edges li {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  line-height: 1.35;
+}
+
+.gen-graph-branch {
+  color: #9aa4b2;
+  flex: 0 0 auto;
+}
+
+.gen-graph-label {
+  color: #697386;
+}
+
+.gen-graph-arrow {
+  color: #9aa4b2;
+}
+
+.gen-graph-value {
+  color: #1f2937;
+  word-break: break-word;
+}
+
+.gen-graph-token-sm {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.05rem 0.3rem;
+}
+
+.gen-map-card {
+  background: #fffdf8;
+  border: 1px solid rgba(32, 58, 95, 0.12);
+  border-radius: 0.75rem;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.7rem 0.8rem;
+}
+
+.gen-map-top {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: space-between;
+}
+
+.gen-map-token {
+  background: #eef2ff;
+  border-radius: 0.35rem;
+  color: #203a5f;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+}
+
+.gen-map-category {
+  color: #697386;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.gen-map-original {
+  color: #1f2937;
+  font-size: 0.9rem;
+  margin: 0;
+  word-break: break-word;
+}
+
+.gen-map-note {
+  color: #697386;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+@media (max-width: 980px) {
+  .gen-boards {
+    grid-template-columns: 1fr;
+  }
+
+  .gen-board-input,
+  .gen-board-output,
+  .gen-rel-shell {
+    height: 22rem !important;
+    min-height: 22rem !important;
+  }
+
+  .gen-workspace.workspace-three-col,
+  .gen-workspace.workspace-four-col {
+    grid-template-columns: 1fr;
+  }
+
+  .gen-workspace .gen-board-input,
+  .gen-workspace .gen-board-output,
+  .gen-workspace .gen-rel-shell {
+    height: auto !important;
+    min-height: 14rem !important;
+  }
+}

@@ -1,20 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { formatCategoryDisplayName } from "../lib/auditReport.js";
-import { findSurfaceOwnerPlaceholder, isPersonLabel } from "../lib/basicPersonGraph.js";
 import { useUiLocale } from "../context/UiLocaleContext.jsx";
-import {
-  countOccurrences,
-  getCategoryChipClass,
-} from "../lib/entityUtils.js";
+import { getCategoryChipClass } from "../lib/entityUtils.js";
 
-export default function EntityEditMenu({
+export default function GenerativeEditMenu({
   menu,
-  sourceText,
-  menuCategories,
-  categoryLabels,
-  persons = [],
-  onScopeChange,
-  onAdd,
+  persons,
+  menuCategories = [],
+  onAddToPerson,
+  onAddAsNewPerson,
+  onAddCategory,
   onAddCustom,
   onRelateToPerson,
   onRemove,
@@ -24,43 +18,25 @@ export default function EntityEditMenu({
   const menuRef = useRef(null);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [position, setPosition] = useState({ top: menu.y, left: menu.x });
-  const scope = menu.mode === "add" && menu.scope === "single" ? "single" : "all";
-  const occurrenceCount = useMemo(() => {
-    if (menu.mode !== "add" || typeof menu.text !== "string") {
-      return 0;
-    }
-
-    return countOccurrences(sourceText, menu.text);
-  }, [menu.mode, menu.text, sourceText]);
 
   const relatedCandidates = useMemo(() => {
-    if (menu.mode !== "remove" || !menu.entity || !persons.length) {
+    if (menu.mode === "add" || !persons.length) {
       return [];
     }
-    const entityLower = String(menu.entity.text || "").toLocaleLowerCase();
-    return persons.filter((person) => {
-      if (!isPersonLabel(menu.entity.label)) {
+    const textLower = String(menu.text || "").toLocaleLowerCase();
+    return persons
+      .map((person, index) => ({ person, index }))
+      .filter(({ person, index }) => {
+        if (menu.personIndex === index && menu.kind !== "attr") {
+          return String(person.name || "").toLocaleLowerCase() !== textLower;
+        }
         return true;
-      }
-      return String(person.name || "").toLocaleLowerCase() !== entityLower;
-    });
-  }, [menu.mode, menu.entity, persons]);
-
-  const currentOwnerPlaceholder = useMemo(() => {
-    if (menu.mode !== "remove" || !menu.entity) {
-      return null;
-    }
-    return findSurfaceOwnerPlaceholder(persons, menu.entity.text);
-  }, [menu.mode, menu.entity, persons]);
-
-  const currentOwner = useMemo(
-    () => persons.find((person) => person.placeholder === currentOwnerPlaceholder) || null,
-    [persons, currentOwnerPlaceholder],
-  );
+      });
+  }, [menu.mode, menu.text, menu.personIndex, menu.kind, persons]);
 
   useEffect(() => {
     setNewCategoryName("");
-  }, [menu.mode, menu.start, menu.end, menu.text, menu.entity?.id]);
+  }, [menu.mode, menu.start, menu.end, menu.text]);
 
   useLayoutEffect(() => {
     const element = menuRef.current;
@@ -87,22 +63,14 @@ export default function EntityEditMenu({
     }
 
     setPosition({ top, left });
-  }, [
-    menu.x,
-    menu.y,
-    menu.text,
-    menu.mode,
-    menu.scope,
-    menuCategories.length,
-    occurrenceCount,
-    relatedCandidates.length,
-  ]);
+  }, [menu.x, menu.y, menu.text, menu.mode, persons.length, menuCategories.length, relatedCandidates.length]);
 
   useEffect(() => {
     function handleKeyDown(event) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        onClose();
+      }
     }
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
@@ -110,7 +78,7 @@ export default function EntityEditMenu({
   return (
     <div className="entity-menu-backdrop" onClick={onClose} role="presentation">
       <section
-        className="entity-menu"
+        className="entity-menu gen-edit-menu"
         ref={menuRef}
         style={{ top: position.top, left: position.left }}
         role="dialog"
@@ -121,37 +89,9 @@ export default function EntityEditMenu({
           <>
             <p className="entity-menu-title">Add entity</p>
             <p className="entity-menu-selection">&quot;{menu.text}&quot;</p>
-            {occurrenceCount > 1 ? (
-              <>
-                <div className="entity-menu-scope" role="radiogroup" aria-label="Occurrence scope">
-                  <button
-                    className={`entity-menu-scope-option ${scope === "all" ? "active" : ""}`}
-                    type="button"
-                    role="radio"
-                    aria-checked={scope === "all"}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => onScopeChange("all")}
-                  >
-                    All word matches ({occurrenceCount})
-                  </button>
-                  <button
-                    className={`entity-menu-scope-option ${scope === "single" ? "active" : ""}`}
-                    type="button"
-                    role="radio"
-                    aria-checked={scope === "single"}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => onScopeChange("single")}
-                  >
-                    This selection only
-                  </button>
-                </div>
-                <p className="entity-menu-hint">
-                  Word matches are whole words/phrases, case-insensitive.
-                </p>
-              </>
-            ) : (
-              <p className="entity-menu-hint">1 whole-word match in this document.</p>
-            )}
+            <p className="entity-menu-hint">
+              Masks every identical occurrence in the text (string match).
+            </p>
             <div className="entity-menu-columns">
               <div className="entity-menu-main">
                 <p className="entity-menu-section-label">Categories</p>
@@ -159,15 +99,53 @@ export default function EntityEditMenu({
                   {menuCategories.map(([category, label]) => (
                     <button
                       key={category}
-                      className={`entity-menu-chip ${getCategoryChipClass(category)}`}
                       type="button"
+                      className={`entity-menu-chip ${getCategoryChipClass(category)}`}
                       onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => onAdd(category)}
+                      onClick={() => onAddCategory(category)}
                     >
                       {label}
                     </button>
                   ))}
                 </div>
+                {persons.length ? (
+                  <>
+                    <p className="entity-menu-section-label">Person graph</p>
+                    <div className="entity-menu-actions">
+                      {persons.map((person, index) => (
+                        <button
+                          key={person.placeholder || index}
+                          type="button"
+                          className="entity-menu-category"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => onAddToPerson(index)}
+                        >
+                          Alias of {person.name}
+                          <code>{person.placeholder}</code>
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className="entity-menu-category"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={onAddAsNewPerson}
+                      >
+                        New person
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="entity-menu-actions">
+                    <button
+                      type="button"
+                      className="entity-menu-category"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={onAddAsNewPerson}
+                    >
+                      New person
+                    </button>
+                  </div>
+                )}
               </div>
               <aside className="entity-menu-new-category-panel">
                 <p className="entity-menu-section-label">New category</p>
@@ -196,38 +174,29 @@ export default function EntityEditMenu({
               </aside>
             </div>
           </>
-        ) : menu.entity ? (
+        ) : (
           <>
             <p className="entity-menu-title">
-              {categoryLabels[menu.entity.label] || formatCategoryDisplayName(menu.entity.label)}
+              {menu.excluded ? t("generativeMenuRestoreTitle") : t("generativeMenuExcludeTitle")}
             </p>
-            <p className="entity-menu-selection">&quot;{menu.entity.text}&quot;</p>
+            <p className="entity-menu-selection">&quot;{menu.text}&quot;</p>
             {relatedCandidates.length && onRelateToPerson ? (
               <>
                 <p className="entity-menu-section-label">{t("entityMenuRelatedTo")}</p>
-                {currentOwner ? (
-                  <p className="entity-menu-hint">
-                    {t("entityMenuCurrentlyRelated", {
-                      person: currentOwner.name,
-                      token: currentOwner.placeholder,
-                    })}
-                  </p>
-                ) : (
-                  <p className="entity-menu-hint">{t("entityMenuRelatedHint")}</p>
-                )}
+                <p className="entity-menu-hint">{t("entityMenuRelatedHint")}</p>
                 <div className="entity-menu-actions">
-                  {relatedCandidates.map((person) => {
-                    const isCurrent = person.placeholder === currentOwnerPlaceholder;
+                  {relatedCandidates.map(({ person, index }) => {
+                    const isCurrent = menu.personIndex === index && menu.kind !== "attr";
                     return (
                       <button
-                        key={person.placeholder}
+                        key={person.placeholder || index}
                         type="button"
                         className={`entity-menu-category${isCurrent ? " is-current" : ""}`}
                         disabled={isCurrent}
                         onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => onRelateToPerson(person.placeholder)}
+                        onClick={() => onRelateToPerson(index)}
                       >
-                        {isPersonLabel(menu.entity.label)
+                        {menu.kind === "person" || menu.kind === "alias"
                           ? t("entityMenuAliasOf", { name: person.name })
                           : t("entityMenuRelateTo", { name: person.name })}
                         <code>{person.placeholder}</code>
@@ -237,13 +206,22 @@ export default function EntityEditMenu({
                 </div>
               </>
             ) : null}
-            <p className="entity-menu-hint">{t("entityMenuRemoveHint")}</p>
-            <button className="entity-menu-danger" type="button" onClick={onRemove}>
-              {t("entityMenuRemove")}
-            </button>
+            <p className="entity-menu-hint">
+              {menu.excluded ? t("generativeMenuRestoreHint") : t("generativeMenuExcludeHint")}
+            </p>
+            <div className="entity-menu-actions">
+              <button
+                type="button"
+                className="entity-menu-remove"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={onRemove}
+              >
+                {menu.excluded ? t("generativeMenuRestore") : t("generativeMenuExclude")}
+              </button>
+            </div>
           </>
-        ) : null}
-        <button className="secondary entity-menu-cancel" type="button" onClick={onClose}>
+        )}
+        <button type="button" className="entity-menu-close secondary" onClick={onClose}>
           Cancel
         </button>
       </section>

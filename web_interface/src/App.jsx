@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import CamembertWorkflowSection from "./components/CamembertWorkflowSection.jsx";
+import GenerativeWorkflowSection from "./components/GenerativeWorkflowSection.jsx";
 import GlinerWorkflowSection from "./components/GlinerWorkflowSection.jsx";
 import LanguageToggle from "./components/LanguageToggle.jsx";
 import PrivacyDetailsWindow from "./components/PrivacyDetailsWindow.jsx";
@@ -10,6 +11,17 @@ export default function App() {
   const { t } = useUiLocale();
   const [privacyDetailsOpen, setPrivacyDetailsOpen] = useState(false);
   const [workflowMode, setWorkflowMode] = useState("basic");
+
+  useEffect(() => {
+    if (workflowMode !== "generative") {
+      return undefined;
+    }
+    const node = document.getElementById("generative-section-title");
+    if (node) {
+      node.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+    return undefined;
+  }, [workflowMode]);
 
   return (
     <main className="app">
@@ -98,6 +110,14 @@ export default function App() {
         >
           {t("workflowModeAdvanced")}
         </button>
+        <button
+          type="button"
+          className={workflowMode === "generative" ? "is-active" : "secondary"}
+          aria-pressed={workflowMode === "generative"}
+          onClick={() => setWorkflowMode("generative")}
+        >
+          {t("workflowModeGenerative")}
+        </button>
       </div>
 
       <div className={workflowMode === "basic" ? undefined : "workflow-panel-hidden"}>
@@ -105,6 +125,9 @@ export default function App() {
       </div>
       <div className={workflowMode === "advanced" ? undefined : "workflow-panel-hidden"}>
         <GlinerWorkflowSection />
+      </div>
+      <div className={workflowMode === "generative" ? undefined : "workflow-panel-hidden"}>
+        <GenerativeWorkflowSection />
       </div>
 
       {privacyDetailsOpen ? (

@@ -727,15 +727,18 @@ h2 {
   grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
 }
 
-.workspace-three-col {
-  grid-template-columns: minmax(230px, 0.68fr) minmax(0, 1.42fr) minmax(0, 1.22fr);
+.workspace-three-col,
+.workspace-four-col {
   align-items: stretch;
+  grid-template-columns: minmax(200px, 0.85fr) minmax(0, 1.45fr) minmax(240px, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
 }
 
-.workspace-three-col > .panel {
+.workspace-three-col > .panel,
+.workspace-four-col > .panel {
   display: flex;
   flex-direction: column;
-  max-height: min(78vh, 720px);
+  max-height: min(72vh, 680px);
 }
 
 .workspace-sidebar {
@@ -764,7 +767,8 @@ h2 {
   font-size: 0.78rem;
 }
 
-.workspace-three-col > .panel > .panel-header {
+.workspace-three-col > .panel > .panel-header,
+.workspace-four-col > .panel > .panel-header {
   flex-shrink: 0;
 }
 
@@ -776,6 +780,7 @@ h2 {
 
 .workspace-source textarea,
 .workspace-source .highlighted-text,
+.workspace-source .highlighted-text-shell,
 .workspace-source .empty-state {
   flex: 1 1 auto;
   box-sizing: border-box;
@@ -787,6 +792,50 @@ h2 {
   resize: none;
 }
 
+.workspace-source .highlighted-text-shell {
+  overflow: hidden;
+}
+
+.highlighted-text-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.highlighted-text-shell > .highlighted-text {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.person-focus-toolbar {
+  border-bottom: 1px solid rgba(32, 58, 95, 0.1);
+  flex: 0 0 auto;
+  padding: 0.55rem 0.85rem;
+}
+
+.workspace-graph .panel-header {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.workspace-graph .panel-header h2 {
+  margin: 0;
+}
+
+.workspace-graph .person-graph-export {
+  font-size: 0.8rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.65rem;
+}
+
+.person-graph-export-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
 .workspace-preview .text-preview {
   flex: 1 1 auto;
   font-size: 0.92rem;
@@ -796,9 +845,31 @@ h2 {
   overflow-y: auto;
 }
 
-.workspace-three-col > .workspace-preview {
+.workspace-three-col > .workspace-preview,
+.workspace-four-col > .workspace-preview {
   display: flex;
   flex-direction: column;
+  grid-column: 1 / -1;
+  max-height: min(34vh, 300px);
+}
+
+.workspace-graph .workspace-graph-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0.75rem 0.85rem 0.9rem;
+}
+
+.workspace-graph .gen-graph-list,
+.workspace-graph .gen-graph-list-sidebar {
+  flex: 0 0 auto;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
 }
 
 .panel-header-actions {
@@ -1306,6 +1377,18 @@ textarea {
   outline: 1px solid rgba(32, 58, 95, 0.18);
 }
 
+.person-focus-underline {
+  text-decoration-line: underline;
+  text-decoration-color: rgba(32, 58, 95, 0.88);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+
+.highlighted-text.has-person-focus .highlight:not(.person-focus-underline) {
+  opacity: 0.55;
+}
+
 .highlight-person,
 .chip-person {
   background: #dff7ff;
@@ -1430,6 +1513,40 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+}
+
+.entity-menu-category {
+  align-items: center;
+  background: #fffdf8;
+  border: 1px solid rgba(32, 58, 95, 0.16);
+  border-radius: 0.75rem;
+  color: #203a5f;
+  cursor: pointer;
+  display: inline-flex;
+  flex-wrap: wrap;
+  font: inherit;
+  font-size: 0.86rem;
+  gap: 0.35rem;
+  justify-content: space-between;
+  padding: 0.45rem 0.7rem;
+  text-align: left;
+  width: 100%;
+}
+
+.entity-menu-category code {
+  color: #697386;
+  font-size: 0.78rem;
+}
+
+.entity-menu-category:hover:not(:disabled) {
+  border-color: rgba(32, 58, 95, 0.35);
+  background: #f8fafc;
+}
+
+.entity-menu-category.is-current,
+.entity-menu-category:disabled {
+  cursor: default;
+  opacity: 0.65;
 }
 
 .entity-menu-columns {
@@ -1631,6 +1748,7 @@ textarea {
   .hero,
   .workspace,
   .workspace-three-col,
+  .workspace-four-col,
   .gliner-grid {
     grid-template-columns: 1fr;
   }

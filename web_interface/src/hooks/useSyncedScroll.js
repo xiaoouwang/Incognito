@@ -21,14 +21,12 @@ export function useSyncedScroll(leftRef, rightRef, enabled) {
       return undefined;
     }
 
-    const left = leftRef.current;
-    const right = rightRef.current;
-    if (!left || !right) {
-      return undefined;
-    }
+    let left = null;
+    let right = null;
+    let frame = 0;
 
     function onLeftScroll() {
-      if (syncing.current) {
+      if (syncing.current || !left || !right) {
         return;
       }
       syncing.current = true;
@@ -39,7 +37,7 @@ export function useSyncedScroll(leftRef, rightRef, enabled) {
     }
 
     function onRightScroll() {
-      if (syncing.current) {
+      if (syncing.current || !left || !right) {
         return;
       }
       syncing.current = true;
@@ -49,12 +47,45 @@ export function useSyncedScroll(leftRef, rightRef, enabled) {
       });
     }
 
-    left.addEventListener("scroll", onLeftScroll, { passive: true });
-    right.addEventListener("scroll", onRightScroll, { passive: true });
+    function detach() {
+      if (left) {
+        left.removeEventListener("scroll", onLeftScroll);
+      }
+      if (right) {
+        right.removeEventListener("scroll", onRightScroll);
+      }
+      left = null;
+      right = null;
+    }
+
+    function attach() {
+      const nextLeft = leftRef.current;
+      const nextRight = rightRef.current;
+      if (!nextLeft || !nextRight) {
+        return false;
+      }
+      if (nextLeft === left && nextRight === right) {
+        return true;
+      }
+      detach();
+      left = nextLeft;
+      right = nextRight;
+      left.addEventListener("scroll", onLeftScroll, { passive: true });
+      right.addEventListener("scroll", onRightScroll, { passive: true });
+      return true;
+    }
+
+    function ensureAttached() {
+      if (!attach()) {
+        frame = requestAnimationFrame(ensureAttached);
+      }
+    }
+
+    ensureAttached();
 
     return () => {
-      left.removeEventListener("scroll", onLeftScroll);
-      right.removeEventListener("scroll", onRightScroll);
+      cancelAnimationFrame(frame);
+      detach();
     };
   }, [leftRef, rightRef, enabled]);
 }
