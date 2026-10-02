@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "incognito-albert-proxy",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-02",
+  "observability": {
+    "enabled": true,
+    "traces": {
+      "enabled": true
+    }
+  }
+}

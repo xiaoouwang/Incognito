@@ -345,8 +345,8 @@ All of the following were built in one working session and landed in release com
 | 19:23–19:38 | Manual **Related to** (Basic/Advanced, then Generative); paste title → Highlighted when relation view on | Users must fix wrong automatic attachments | chat |
 | 19:40–19:48 | Person **chips = focus only**; soft-exclude must still change anonymized text (restore after over-aggressive visual-only); nested-alias guard for `[PER_1] Martin` | Focus ≠ exclude; aliases must not keep replacing after full-name exclude | chat |
 | 19:41–19:58 | **Export CSV** + **Export CSV by person** on all modes | Archive / analyze the person graph | chat |
-| 19:59–20:01 | Version **1.0.0** (README, `package.json`, `uiStrings`); push **`7d1a6da`** | Major: graph + generative + relations first-class; exit 0.x | chat + git |
-| 20:02–20:04 | **`docs/WEB_INTERFACE_EVOLUTION.md`** + README pointer; push **`0c52f09`** | Journal of design/code/reasons from day one | chat + git |
+| 20:01–20:04 | **`7d1a6da`** / **`0c52f09`** — 1.0.0 + evolution journal | Ship + document | chat + git |
+| evening (post-release) | Cloudflare Worker **`incognito-albert-proxy`** + Pages uses `ALBERT_CORS_PROXY_BASE_URL` | Albert has no usable CORS for `github.io`; Vite proxy is local-only | git + deploy |
 
 ### Date ↔ phase map
 

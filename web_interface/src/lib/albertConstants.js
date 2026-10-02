@@ -2,6 +2,14 @@
 
 export const ALBERT_API_ORIGIN = "https://albert.api.etalab.gouv.fr";
 
+/**
+ * Cloudflare Worker CORS proxy for GitHub Pages (and other static hosts).
+ * Albert itself does not allow browser cross-origin calls from github.io;
+ * local Vite still uses `/albert-api` (see vite.config.js).
+ */
+export const ALBERT_CORS_PROXY_BASE_URL =
+  "https://incognito-albert-proxy.singerxo.workers.dev/v1";
+
 export const ALBERT_DOCS_URL = "https://guides.ia.numerique.gouv.fr/albert-api";
 
 export const ALBERT_KEY_STORAGE_KEY = "incognito-albert-api-key";

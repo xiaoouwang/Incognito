@@ -159,7 +159,7 @@ const en = {
   generativeStatusSampleRestored: "Sample text restored.",
   generativeTooLong: "over limit ({max})",
   generativeErrorHint:
-    "Check your Albert API key and text-generation model. Use local preview (npm run dev) for the Vite proxy. Albert only returns candidate IDs; strings and the anonymized text are resolved in the browser.",
+    "Check your Albert API key and text-generation model. On GitHub Pages, calls go through the Incognito Albert CORS proxy Worker. Locally, use npm run dev (Vite proxy). Albert only returns candidate IDs; strings and the anonymized text are resolved in the browser.",
   glinerDemoModelLabel: "Sample demo (preloaded)",
   glinerDemoPanelHint: "explore labels and highlights; run GLiNER on your own text when ready",
   glinerStatusDemoRestored: "GLiNER sample demo restored.",
@@ -457,7 +457,7 @@ const fr = {
   generativeStatusSampleRestored: "Texte d'exemple restauré.",
   generativeTooLong: "au-delà de la limite ({max})",
   generativeErrorHint:
-    "Vérifiez votre clé Albert et le modèle text-generation. Utilisez l'aperçu local (npm run dev) pour le proxy Vite. Albert ne renvoie que des ids candidats ; chaînes et texte anonymisé sont résolus dans le navigateur.",
+    "Vérifiez votre clé Albert et le modèle text-generation. Sur GitHub Pages, les appels passent par le Worker proxy CORS Incognito. En local, utilisez npm run dev (proxy Vite). Albert ne renvoie que des ids candidats ; chaînes et texte anonymisé sont résolus dans le navigateur.",
   glinerDemoModelLabel: "Démo d'exemple (préchargée)",
   glinerDemoPanelHint: "explorez les étiquettes et surlignages ; lancez GLiNER sur votre texte quand vous voulez",
   glinerStatusDemoRestored: "Démo GLiNER d'exemple réinitialisée.",

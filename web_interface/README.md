@@ -50,6 +50,7 @@ This is an **anonymization assistant**, not a guarantee of full anonymization. A
 - **API key + model** — paste your Albert key; choose a chat model
 - **Person / relation graph** from the model response, then soft-exclude and Related to like the other modes
 - **Sample text** for a first run without your own corpus
+- **CORS proxy on GitHub Pages** — Albert does not allow browser cross-origin calls from `github.io`. Production builds call a Cloudflare Worker ([`albert-proxy/`](albert-proxy/)) that forwards `/v1/…` to Albert with CORS for the Pages origin. Your key still stays in the browser session; the Worker does not store it. Local `npm run dev` keeps using the Vite `/albert-api` proxy.
 
 ### Person graph (all web modes)
 
@@ -118,7 +119,7 @@ Key files: `src/lib/glinerRuntime.js` · `src/lib/glinerSampleDemo.js` · `src/c
 3. Review the person graph / highlights; soft-exclude and Related to as needed.
 4. Export person-graph CSVs; copy anonymized text.
 
-Key files: `src/lib/albertClient.js` · `src/lib/albertEdit.js` · `src/components/GenerativeWorkflowSection.jsx`
+Key files: `src/lib/albertClient.js` · `src/lib/albertEdit.js` · `src/components/GenerativeWorkflowSection.jsx` · `albert-proxy/` (Cloudflare Worker)
 
 ## Batch processing
 

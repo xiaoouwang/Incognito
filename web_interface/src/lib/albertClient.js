@@ -1,5 +1,5 @@
 import {
-  ALBERT_API_ORIGIN,
+  ALBERT_CORS_PROXY_BASE_URL,
   ALBERT_DEFAULT_MODEL,
   ALBERT_DEFAULT_MODELS,
   ALBERT_KEY_STORAGE_KEY,
@@ -12,19 +12,21 @@ import {
 } from "./albertCandidates.js";
 
 export function getAlbertBaseUrl() {
+  const configured = import.meta.env.VITE_ALBERT_BASE_URL;
+  if (typeof configured === "string" && configured.trim()) {
+    return configured.trim().replace(/\/$/, "");
+  }
+
   if (typeof window !== "undefined") {
     const host = window.location.hostname;
     if (host === "localhost" || host === "127.0.0.1") {
+      // Vite proxy — avoids CORS during local preview.
       return "/albert-api/v1";
     }
   }
 
-  const configured = import.meta.env.VITE_ALBERT_BASE_URL;
-  if (configured) {
-    return configured.replace(/\/$/, "");
-  }
-
-  return `${ALBERT_API_ORIGIN}/v1`;
+  // Static hosts (GitHub Pages): browser cannot call Albert directly (no CORS).
+  return ALBERT_CORS_PROXY_BASE_URL.replace(/\/$/, "");
 }
 
 export function loadStoredAlbertApiKey() {

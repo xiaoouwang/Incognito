@@ -276,6 +276,12 @@ Copyright remains with the original author. The AGPLv3 license grants users the 
 
 Historique des évolutions fonctionnelles, avec date et fonctions concernées dans le code.
 
+### 2026-10-02 — Proxy CORS Albert (GitHub Pages)
+
+- **Problème** — sur Pages, le mode génératif appelait Albert en cross-origin ; l’API n’envoie pas de headers CORS utilisables, et le proxy Vite n’existe qu’en local.
+- **Correctif** — Worker Cloudflare `incognito-albert-proxy` (`web_interface/albert-proxy/`) qui relaie `/v1/…` vers `albert.api.etalab.gouv.fr` avec CORS pour `xiaoouwang.github.io` ; la clé reste dans le navigateur.
+- URL proxy : `https://incognito-albert-proxy.singerxo.workers.dev/v1` (`ALBERT_CORS_PROXY_BASE_URL`).
+
 ### 2026-10-02 — v1.0.0 — Graphe de personnes, relations et anonymisation générative
 
 - **Version 1.0.0 (web)** — première version majeure (sortie de la série 0.x) : le parcours web intègre un **graphe de personnes** et un mode **génératif**.
