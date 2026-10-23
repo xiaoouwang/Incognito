@@ -570,6 +570,40 @@ export function usePersonGraphPanel({
     return { name: target.name, placeholder: toPlaceholder, surface };
   }
 
+  /**
+   * Detach a surface (attr / alias / coref) from its person without soft-excluding it.
+   * Survives graph rebuilds via an asDetached relation override.
+   */
+  function removeSurfaceRelation(fromPlaceholder, surface, meta = {}) {
+    if (!surface || !fromPlaceholder) {
+      return null;
+    }
+    const lower = String(surface).toLocaleLowerCase();
+    const entry = {
+      placeholder: fromPlaceholder,
+      surface,
+      entityLabel: meta.entityLabel || "misc",
+      asDetached: true,
+    };
+    const next = { ...relationOverridesRef.current, [lower]: [entry] };
+    relationOverridesRef.current = next;
+    setRelationOverrides(next);
+    setPersons((currentPersons) => {
+      const cleared = clearSurfaceFromPersons(currentPersons, surface);
+      return commitPersons(cleared);
+    });
+    setExcludedSurfaces((current) => {
+      const key = surfaceExcludeKey(fromPlaceholder, surface);
+      if (!current[key]) {
+        return current;
+      }
+      const migrated = { ...current };
+      delete migrated[key];
+      return migrated;
+    });
+    return { surface, placeholder: fromPlaceholder };
+  }
+
   /** Rename an edge type label (âge, alias, related to, …) on a person card. */
   function renameEdgeLabel(placeholder, kind, value, nextLabel) {
     const trimmed = String(nextLabel || "").trim();
@@ -718,6 +752,7 @@ export function usePersonGraphPanel({
     relateEntityToPerson,
     relatePersonToPerson,
     moveSurfaceToPerson,
+    removeSurfaceRelation,
     renameEdgeLabel,
     renameEdgeValue,
     getRelatedPlaceholdersForSurface,

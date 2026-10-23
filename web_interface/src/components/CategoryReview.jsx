@@ -4,6 +4,7 @@ import {
   getCategoryChipClass,
   getEntityValueKey,
 } from "../lib/entityUtils.js";
+import { VisibilityIcon, VisibilityToggleButton } from "./VisibilityToggleIcon.jsx";
 
 export default function CategoryReview({
   entities,
@@ -23,42 +24,56 @@ export default function CategoryReview({
 
   return (
     <div className="category-list">
-      {categories.map((category) => (
-        <article className="category-card" key={category}>
-          <label className="category-toggle">
-            <input
-              type="checkbox"
-              checked={Boolean(selectedCategories[category])}
-              onChange={() => onToggleCategory(category)}
-            />
-            <span>
-              {t("replaceCategory")} {categoryLabels[category] || category}
-              <small>{t("uniqueValues", { count: groupedEntities[category].length })}</small>
-            </span>
-          </label>
-          <div className="entity-chips">
-            {groupedEntities[category].map((entity, entityIndex) => {
-              const occurrenceCount = countEntitySpans(entities, category, entity.text);
-              const active =
-                Boolean(selectedCategories[category]) &&
-                !excludedEntityKeys[getEntityValueKey(category, entity.text)];
+      {categories.map((category) => {
+        const categoryActive = Boolean(selectedCategories[category]);
+        return (
+          <article className="category-card" key={category}>
+            <div className="category-toggle">
+              <VisibilityToggleButton
+                shown={!categoryActive}
+                className="category-visibility"
+                size={16}
+                title={
+                  categoryActive
+                    ? t("personGraphVisibilityAnonymizedTitle")
+                    : t("personGraphVisibilityShownTitle")
+                }
+                onClick={() => onToggleCategory(category)}
+              />
+              <span>
+                {t("anonymizeCategory")} {categoryLabels[category] || category}
+                <small>{t("uniqueValues", { count: groupedEntities[category].length })}</small>
+              </span>
+            </div>
+            <div className="entity-chips">
+              {groupedEntities[category].map((entity, entityIndex) => {
+                const occurrenceCount = countEntitySpans(entities, category, entity.text);
+                const active =
+                  categoryActive &&
+                  !excludedEntityKeys[getEntityValueKey(category, entity.text)];
 
-              return (
-                <button
-                  type="button"
-                  className={`chip ${getCategoryChipClass(category)} ${active ? "chip-active" : "chip-inactive"}`}
-                  key={entity.key || `${category}:${entity.text}:${entityIndex}`}
-                  onClick={() => onToggleEntity(category, entity.text)}
-                  title={active ? t("chipKeep") : t("chipInclude")}
-                >
-                  <span className="chip-label">{entity.text}</span>
-                  <span className="chip-count">{occurrenceCount}</span>
-                </button>
-              );
-            })}
-          </div>
-        </article>
-      ))}
+                return (
+                  <button
+                    type="button"
+                    className={`chip ${getCategoryChipClass(category)} ${active ? "chip-active" : "chip-inactive"}`}
+                    key={entity.key || `${category}:${entity.text}:${entityIndex}`}
+                    onClick={() => onToggleEntity(category, entity.text)}
+                    title={
+                      active
+                        ? t("personGraphVisibilityAnonymizedTitle")
+                        : t("personGraphVisibilityShownTitle")
+                    }
+                  >
+                    <VisibilityIcon shown={!active} size={13} />
+                    <span className="chip-label">{entity.text}</span>
+                    <span className="chip-count">{occurrenceCount}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </article>
+        );
+      })}
       <p className="category-hint">{t("categoryHint")}</p>
     </div>
   );

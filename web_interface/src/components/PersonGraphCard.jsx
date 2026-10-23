@@ -5,6 +5,7 @@ import {
   surfaceExcludeKey,
 } from "../lib/albertEdit.js";
 import { useUiLocale } from "../context/UiLocaleContext.jsx";
+import { VisibilityToggleButton } from "./VisibilityToggleIcon.jsx";
 
 const MOVE_MIME = "application/x-incognito-graph-surface";
 const MENU_MARGIN = 8;
@@ -201,6 +202,7 @@ export default function PersonGraphCard({
   onHoverPerson,
   onPinPerson,
   onMoveSurface,
+  onRemoveSurface,
   onRelatePerson,
   onRenameEdgeLabel,
   onRenameEdgeValue,
@@ -222,7 +224,9 @@ export default function PersonGraphCard({
     (item) => item.placeholder !== person.placeholder,
   );
   const canToggle = typeof onTogglePerson === "function";
+  const canRemoveSurface = typeof onRemoveSurface === "function";
   const canMove = typeof onMoveSurface === "function" && otherPersons.length > 0;
+  const canMoveMenu = canMove || canRemoveSurface;
   const canRelate = typeof onRelatePerson === "function" && otherPersons.length > 0;
 
   const edges = [];
@@ -420,17 +424,19 @@ export default function PersonGraphCard({
           </span>
         ) : null}
         {canToggle ? (
-          <button
-            type="button"
-            className={`gen-graph-remove${nameExcluded ? " is-restore" : ""}`}
+          <VisibilityToggleButton
+            shown={nameExcluded}
+            className="gen-graph-visibility"
+            title={
+              nameExcluded
+                ? t("personGraphVisibilityShownTitle")
+                : t("personGraphVisibilityAnonymizedTitle")
+            }
             onClick={(event) => {
               event.stopPropagation();
               onTogglePerson(person.placeholder);
             }}
-            title={nameExcluded ? "Restore person" : "Exclude person"}
-          >
-            {nameExcluded ? "↺" : "×"}
-          </button>
+          />
         ) : null}
       </div>
       {edges.length ? (
@@ -439,11 +445,12 @@ export default function PersonGraphCard({
             const isLast = index === edges.length - 1;
             const key = edgeMenuKey(edge, index);
             const movable = canMove && isMovableEdge(edge);
+            const showMoveMenu = canMoveMenu && isMovableEdge(edge);
             const menuOpen = moveMenuKey === key;
             return (
               <li
                 key={key}
-                className={`${edge.excluded ? "is-excluded" : ""}${movable ? " is-movable" : ""}${
+                className={`${edge.excluded ? "is-excluded" : ""}${showMoveMenu ? " is-movable" : ""}${
                   menuOpen ? " is-move-open" : ""
                 }`.trim()}
                 draggable={movable}
@@ -506,7 +513,7 @@ export default function PersonGraphCard({
                 {edge.placeholder && (edge.kind === "attr" || edge.kind === "rel") ? (
                   <code className="gen-map-token gen-graph-token-sm">{edge.placeholder}</code>
                 ) : null}
-                {movable ? (
+                {showMoveMenu ? (
                   <span className="gen-graph-move">
                     <button
                       type="button"
@@ -531,9 +538,14 @@ export default function PersonGraphCard({
                   </span>
                 ) : null}
                 {canToggle ? (
-                  <button
-                    type="button"
-                    className={`gen-graph-remove${edge.excluded ? " is-restore" : ""}`}
+                  <VisibilityToggleButton
+                    shown={edge.excluded}
+                    className="gen-graph-visibility"
+                    title={
+                      edge.excluded
+                        ? t("personGraphVisibilityShownTitle")
+                        : t("personGraphVisibilityAnonymizedTitle")
+                    }
                     onClick={(event) => {
                       event.stopPropagation();
                       if (edge.kind === "alias" || edge.kind === "coref" || edge.kind === "rel") {
@@ -542,10 +554,7 @@ export default function PersonGraphCard({
                         onToggleAttr(edge.placeholder || person.placeholder, edge.value);
                       }
                     }}
-                    title={edge.excluded ? "Restore" : "Exclude"}
-                  >
-                    {edge.excluded ? "↺" : "×"}
-                  </button>
+                  />
                 ) : null}
               </li>
             );
@@ -556,12 +565,31 @@ export default function PersonGraphCard({
         <GraphPortalMenu
           id={`${moveMenuId}-${openMoveIndex}`}
           anchorRef={moveAnchorRef}
-          label={t("personGraphMoveTo")}
+          label={canMove ? t("personGraphMoveTo") : t("personGraphRemoveRelation")}
           onClose={() => {
             moveAnchorRef.current = null;
             setMoveMenuKey(null);
           }}
         >
+          {canRemoveSurface ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="gen-graph-move-option is-danger"
+              onClick={(event) => {
+                event.stopPropagation();
+                onRemoveSurface?.(person.placeholder, openMoveEdge.value, {
+                  kind: openMoveEdge.kind,
+                  entityLabel: openMoveEdge.entityLabel,
+                  key: openMoveEdge.key,
+                });
+                moveAnchorRef.current = null;
+                setMoveMenuKey(null);
+              }}
+            >
+              <span>{t("personGraphRemoveRelation")}</span>
+            </button>
+          ) : null}
           {otherPersons.map((target) => (
             <button
               key={target.placeholder}

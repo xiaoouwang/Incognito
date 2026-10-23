@@ -718,23 +718,8 @@
   text-underline-offset: 3px;
 }
 
-.gen-graph-remove {
-  background: transparent;
-  border: 0;
-  color: #9aa4b2;
-  cursor: pointer;
-  font: inherit;
-  font-size: 1rem;
-  line-height: 1;
-  padding: 0 0.15rem;
-}
-
-.gen-graph-remove:hover {
-  color: #b91c1c;
-}
-
-.gen-graph-remove.is-restore:hover {
-  color: #047857;
+.gen-graph-visibility {
+  flex-shrink: 0;
 }
 
 .gen-graph-toggle {
@@ -946,6 +931,15 @@
 
 .gen-graph-move-option.is-current {
   background: rgba(32, 58, 95, 0.1);
+}
+
+.gen-graph-move-option.is-danger {
+  color: #9b2c2c;
+  font-weight: 600;
+}
+
+.gen-graph-move-option.is-danger:hover {
+  background: rgba(155, 44, 44, 0.1);
 }
 
 .gen-graph-move-option code {

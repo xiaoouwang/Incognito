@@ -193,11 +193,12 @@ export function listRelationOverrideEntries(overrides) {
 /**
  * Manual relation pins that survive auto rebuilds.
  * overrides: {
- *   [surfaceLower]: { placeholder, surface, entityLabel, asAlias?, asRel?, relLabel? }
- *     | Array<{ placeholder, surface, entityLabel, asAlias?, asRel?, relLabel? }>
+ *   [surfaceLower]: { placeholder, surface, entityLabel, asAlias?, asRel?, asDetached?, relLabel? }
+ *     | Array<{ placeholder, surface, entityLabel, asAlias?, asRel?, asDetached?, relLabel? }>
  * }
  * One surface may be related to several persons (editing only).
  * Person↔person links use asRel (graph `rels`); asAlias merges names.
+ * asDetached strips a surface from every card without re-attaching it.
  */
 export function applyRelationOverrides(persons, overrides) {
   if (!persons?.length || !overrides || !Object.keys(overrides).length) {
@@ -216,7 +217,7 @@ export function applyRelationOverrides(persons, overrides) {
     return next;
   }
 
-  // Attr/alias overrides replace ownership. Person↔person (asRel) is additive —
+  // Attr/alias/detached overrides replace ownership. Person↔person (asRel) is additive —
   // never strip existing rels when pinning another relation to the same person.
   const attrAliasLowers = new Set(
     entries
@@ -241,6 +242,9 @@ export function applyRelationOverrides(persons, overrides) {
   }
 
   for (const override of entries) {
+    if (override.asDetached) {
+      continue;
+    }
     const target = next.find((person) => person.placeholder === override.placeholder);
     if (!target) {
       continue;

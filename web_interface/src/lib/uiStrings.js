@@ -260,17 +260,23 @@ const en = {
   personGraphGliner2MultiHint:
     "Choose GLiNER2-multi or GLiNER2-PII for entities; after Run Anonymization the person graph links via GLiNER ReLex (~450 + ~14 MB, cached). Demo uses a captured ReLex fixture (same graph as the model, no download).",
   personGraphFocusHint:
-    "Person chips above the text only focus/underline related info (no anonymization change). Use graph × or category chips to soft-exclude from the anonymized preview.",
+    "Person chips above the text only focus/underline related info (no anonymization change). Use the eye icons on the graph (or category chips) to keep a value visible or anonymize it in the preview.",
+  personGraphVisibilityAnonymizedTitle:
+    "Anonymized in preview — click to keep the original text",
+  personGraphVisibilityShownTitle:
+    "Original kept in preview — click to anonymize",
   personGraphMoveHint:
-    "Drag attributes (or use ↝) onto another person card to reassign them. Use ⟷ to link people when the model missed a relation. Click a label or value to rename it; double-click a person name to rename it (single-click still underlines).",
+    "Drag attributes (or use ↝) onto another person card to reassign them. In the ↝ menu, choose Remove relation to detach an attribute (eye icons still control anonymization). Use ⟷ to link people when the model missed a relation. Click a label or value to rename it; double-click a person name to rename it (single-click still underlines).",
   personGraphRenameLabelTitle: "Click to rename this label",
   personGraphRenameValueTitle: "Click to rename this value",
   personGraphPinHint: "Click to underline in the text",
   personGraphUnpinHint: "Click to clear underline",
   personGraphRenamedLabel: "Renamed label to \"{label}\" for {value}.",
   personGraphRenamedValue: "Renamed \"{previous}\" to \"{value}\".",
-  personGraphMoveTitle: "Move to another person",
+  personGraphMoveTitle: "Move or remove this relation",
   personGraphMoveTo: "Move to",
+  personGraphRemoveRelation: "Remove relation",
+  personGraphRelationRemoved: "Removed relation for \"{surface}\".",
   personGraphMoved: "Moved \"{surface}\" to {person}.",
   personGraphRelateTitle: "Relate to another person",
   personGraphRelateTo: "Relate to",
@@ -389,11 +395,13 @@ const en = {
     "Ensure you have a network connection for the first model download. The ONNX model and tokenizer are cached in your browser afterward.",
   categoryEmpty:
     "Run anonymization or add entities manually in the highlighted view below.",
-  replaceCategory: "Replace",
+  anonymizeCategory: "Anonymize",
+  replaceCategory: "Anonymize",
   uniqueValues: "{count} unique value(s)",
-  categoryHint: "Click an entity to toggle all of its occurrences in the output.",
-  chipKeep: "Click to keep this value unchanged in the output",
-  chipInclude: "Click to include this value in anonymization again",
+  categoryHint:
+    "Eye icons show whether a value is anonymized (slashed) or kept visible (open). Click a category or entity to toggle.",
+  chipKeep: "Anonymized in preview — click to keep the original text",
+  chipInclude: "Original kept in preview — click to anonymize",
   auditEyebrow: "Research documentation",
   auditTitle: "Audit Report",
   auditCopy: "Copy report",
@@ -744,17 +752,23 @@ const fr = {
   personGraphGliner2MultiHint:
     "Choisissez GLiNER2-multi ou GLiNER2-PII pour les entités ; après « Lancer l’anonymisation », le graphe est lié via GLiNER ReLex (~450 + ~14 Mo, mis en cache). La démo utilise une capture ReLex (même graphe que le modèle, sans téléchargement).",
   personGraphFocusHint:
-    "Les pastilles au-dessus du texte ne font que souligner les infos liées (sans changer l'anonymisation). Utilisez × sur le graphe ou les catégories pour exclure de l'aperçu anonymisé.",
+    "Les pastilles au-dessus du texte ne font que souligner les infos liées (sans changer l'anonymisation). Utilisez les icônes œil du graphe (ou les catégories) pour garder une valeur visible ou l’anonymiser dans l’aperçu.",
+  personGraphVisibilityAnonymizedTitle:
+    "Anonymisé dans l’aperçu — cliquer pour garder le texte d’origine",
+  personGraphVisibilityShownTitle:
+    "Texte d’origine conservé dans l’aperçu — cliquer pour anonymiser",
   personGraphMoveHint:
-    "Glissez les attributs (ou utilisez ↝) vers une autre fiche pour les réassigner. Utilisez ⟷ pour lier des personnes si le modèle a manqué une relation. Cliquez un libellé ou une valeur pour renommer ; double-cliquez le nom d’une personne (simple clic = soulignement).",
+    "Glissez les attributs (ou utilisez ↝) vers une autre fiche pour les réassigner. Dans le menu ↝, choisissez Retirer la relation pour détacher un attribut (les icônes œil gèrent toujours l’anonymisation). Utilisez ⟷ pour lier des personnes si le modèle a manqué une relation. Cliquez un libellé ou une valeur pour renommer ; double-cliquez le nom d’une personne (simple clic = soulignement).",
   personGraphRenameLabelTitle: "Cliquer pour renommer ce libellé",
   personGraphRenameValueTitle: "Cliquer pour renommer cette valeur",
   personGraphPinHint: "Cliquer pour souligner dans le texte",
   personGraphUnpinHint: "Cliquer pour retirer le soulignement",
   personGraphRenamedLabel: "Libellé renommé en « {label} » pour {value}.",
   personGraphRenamedValue: "« {previous} » renommé en « {value} ».",
-  personGraphMoveTitle: "Déplacer vers une autre personne",
+  personGraphMoveTitle: "Déplacer ou retirer cette relation",
   personGraphMoveTo: "Déplacer vers",
+  personGraphRemoveRelation: "Retirer la relation",
+  personGraphRelationRemoved: "Relation retirée pour « {surface} ».",
   personGraphMoved: "« {surface} » déplacé vers {person}.",
   personGraphRelateTitle: "Relier à une autre personne",
   personGraphRelateTo: "Relier à",
@@ -876,12 +890,13 @@ const fr = {
     "Vérifiez votre connexion internet pour le premier téléchargement du modèle. Le modèle ONNX et le tokenizer sont ensuite mis en cache dans votre navigateur.",
   categoryEmpty:
     "Lancez l'anonymisation ou ajoutez des entités manuellement dans la vue surlignée ci-dessous.",
-  replaceCategory: "Remplacer",
+  anonymizeCategory: "Anonymiser",
+  replaceCategory: "Anonymiser",
   uniqueValues: "{count} valeur(s) distincte(s)",
   categoryHint:
-    "Cliquez sur une entité pour basculer toutes ses occurrences dans le résultat.",
-  chipKeep: "Cliquez pour conserver cette valeur dans le texte final",
-  chipInclude: "Cliquez pour inclure à nouveau cette valeur dans l'anonymisation",
+    "Les icônes œil indiquent si une valeur est anonymisée (barrée) ou conservée visible (ouverte). Cliquez une catégorie ou une entité pour basculer.",
+  chipKeep: "Anonymisé dans l’aperçu — cliquer pour garder le texte d’origine",
+  chipInclude: "Texte d’origine conservé dans l’aperçu — cliquer pour anonymiser",
   auditEyebrow: "Documentation de recherche",
   auditTitle: "Rapport d'audit",
   auditCopy: "Copier le rapport",

@@ -153,6 +153,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     relateEntityToPerson,
     relatePersonToPerson,
     moveSurfaceToPerson,
+    removeSurfaceRelation,
     renameEdgeLabel,
     renameEdgeValue,
     getRelatedPlaceholdersForSurface,
@@ -1945,6 +1946,16 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
                             t("personGraphMoved", {
                               surface,
                               person: result.name,
+                            }),
+                          );
+                        }
+                      }}
+                      onRemoveSurface={(fromPlaceholder, surface, meta) => {
+                        const result = removeSurfaceRelation(fromPlaceholder, surface, meta);
+                        if (result) {
+                          setStatus(
+                            t("personGraphRelationRemoved", {
+                              surface,
                             }),
                           );
                         }
