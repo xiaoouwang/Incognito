@@ -3,14 +3,11 @@ import AuditReportWindow from "./AuditReportWindow.jsx";
 import CategoryReview from "./CategoryReview.jsx";
 import EntityEditMenu from "./EntityEditMenu.jsx";
 import HighlightedText from "./HighlightedText.jsx";
-import ModelProgress from "./ModelProgress.jsx";
 import BatchJobProgress from "./BatchJobProgress.jsx";
-import PersonGraphCard from "./PersonGraphCard.jsx";
+import PersonGraphCard, { MOVE_MIME } from "./PersonGraphCard.jsx";
 import PersonGraphExportButton from "./PersonGraphExportButton.jsx";
 import WorkflowSectionHeader from "./WorkflowSectionHeader.jsx";
 import { useUiLocale } from "../context/UiLocaleContext.jsx";
-import { useNerWorker } from "../hooks/useNerWorker.js";
-import { useDepWorker } from "../hooks/useDepWorker.js";
 import { useSyncedScroll } from "../hooks/useSyncedScroll.js";
 import { createLabelStudioExport } from "../labelStudioExport.js";
 import { createAuditReport } from "../lib/auditReport.js";
@@ -22,15 +19,28 @@ import {
   readDocumentsFromFilePicker,
   readDocumentsFromFolderInput,
 } from "../lib/batchLoad.js";
-import { NER_BACKENDS } from "../lib/constants.js";
-import { buildSampleDemoState } from "../lib/sampleDemo.js";
-import { backendDisplayLabel, CUSTOM_MODEL_EXAMPLE } from "../lib/modelRegistry.js";
-import { buildBasicPersonGraph, applyRelationOverrides, isPersonLabel } from "../lib/basicPersonGraph.js";
-import { buildPersonFocusRanges } from "../lib/personFocus.js";
 import {
-  surfaceExcludeKey,
-  toggleSurfaceExcluded,
-} from "../lib/albertEdit.js";
+  buildSampleDemoPersonGraph,
+  buildSampleDemoState,
+  getSampleDemoRelexRelations,
+} from "../lib/sampleDemo.js";
+import {
+  buildGliner2LabelMap,
+  GLINER2_MULTI_DEFAULT_THRESHOLD,
+  GLINER2_MULTI_HF_URL,
+  GLINER2_MULTI_MODEL_ID,
+} from "../lib/gliner2MultiConstants.js";
+import {
+  BASIC_NER_ENGINE_DEFAULT,
+  BASIC_NER_ENGINE_MULTI,
+  BASIC_NER_ENGINE_PII_ONNX,
+  GLINER2_PII_ONNX_DEFAULT_THRESHOLD,
+  GLINER2_PII_ONNX_HF_URL,
+  GLINER2_PII_ONNX_MODEL_ID,
+} from "../lib/gliner2PiiOnnxConstants.js";
+import { GLINER_LABELS, GLINER_RULE_LABELS } from "../lib/glinerConstants.js";
+import { useGeneralizationLadders } from "../hooks/useGeneralizationLadders.js";
+import { usePersonGraphPanel } from "../hooks/usePersonGraphPanel.js";
 import {
   addEntitySpans,
   buildCategoryLabels,
@@ -49,32 +59,27 @@ import {
   isEntityActive,
   finalizeDetectedEntities,
   removeEntityById,
-  replaceSelectedCategories,
+  buildAnonymizedPreviewModel,
 } from "../lib/entityUtils.js";
+import AnonymizedSplitPreview from "./AnonymizedSplitPreview.jsx";
+import AnonymizedPersonGraphPanel from "./AnonymizedPersonGraphPanel.jsx";
+import DomReconcileErrorBoundary from "./DomReconcileErrorBoundary.jsx";
+import PersonGraphViewButton from "./PersonGraphViewButton.jsx";
+import {
+  applyAnonymizedGraphValueEdit,
+  resolveAnonymizedGraphEdgeOrigin,
+  resolveAnonymizedPersonGraph,
+} from "../lib/anonymizedPersonGraph.js";
 import "./generativeWorkflow.css";
 
-function guessSurfaceCategory(entities, surface, attrKey = "") {
-  const lower = String(surface || "").toLocaleLowerCase();
-  const hit = entities.find((entity) => entity.text.toLocaleLowerCase() === lower);
-  if (hit?.label) {
-    return hit.label;
-  }
-  if (attrKey === "loc") return "location";
-  if (attrKey === "org") return "organization";
-  if (attrKey === "dob") return "date";
-  if (attrKey === "em") return "email";
-  if (attrKey === "tel") return "phone";
-  return "misc";
-}
-
-export default function CamembertWorkflowSection() {
-  const { detectEntities: detectEntitiesInWorker, progressItems, modelReady } = useNerWorker();
-  const {
-    parseDependencies,
-    progressItems: depProgressItems,
-    modelReady: depModelReady,
-  } = useDepWorker();
+/**
+ * @param {{ variant?: "basic" | "advanced" }} props
+ * basic — NER only (no person graph / ReLex)
+ * advanced — NER + ReLex person graph (former Basic stack)
+ */
+export default function CamembertWorkflowSection({ variant = "advanced" }) {
   const { t } = useUiLocale();
+  const showPersonGraph = variant === "advanced";
   const folderInputRef = useRef(null);
   const filesInputRef = useRef(null);
   const fileStatesRef = useRef({});
@@ -87,9 +92,12 @@ export default function CamembertWorkflowSection() {
   const [text, setText] = useState(initialDemo.text);
   const [entities, setEntities] = useState(initialDemo.entities);
   const [modelName, setModelName] = useState(initialDemo.modelName);
-  const [isDemoMode, setIsDemoMode] = useState(true);
-  const [nerBackend, setNerBackend] = useState("camembert-dates");
-  const [customModelId, setCustomModelId] = useState(CUSTOM_MODEL_EXAMPLE);
+  const [isDemoMode, setIsDemoModeState] = useState(true);
+  const isDemoModeRef = useRef(true);
+  function setIsDemoMode(next) {
+    isDemoModeRef.current = next;
+    setIsDemoModeState(next);
+  }
   const [selectedCategories, setSelectedCategories] = useState(initialDemo.selectedCategories);
   const [excludedEntityKeys, setExcludedEntityKeys] = useState({});
   const [reportOpen, setReportOpen] = useState(false);
@@ -106,161 +114,179 @@ export default function CamembertWorkflowSection() {
   const [batchFiles, setBatchFiles] = useState([]);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [autoRunNer, setAutoRunNer] = useState(true);
+  /** Chunk size while processing a folder: "all" | "1" | "5" | "10" | "25". */
+  const [batchProcessCount, setBatchProcessCount] = useState("all");
+  const [sourceBodyKey, setSourceBodyKey] = useState(0);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [entityMenu, setEntityMenu] = useState(null);
   const [customCategories, setCustomCategories] = useState({});
+  const [activeLabels, setActiveLabels] = useState(() => new Set(GLINER_LABELS));
+  const [customDetectionLabels, setCustomDetectionLabels] = useState([]);
+  const [newLabelDraft, setNewLabelDraft] = useState("");
+  /** Browser ONNX NER for Basic and Advanced (GLiNER2-multi or GLiNER2-PII). */
+  const [nerEngine, setNerEngine] = useState(BASIC_NER_ENGINE_DEFAULT);
+  const activeNerEngine = nerEngine;
+  const [threshold, setThreshold] = useState(GLINER2_MULTI_DEFAULT_THRESHOLD);
   const [isEditingSource, setIsEditingSource] = useState(false);
-  const [persons, setPersons] = useState([]);
-  const [excludedPlaceholders, setExcludedPlaceholders] = useState({});
-  const [excludedSurfaces, setExcludedSurfaces] = useState({});
-  const [personGraphNote, setPersonGraphNote] = useState("");
-  const [hoveredPersonPlaceholder, setHoveredPersonPlaceholder] = useState(null);
-  const [pinnedPersonPlaceholder, setPinnedPersonPlaceholder] = useState(null);
-  const relationOverridesRef = useRef({});
+  const [categoryMethods, setCategoryMethods] = useState({});
+  const [surfaceOverrides, setSurfaceOverrides] = useState({});
+  const [anonymizedTextOverride, setAnonymizedTextOverride] = useState(null);
+  const [showAnonymizedPersonGraph, setShowAnonymizedPersonGraph] = useState(true);
+
+  const {
+    persons,
+    excludedPlaceholders,
+    excludedSurfaces,
+    personGraphNote,
+    pinnedPersonPlaceholder,
+    focusedPersonPlaceholder,
+    personFocusRanges,
+    setHoveredPersonPlaceholder,
+    setPinnedPersonPlaceholder,
+    refreshPersonGraph,
+    applyRelexPersonGraph,
+    clearPersonGraph,
+    handleTogglePerson,
+    handleToggleGraphSurface,
+    syncEntityChipToGraph,
+    relateEntityToPerson,
+    relatePersonToPerson,
+    moveSurfaceToPerson,
+    renameEdgeLabel,
+    renameEdgeValue,
+    getRelatedPlaceholdersForSurface,
+  } = usePersonGraphPanel({
+    text,
+    entities,
+    t,
+    // Advanced: ReLex person graph after NER (demo uses captured fixture).
+    extractRelations: showPersonGraph
+      ? async (sourceText, nextEntities) => {
+          if (isDemoModeRef.current) {
+            return {
+              relations: getSampleDemoRelexRelations(),
+              fillProximity: true,
+              noteKey: "personGraphRelexDemoReady",
+            };
+          }
+          const { extractGlinerRelexRelations } = await import("../lib/glinerRelexService.js");
+          return extractGlinerRelexRelations(sourceText, nextEntities);
+        }
+      : null,
+  });
+  const [graphDropTarget, setGraphDropTarget] = useState(null);
 
   const showSourceHighlight = entities.length > 0 && !isEditingSource;
 
-  useSyncedScroll(sourceScrollRef, previewScrollRef, showSourceHighlight);
+  const availableDetectionLabels = useMemo(() => {
+    const extras = customDetectionLabels.filter((label) => !GLINER_LABELS.includes(label));
+    return [...GLINER_LABELS, ...extras];
+  }, [customDetectionLabels]);
 
-  const currentFile = batchFiles[currentFileIndex] || null;
+  const selectedDetectionLabels = useMemo(
+    () => availableDetectionLabels.filter((label) => activeLabels.has(label)),
+    [activeLabels, availableDetectionLabels],
+  );
 
-  function rebuildPersonGraph(sourceText, nextEntities, depResult = null, { resetExclusions = true } = {}) {
-    if (resetExclusions) {
-      relationOverridesRef.current = {};
-      setExcludedPlaceholders({});
-      setExcludedSurfaces({});
-      setPinnedPersonPlaceholder(null);
-      setHoveredPersonPlaceholder(null);
+  const detectionLabelMap = useMemo(
+    () => buildGliner2LabelMap(selectedDetectionLabels),
+    [selectedDetectionLabels],
+  );
+
+  const nerEngineMeta = useMemo(() => {
+    if (activeNerEngine === BASIC_NER_ENGINE_PII_ONNX) {
+      return {
+        id: GLINER2_PII_ONNX_MODEL_ID,
+        hfUrl: GLINER2_PII_ONNX_HF_URL,
+        shortNameKey: "gliner2PiiOnnxShortName",
+        downloadHint: "Running GLiNER2-PII ONNX in the browser (first run downloads ~426 MB quantized into cache)…",
+        downloadLabel: "GLiNER2-PII",
+        detectLabel: "GLiNER2-PII",
+      };
     }
-    const graph = buildBasicPersonGraph(sourceText, nextEntities, depResult);
-    setPersons(applyRelationOverrides(graph.persons, relationOverridesRef.current));
-    setPersonGraphNote(
-      graph.usedDependencyParse
-        ? t("personGraphDepReady")
-        : t("personGraphProximityFallback"),
+    return {
+      id: GLINER2_MULTI_MODEL_ID,
+      hfUrl: GLINER2_MULTI_HF_URL,
+      shortNameKey: "gliner2MultiShortName",
+      downloadHint:
+        "Running GLiNER2-multi in the browser (first run downloads ~614 MB fp16 ONNX into cache)…",
+      downloadLabel: "GLiNER2-multi",
+      detectLabel: "GLiNER2-multi",
+    };
+  }, [activeNerEngine]);
+
+  function handleNerEngineChange(nextEngine) {
+    setNerEngine(nextEngine);
+    setThreshold(
+      nextEngine === BASIC_NER_ENGINE_PII_ONNX
+        ? GLINER2_PII_ONNX_DEFAULT_THRESHOLD
+        : GLINER2_MULTI_DEFAULT_THRESHOLD,
     );
-    return graph;
   }
 
-  async function enrichWithDependencyGraph(sourceText, nextEntities) {
-    try {
-      setPersonGraphNote(t("personGraphDepLoading"));
-      const depResult = await parseDependencies(sourceText);
-      rebuildPersonGraph(sourceText, nextEntities, depResult, { resetExclusions: false });
-    } catch (caughtError) {
-      rebuildPersonGraph(sourceText, nextEntities, null, { resetExclusions: false });
-      setPersonGraphNote(
-        `${t("personGraphProximityFallback")} (${caughtError instanceof Error ? caughtError.message : String(caughtError)})`,
+  async function runSelectedNerDetection({ text: sourceText, onProgress }) {
+    if (activeNerEngine === BASIC_NER_ENGINE_PII_ONNX) {
+      const { runGliner2PiiOnnxDetection } = await import("../lib/gliner2PiiOnnxService.js");
+      return runGliner2PiiOnnxDetection({
+        text: sourceText,
+        labels: selectedDetectionLabels,
+        threshold,
+        onProgress,
+      });
+    }
+    const { runGliner2MultiDetection } = await import("../lib/gliner2MultiService.js");
+    return runGliner2MultiDetection({
+      text: sourceText,
+      labelMap: detectionLabelMap,
+      threshold,
+      onProgress,
+    });
+  }
+
+  // Split preview syncs its own panes; dual sync on previewScrollRef crashes Chromium.
+  useSyncedScroll(sourceScrollRef, previewScrollRef, false);
+
+  function toggleDetectionLabel(label) {
+    setActiveLabels((current) => {
+      const next = new Set(current);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      return next;
+    });
+  }
+
+  function handleAddDetectionLabel(event) {
+    event.preventDefault();
+    const normalized = newLabelDraft.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+    if (!normalized) {
+      return;
+    }
+    if (!GLINER_LABELS.includes(normalized)) {
+      setCustomDetectionLabels((current) =>
+        current.includes(normalized) ? current : [...current, normalized],
       );
     }
+    setActiveLabels((current) => new Set(current).add(normalized));
+    setNewLabelDraft("");
   }
 
-  function setEntityKeyExcluded(nextKeys, category, surface, excluded) {
-    const key = getEntityValueKey(category, surface);
-    if (excluded) {
-      nextKeys[key] = true;
-    } else {
-      delete nextKeys[key];
-    }
-  }
-
-  /** Exclude/restore every NER span whose text matches (any category). */
-  function applySurfaceToExcludedKeys(nextKeys, surface, excluding, preferredCategory = null) {
-    const lower = String(surface || "").toLocaleLowerCase();
-    if (!lower) {
+  function removeCustomDetectionLabel(label) {
+    if (GLINER_LABELS.includes(label)) {
       return;
     }
-    let matched = false;
-    for (const entity of entities) {
-      if (entity.text.toLocaleLowerCase() !== lower) {
-        continue;
-      }
-      matched = true;
-      setEntityKeyExcluded(nextKeys, entity.label, entity.text, excluding);
-    }
-    if (!matched && preferredCategory) {
-      setEntityKeyExcluded(nextKeys, preferredCategory, surface, excluding);
-    }
-  }
-
-  function handleTogglePerson(placeholder) {
-    const person = persons.find((item) => item.placeholder === placeholder);
-    if (!person) {
-      return;
-    }
-    const excluding = !excludedPlaceholders[placeholder];
-    const nameSurfaces = [person.name, ...(person.aliases || []), ...(person.corefs || [])];
-
-    setExcludedPlaceholders((current) => {
-      const next = { ...current };
-      if (excluding) {
-        next[placeholder] = true;
-      } else {
-        delete next[placeholder];
-      }
-      return next;
-    });
-
-    setExcludedEntityKeys((current) => {
-      const next = { ...current };
-      for (const surface of nameSurfaces) {
-        applySurfaceToExcludedKeys(next, surface, excluding, "person");
-      }
-      for (const attr of person.attrs || []) {
-        applySurfaceToExcludedKeys(
-          next,
-          attr.value,
-          excluding,
-          attr.entityLabel || guessSurfaceCategory(entities, attr.value, attr.key),
-        );
-      }
-      return next;
-    });
-
-    setExcludedSurfaces((current) => {
-      const next = { ...current };
-      for (const surface of nameSurfaces) {
-        const key = surfaceExcludeKey(placeholder, surface);
-        if (excluding) {
-          next[key] = true;
-        } else {
-          delete next[key];
-        }
-      }
-      for (const attr of person.attrs || []) {
-        const key = surfaceExcludeKey(attr.placeholder || placeholder, attr.value);
-        if (excluding) {
-          next[key] = true;
-        } else {
-          delete next[key];
-        }
-      }
+    setCustomDetectionLabels((current) => current.filter((item) => item !== label));
+    setActiveLabels((current) => {
+      const next = new Set(current);
+      next.delete(label);
       return next;
     });
   }
 
-  function handleToggleGraphSurface(placeholder, surface, attrKey = "", entityLabel = "") {
-    const person = persons.find((item) => item.placeholder === placeholder);
-    const isNameSurface =
-      Boolean(person) &&
-      (person.name === surface ||
-        (person.aliases || []).includes(surface) ||
-        (person.corefs || []).includes(surface));
-    const preferredCategory = isNameSurface
-      ? "person"
-      : entityLabel || guessSurfaceCategory(entities, surface, attrKey);
-
-    const surfaceKey = surfaceExcludeKey(placeholder, surface);
-    const willExclude = !excludedSurfaces[surfaceKey];
-
-    setExcludedSurfaces((current) => toggleSurfaceExcluded(current, placeholder, surface));
-    setExcludedEntityKeys((current) => {
-      const next = { ...current };
-      applySurfaceToExcludedKeys(next, surface, willExclude, preferredCategory);
-      return next;
-    });
-  }
+  const currentFile = batchFiles[currentFileIndex] || null;
 
   function syncCustomCategories(next, batchScoped = batchMode) {
     setCustomCategories(next);
@@ -288,9 +314,18 @@ export default function CamembertWorkflowSection() {
   }, [entityMenu]);
 
   useEffect(() => {
-    rebuildPersonGraph(initialDemo.text, initialDemo.entities, null);
-    void enrichWithDependencyGraph(initialDemo.text, initialDemo.entities);
-    // Initial demo graph only once on mount.
+    if (showPersonGraph) {
+      // Synchronous demo seed so person cards + "Show person graph" work before any model run.
+      const demoGraph = buildSampleDemoPersonGraph();
+      applyRelexPersonGraph(demoGraph.text, demoGraph.entities, demoGraph.relations, {
+        resetExclusions: true,
+        fillProximity: true,
+        noteKey: "personGraphRelexDemoReady",
+      });
+    } else {
+      clearPersonGraph();
+    }
+    // Initial demo graph only once on mount (Advanced only).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -312,31 +347,85 @@ export default function CamembertWorkflowSection() {
     [customCategories],
   );
   const groupedEntities = useMemo(() => groupEntities(entities), [entities]);
+  const {
+    ladders: generalizationLadders,
+    loading: generalizationLoading,
+    mode: generalizationMode,
+    error: generalizationError,
+  } = useGeneralizationLadders({
+    entities,
+    categoryMethods,
+    selectedCategories,
+  });
   const highlightedSegments = useMemo(
     () => createHighlightSegments(text, entities),
     [text, entities],
   );
-  const focusedPersonPlaceholder = pinnedPersonPlaceholder || hoveredPersonPlaceholder;
-  const focusedPerson = useMemo(
-    () => persons.find((person) => person.placeholder === focusedPersonPlaceholder) || null,
-    [persons, focusedPersonPlaceholder],
-  );
-  const personFocusRanges = useMemo(
-    () => buildPersonFocusRanges(text, focusedPerson),
-    [text, focusedPerson],
-  );
-  const anonymizedText = useMemo(
+  const anonymizedPreview = useMemo(
     () =>
-      replaceSelectedCategories(
+      buildAnonymizedPreviewModel(
         text,
         entities,
         groupedEntities,
         selectedCategories,
         excludedEntityKeys,
         customCategories,
+        {
+          categoryMethods,
+          salt: text,
+          generalizationLadders,
+          persons,
+          surfaceOverrides,
+        },
       ),
-    [text, entities, groupedEntities, selectedCategories, excludedEntityKeys, customCategories],
+    [
+      text,
+      entities,
+      groupedEntities,
+      selectedCategories,
+      excludedEntityKeys,
+      customCategories,
+      categoryMethods,
+      generalizationLadders,
+      persons,
+      surfaceOverrides,
+    ],
   );
+  const anonymizedText =
+    anonymizedTextOverride != null ? anonymizedTextOverride : anonymizedPreview.anonymizedText;
+  const anonymizedSegments = anonymizedPreview.segments;
+  const anonymizedGraphModel = useMemo(
+    () =>
+      resolveAnonymizedPersonGraph({
+        text,
+        entities,
+        groupedEntities,
+        selectedCategories,
+        customCategories,
+        persons,
+        excludedPlaceholders,
+        excludedSurfaces,
+        categoryMethods,
+        generalizationLadders,
+        salt: text,
+        surfaceOverrides,
+      }),
+    [
+      text,
+      entities,
+      groupedEntities,
+      selectedCategories,
+      customCategories,
+      persons,
+      excludedPlaceholders,
+      excludedSurfaces,
+      categoryMethods,
+      generalizationLadders,
+      surfaceOverrides,
+    ],
+  );
+  const anonymizedPersons = anonymizedGraphModel.persons;
+  const anonymizedReplacementMap = anonymizedGraphModel.replacementMap;
   const activeEntities = useMemo(
     () =>
       entities.filter((entity) =>
@@ -355,9 +444,13 @@ export default function CamembertWorkflowSection() {
         excludedEntityKeys,
         modelName,
         sourceFile: currentFile?.name || null,
-        nerBackend: batchMode ? nerBackend : null,
+        nerBackend: batchMode ? activeNerEngine : null,
         batchMode,
         customCategories,
+        categoryMethods,
+        generalizationLadders,
+        persons,
+        surfaceOverrides,
       }),
     [
       text,
@@ -368,9 +461,13 @@ export default function CamembertWorkflowSection() {
       excludedEntityKeys,
       modelName,
       currentFile,
-      nerBackend,
+      categoryMethods,
+      generalizationLadders,
+      persons,
       batchMode,
       customCategories,
+      surfaceOverrides,
+      activeNerEngine,
     ],
   );
   const labelStudioExport = useMemo(
@@ -378,12 +475,12 @@ export default function CamembertWorkflowSection() {
       createLabelStudioExport({
         text,
         entities: activeEntities,
-        modelName,
-        nerBackend,
+        modelName: modelName || nerEngineMeta.id,
+        nerBackend: activeNerEngine,
         sourceFile: currentFile?.name || null,
         customCategories,
       }),
-    [text, activeEntities, modelName, nerBackend, currentFile, customCategories],
+    [text, activeEntities, modelName, currentFile, customCategories, nerEngineMeta.id, activeNerEngine],
   );
   const labelStudioJson = useMemo(
     () => JSON.stringify(labelStudioExport, null, 2),
@@ -403,13 +500,15 @@ export default function CamembertWorkflowSection() {
       modelName,
       customCategories,
       outputsModified: currentFileOutputsModified,
+      relations: fileStatesRef.current[currentFile.id]?.relations || [],
     };
   }
 
   function applyFileState(file, savedState, options = {}) {
     const { isBatchNavigation = batchMode } = options;
     const nextEntities = savedState?.entities ?? [];
-    setText(savedState?.text ?? file.text);
+    const nextText = savedState?.text ?? file.text;
+    setText(nextText);
     setEntities(nextEntities);
     setSelectedCategories(savedState?.selectedCategories ?? {});
     setExcludedEntityKeys(savedState?.excludedEntityKeys ?? {});
@@ -429,11 +528,22 @@ export default function CamembertWorkflowSection() {
     setReportOpen(false);
     setError("");
     setIsEditingSource(nextEntities.length === 0);
+
+    if (!showPersonGraph) {
+      clearPersonGraph();
+    } else if (nextEntities.length && Array.isArray(savedState?.relations)) {
+      applyRelexPersonGraph(nextText, nextEntities, savedState.relations, {
+        resetExclusions: true,
+      });
+    } else if (nextEntities.length) {
+      refreshPersonGraph(nextText, nextEntities, { resetExclusions: true });
+    } else {
+      clearPersonGraph();
+    }
   }
 
   async function runNerDetection({
     sourceText = text,
-    backend = nerBackend,
     fileName = null,
     filePosition = null,
   } = {}) {
@@ -442,25 +552,80 @@ export default function CamembertWorkflowSection() {
       return null;
     }
 
+    if (!selectedDetectionLabels.length) {
+      setError(t("glinerStatusNoLabels"));
+      setStatus(t("glinerStatusNoLabels"));
+      return null;
+    }
+
     setError("");
     setIsDetecting(true);
-    setStatus(
-      `Running ${backendDisplayLabel(backend, customModelId)}. The first run downloads ONNX weights into your browser cache…`,
-    );
+    setStatus(nerEngineMeta.downloadHint);
 
     try {
-      const result = await detectEntitiesInWorker(textToAnalyze, backend, customModelId);
-      const normalized = finalizeDetectedEntities(textToAnalyze, result.entities || []);
+      const result = await runSelectedNerDetection({
+        text: textToAnalyze,
+        onProgress: (progress) => {
+          if (progress?.phase === "download") {
+            const pct =
+              typeof progress.percent === "number" ? ` ${Math.round(progress.percent)}%` : "";
+            setStatus(
+              `Downloading ${nerEngineMeta.downloadLabel} (${progress.file || "model"})${pct}…`,
+            );
+          }
+        },
+      });
+      const resolvedModel = result.model || nerEngineMeta.id;
+      const normalized = finalizeDetectedEntities(textToAnalyze, result.entities || [], {
+        ruleLabels: selectedDetectionLabels.filter((label) =>
+          GLINER_RULE_LABELS.includes(label),
+        ),
+      });
       const categorySelection = createCategorySelectionFromEntities(normalized);
 
       setEntities(normalized);
       setSelectedCategories(categorySelection);
       setExcludedEntityKeys({});
-      setModelName(result.model);
+      setModelName(resolvedModel);
       setIsDemoMode(false);
       setIsEditingSource(false);
-      rebuildPersonGraph(textToAnalyze, normalized, null);
-      void enrichWithDependencyGraph(textToAnalyze, normalized);
+
+      let relations = [];
+      let graphNote = "";
+      if (showPersonGraph) {
+        setStatus("Linking person graph with GLiNER ReLex…");
+        const { extractGlinerRelexRelations } = await import("../lib/glinerRelexService.js");
+        graphNote = "ReLex graph";
+        try {
+          relations = await extractGlinerRelexRelations(textToAnalyze, normalized, (progress) => {
+            if (progress?.phase === "download") {
+              const pct =
+                typeof progress.percent === "number" ? ` ${Math.round(progress.percent)}%` : "";
+              setStatus(`Downloading GLiNER ReLex (${progress.file || "model"})${pct}…`);
+            }
+          });
+          applyRelexPersonGraph(textToAnalyze, normalized, relations, { resetExclusions: true });
+        } catch (graphError) {
+          refreshPersonGraph(textToAnalyze, normalized, { resetExclusions: true });
+          graphNote = `proximity fallback (${
+            graphError instanceof Error ? graphError.message : String(graphError)
+          })`;
+        }
+      } else {
+        clearPersonGraph();
+      }
+
+      if (batchMode && currentFile) {
+        fileStatesRef.current[currentFile.id] = {
+          ...fileStatesRef.current[currentFile.id],
+          text: textToAnalyze,
+          entities: normalized,
+          selectedCategories: categorySelection,
+          excludedEntityKeys: {},
+          modelName: resolvedModel,
+          relations,
+        };
+      }
 
       const uniqueCount = Object.values(
         normalized.reduce((groups, entity) => {
@@ -475,13 +640,18 @@ export default function CamembertWorkflowSection() {
           ? ` for ${currentFile.name}`
           : "";
       setStatus(
-        `Detected ${normalized.length} entities (${uniqueCount} unique value${uniqueCount === 1 ? "" : "s"}) using ${result.model} (${backend})${fileNote}.`,
+        `Detected ${normalized.length} entities (${uniqueCount} unique value${
+          uniqueCount === 1 ? "" : "s"
+        }) with ${nerEngineMeta.detectLabel}${
+          graphNote ? ` · ${graphNote}` : " (NER only)"
+        }${fileNote}.`,
       );
 
       return {
         entities: normalized,
         selectedCategories: categorySelection,
-        modelName: result.model,
+        modelName: resolvedModel,
+        relations,
       };
     } catch (caughtError) {
       setError(caughtError.message);
@@ -501,7 +671,51 @@ export default function CamembertWorkflowSection() {
     });
   }
 
-  async function processInitialBatchFolder(files, backend) {
+  function seedBatchFileStates(files) {
+    for (const file of files) {
+      fileStatesRef.current[file.id] = {
+        text: file.text,
+        entities: [],
+        selectedCategories: {},
+        excludedEntityKeys: {},
+        modelName: null,
+        customCategories: {},
+        outputsModified: false,
+        relations: [],
+      };
+    }
+  }
+
+  function listUnprocessedBatchFiles(files = batchFiles) {
+    return files.filter((file) => !fileStatesRef.current[file.id]?.modelName);
+  }
+
+  function resolveBatchChunkSize(total) {
+    if (batchProcessCount === "all") {
+      return total;
+    }
+    const parsed = Number(batchProcessCount);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      return total;
+    }
+    return Math.min(Math.floor(parsed), total);
+  }
+
+  function beginEditSourceText() {
+    // Remount the source body so React is not removing highlight nodes that
+    // Chromium (or extensions) may have rewritten — that throws removeChild.
+    setEntityMenu(null);
+    setPinnedPersonPlaceholder(null);
+    setSourceBodyKey((current) => current + 1);
+    setIsEditingSource(true);
+  }
+
+  /** Run NER (+ ReLex when Advanced) on the given files, in chunks of batchProcessCount. */
+  async function processBatchFiles(files) {
+    if (!files.length) {
+      return;
+    }
+
     setIsDetecting(true);
     setBatchJobProgress({
       phase: "detecting",
@@ -510,29 +724,72 @@ export default function CamembertWorkflowSection() {
       fileName: files[0]?.name || "",
     });
 
+    if (!selectedDetectionLabels.length) {
+      setError(t("glinerStatusNoLabels"));
+      setStatus(t("glinerStatusNoLabels"));
+      setIsDetecting(false);
+      setBatchJobProgress(null);
+      return;
+    }
+
+    const chunkSize = resolveBatchChunkSize(files.length);
+
     try {
+      const extractGlinerRelexRelations = showPersonGraph
+        ? (await import("../lib/glinerRelexService.js")).extractGlinerRelexRelations
+        : null;
+
       for (let index = 0; index < files.length; index += 1) {
         const file = files[index];
+        const chunkIndex = Math.floor(index / chunkSize) + 1;
+        const chunkTotal = Math.ceil(files.length / chunkSize);
         setBatchJobProgress({
           phase: "detecting",
           current: index,
           total: files.length,
           fileName: file.name,
         });
-        setStatus(`Detecting entities: ${index + 1} of ${files.length} — ${file.name}`);
+        setStatus(
+          `Detecting with ${nerEngineMeta.detectLabel}: ${index + 1} of ${files.length} — ${file.name}${
+            showPersonGraph ? "" : " (NER only)"
+          }${chunkTotal > 1 ? ` · chunk ${chunkIndex}/${chunkTotal}` : ""}`,
+        );
+        // Let React paint progress between WASM-heavy inferences.
+        await new Promise((resolve) => setTimeout(resolve, 0));
 
-        const result = await detectEntitiesInWorker(file.text, backend, customModelId);
-        const normalized = finalizeDetectedEntities(file.text, result.entities || []);
+        const result = await runSelectedNerDetection({ text: file.text });
+        const resolvedModel = result.model || nerEngineMeta.id;
+        const normalized = finalizeDetectedEntities(file.text, result.entities || [], {
+          ruleLabels: selectedDetectionLabels.filter((label) =>
+            GLINER_RULE_LABELS.includes(label),
+          ),
+        });
         const categorySelection = createCategorySelectionFromEntities(normalized);
 
+        let relations = [];
+        if (extractGlinerRelexRelations) {
+          try {
+            setStatus(
+              `Linking person graph (ReLex): ${index + 1} of ${files.length} — ${file.name}`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            relations = await extractGlinerRelexRelations(file.text, normalized);
+          } catch {
+            relations = [];
+          }
+        }
+
+        const previous = fileStatesRef.current[file.id] || {};
         fileStatesRef.current[file.id] = {
+          ...previous,
           text: file.text,
           entities: normalized,
           selectedCategories: categorySelection,
-          excludedEntityKeys: {},
-          modelName: result.model,
-          customCategories: {},
-          outputsModified: false,
+          excludedEntityKeys: previous.excludedEntityKeys || {},
+          modelName: resolvedModel,
+          customCategories: previous.customCategories || {},
+          outputsModified: previous.outputsModified || false,
+          relations,
         };
 
         setBatchJobProgress({
@@ -541,6 +798,15 @@ export default function CamembertWorkflowSection() {
           total: files.length,
           fileName: file.name,
         });
+
+        // After each chunk, yield so the UI can breathe before the next wave.
+        const finishedChunk = (index + 1) % chunkSize === 0 && index + 1 < files.length;
+        if (finishedChunk) {
+          setStatus(
+            `Processed ${index + 1} of ${files.length} file(s) — starting next chunk of ${chunkSize}…`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
       }
     } finally {
       setIsDetecting(false);
@@ -565,7 +831,7 @@ export default function CamembertWorkflowSection() {
     setCurrentFileIndex(index);
     applyFileState(file, savedState);
 
-    if (autoRunNer && !savedState?.entities?.length) {
+    if (autoRunNer && !savedState?.modelName) {
       await runNerDetection({
         sourceText: fileText,
         fileName: file.name,
@@ -620,6 +886,7 @@ export default function CamembertWorkflowSection() {
 
     fileStatesRef.current = {};
     batchCustomCategoriesRef.current = {};
+    seedBatchFileStates(files);
     setBatchMode(true);
     setBatchFolderLabel(sourceLabel);
     setBatchOutputLabel(outputLabel);
@@ -629,18 +896,30 @@ export default function CamembertWorkflowSection() {
     setEntityMenu(null);
     setReportOpen(false);
 
-    applyFileState(files[0], null, { isBatchNavigation: true });
-    setStatus(`Loaded ${files.length} text file(s). Running NER on each file…`);
-    setIsBatchLoading(false);
-
-    await processInitialBatchFolder(files, nerBackend);
-
     applyFileState(files[0], fileStatesRef.current[files[0].id], {
       isBatchNavigation: true,
     });
-    setStatus(
-      `Loaded and processed ${files.length} file(s). Download outputs as a ZIP when review is complete (${outputLabel}).`,
-    );
+    setIsBatchLoading(false);
+
+    if (autoRunNer) {
+      const chunkSize = resolveBatchChunkSize(files.length);
+      setStatus(
+        chunkSize < files.length
+          ? `Loaded ${files.length} text file(s). Running NER in chunks of ${chunkSize}…`
+          : `Loaded ${files.length} text file(s). Running NER on each file…`,
+      );
+      await processBatchFiles(files);
+      applyFileState(files[0], fileStatesRef.current[files[0].id], {
+        isBatchNavigation: true,
+      });
+      setStatus(
+        `Loaded and processed ${files.length} file(s). Download outputs as a ZIP when review is complete (${outputLabel}).`,
+      );
+    } else {
+      setStatus(
+        `Loaded ${files.length} file(s). Open a file and run anonymization, or enable auto-run. Output folder: ${outputLabel}.`,
+      );
+    }
   }
 
   async function handleBatchFolderChange(event) {
@@ -778,6 +1057,19 @@ export default function CamembertWorkflowSection() {
       };
     }
 
+    const pending = listUnprocessedBatchFiles();
+    if (pending.length) {
+      setStatus(
+        `Running NER on ${pending.length} unprocessed file(s) before building the ZIP…`,
+      );
+      await processBatchFiles(pending);
+      if (currentFile && fileStatesRef.current[currentFile.id]) {
+        applyFileState(currentFile, fileStatesRef.current[currentFile.id], {
+          isBatchNavigation: true,
+        });
+      }
+    }
+
     setIsDownloadingZip(true);
     setStatus("Building ZIP archive…");
 
@@ -785,8 +1077,10 @@ export default function CamembertWorkflowSection() {
       await downloadBatchZip({
         files: batchFiles,
         fileStates: fileStatesRef.current,
-        nerBackend,
+        nerBackend: activeNerEngine,
         outputLabel: batchOutputLabel,
+        categoryMethods,
+        generalizationLadders,
       });
       setStatus(`Downloaded ${batchOutputLabel}.zip with anonymized outputs and reports.`);
     } catch (caughtError) {
@@ -798,11 +1092,14 @@ export default function CamembertWorkflowSection() {
   }
 
   function restoreSampleDemo() {
-    const demo = buildSampleDemoState();
+    const demo = buildSampleDemoPersonGraph();
     setText(demo.text);
     setEntities(demo.entities);
     setSelectedCategories(demo.selectedCategories);
     setExcludedEntityKeys(demo.excludedEntityKeys);
+    setCategoryMethods({});
+    setSurfaceOverrides({});
+    setAnonymizedTextOverride(null);
     setModelName(demo.modelName);
     setCustomCategories({});
     setEntityMenu(null);
@@ -810,8 +1107,15 @@ export default function CamembertWorkflowSection() {
     setError("");
     setIsDemoMode(true);
     setIsEditingSource(false);
-    rebuildPersonGraph(demo.text, demo.entities, null);
-    void enrichWithDependencyGraph(demo.text, demo.entities);
+    if (showPersonGraph) {
+      applyRelexPersonGraph(demo.text, demo.entities, demo.relations, {
+        resetExclusions: true,
+        fillProximity: true,
+        noteKey: "personGraphRelexDemoReady",
+      });
+    } else {
+      clearPersonGraph();
+    }
     setStatus(t("statusDemoRestored"));
   }
 
@@ -844,13 +1148,12 @@ export default function CamembertWorkflowSection() {
 
     setText("");
     setEntities([]);
-    setPersons([]);
-    relationOverridesRef.current = {};
-    setExcludedPlaceholders({});
-    setExcludedSurfaces({});
-    setPersonGraphNote("");
+    clearPersonGraph();
     setSelectedCategories({});
     setExcludedEntityKeys({});
+    setCategoryMethods({});
+    setSurfaceOverrides({});
+    setAnonymizedTextOverride(null);
     setModelName(null);
     setIsDemoMode(false);
     setIsEditingSource(true);
@@ -862,12 +1165,12 @@ export default function CamembertWorkflowSection() {
   function toggleAutoRunNer(enabled) {
     setAutoRunNer(enabled);
 
-    if (!enabled || !batchMode || !currentFile || isDetecting || entities.length) {
+    if (!enabled || !batchMode || !currentFile || isDetecting) {
       return;
     }
 
     const savedState = fileStatesRef.current[currentFile.id];
-    if (savedState?.entities?.length) {
+    if (savedState?.modelName) {
       return;
     }
 
@@ -887,9 +1190,9 @@ export default function CamembertWorkflowSection() {
 
   function toggleEntityValue(category, entityText) {
     const key = getEntityValueKey(category, entityText);
+    const excluding = !excludedEntityKeys[key];
     setExcludedEntityKeys((current) => {
       const next = { ...current };
-      const excluding = !next[key];
       if (excluding) {
         next[key] = true;
       } else {
@@ -897,37 +1200,7 @@ export default function CamembertWorkflowSection() {
       }
       return next;
     });
-
-    setExcludedSurfaces((current) => {
-      const next = { ...current };
-      const excluding = !excludedEntityKeys[key];
-      for (const person of persons) {
-        const nameMatch =
-          person.name === entityText ||
-          (person.aliases || []).includes(entityText) ||
-          (person.corefs || []).includes(entityText);
-        if (category === "person" && nameMatch) {
-          const surfaceKey = surfaceExcludeKey(person.placeholder, entityText);
-          if (excluding) {
-            next[surfaceKey] = true;
-          } else {
-            delete next[surfaceKey];
-          }
-        }
-        for (const attr of person.attrs || []) {
-          if (attr.value !== entityText) {
-            continue;
-          }
-          const surfaceKey = surfaceExcludeKey(attr.placeholder || person.placeholder, attr.value);
-          if (excluding) {
-            next[surfaceKey] = true;
-          } else {
-            delete next[surfaceKey];
-          }
-        }
-      }
-      return next;
-    });
+    syncEntityChipToGraph(category, entityText, excluding);
   }
 
   function copyAnonymizedText() {
@@ -960,33 +1233,23 @@ export default function CamembertWorkflowSection() {
     setEntityMenu(null);
   }
 
-  function handleRelateEntityToPerson(personPlaceholder) {
-    const menu = entityMenuRef.current;
-    const entity = menu?.entity;
+  function handleRelateEntityToPerson(personPlaceholder, options = {}) {
+    const entity = entityMenuRef.current?.entity;
     if (!entity?.text || !personPlaceholder) {
       return;
     }
-    const target = persons.find((person) => person.placeholder === personPlaceholder);
-    if (!target) {
+    const result = relateEntityToPerson(entity, personPlaceholder, options);
+    if (!result) {
       return;
     }
-    const lower = entity.text.toLocaleLowerCase();
-    const entry = {
-      placeholder: personPlaceholder,
-      surface: entity.text,
-      entityLabel: entity.label || "misc",
-      asAlias: isPersonLabel(entity.label),
-    };
-    const nextOverrides = { ...relationOverridesRef.current, [lower]: entry };
-    relationOverridesRef.current = nextOverrides;
-    setPersons((current) => applyRelationOverrides(current, nextOverrides));
-    closeEntityMenu();
-    setStatus(
-      t(entry.asAlias ? "entityMenuAliasStatus" : "entityMenuRelatedStatus", {
-        text: entity.text,
-        person: target.name,
-      }),
-    );
+    const statusKey = result.removed
+      ? result.mode === "alias"
+        ? "entityMenuUnaliasStatus"
+        : "entityMenuUnrelatedStatus"
+      : result.mode === "alias"
+        ? "entityMenuAliasStatus"
+        : "entityMenuRelatedStatus";
+    setStatus(t(statusKey, { text: entity.text, person: result.name }));
   }
 
   function setEntityMenuScope(scope) {
@@ -1011,22 +1274,42 @@ export default function CamembertWorkflowSection() {
         ? [{ start: menu.start, end: menu.end, text: menu.text }]
         : findAllOccurrenceRanges(text, menu.text);
 
+    const previousKeys = new Set(
+      entities.map((entity) => `${entity.start}:${entity.end}:${entity.label}`),
+    );
     const next = addEntitySpans(entities, spans, categoryId, text);
+    const addedCount = next.filter(
+      (entity) => !previousKeys.has(`${entity.start}:${entity.end}:${entity.label}`),
+    ).length;
+    const skippedCount = Math.max(0, spans.length - addedCount);
 
     setEntities(next);
     setSelectedCategories((current) => ({
       ...current,
       [categoryId]: current[categoryId] ?? true,
     }));
-    rebuildPersonGraph(text, next, null);
-    void enrichWithDependencyGraph(text, next);
+    if (showPersonGraph) {
+      refreshPersonGraph(text, next, { resetExclusions: false });
+    }
     closeEntityMenu();
-    const count = spans.length;
+    const labelName = displayLabel || getCategoryLabel(categoryId, customCategories);
+    if (!addedCount) {
+      setStatus(
+        `Kept existing detections — "${menu.text}" already overlaps annotated spans (nothing added).`,
+      );
+      return;
+    }
     const scopeNote =
-      count === 1 ? "" : scope === "all" ? ` (${count} occurrences)` : " (this selection only)";
-    setStatus(
-      `Added ${displayLabel || getCategoryLabel(categoryId, customCategories)} entity "${menu.text}"${scopeNote}.`,
-    );
+      addedCount === 1 && scope === "single"
+        ? " (this selection only)"
+        : addedCount === 1
+          ? ""
+          : ` (${addedCount} occurrence${addedCount === 1 ? "" : "s"})`;
+    const skipNote =
+      skippedCount > 0
+        ? ` · left ${skippedCount} overlapping span${skippedCount === 1 ? "" : "s"} unchanged`
+        : "";
+    setStatus(`Added ${labelName} entity "${menu.text}"${scopeNote}${skipNote}.`);
   }
 
   function handleAddEntity(label) {
@@ -1053,79 +1336,41 @@ export default function CamembertWorkflowSection() {
 
     const next = removeEntityById(entities, entityMenu.entity.id, entityMenu.entity);
     setEntities(next);
-    rebuildPersonGraph(text, next, null);
-    void enrichWithDependencyGraph(text, next);
+    if (showPersonGraph) {
+      refreshPersonGraph(text, next, { resetExclusions: false });
+    }
     closeEntityMenu();
     setStatus(`Removed entity "${entityMenu.entity.text}".`);
   }
 
-  return (
-    <section className="workflow-section camembert-section" aria-labelledby="camembert-section-title">
-      <WorkflowSectionHeader
-        id="camembert-section-title"
-        eyebrow={t("camembertEyebrow")}
-        title={t("camembertTitle")}
-        steps={[t("camembertStep1"), t("camembertStep2"), t("camembertStep3")]}
-        badge={t("camembertBadge")}
-      />
+  const sectionId =
+    variant === "basic" ? "basic-ner-section-title" : "camembert-section-title";
 
-      <ModelProgress
-        progressItems={[...progressItems, ...depProgressItems]}
-        modelReady={modelReady && depModelReady !== false}
+  return (
+    <section
+      className="workflow-section camembert-section"
+      aria-labelledby={sectionId}
+      translate="no"
+    >
+      <WorkflowSectionHeader
+        id={sectionId}
+        eyebrow={t(variant === "basic" ? "basicNerEyebrow" : "camembertEyebrow")}
+        title={t(variant === "basic" ? "basicNerTitle" : "camembertTitle")}
+        steps={
+          variant === "basic"
+            ? [t("basicNerStep1"), t("basicNerStep2"), t("basicNerStep3")]
+            : [t("camembertStep1"), t("camembertStep2"), t("camembertStep3")]
+        }
+        badge={t(variant === "basic" ? "basicNerBadge" : "camembertBadge")}
       />
 
       <BatchJobProgress progress={batchJobProgress} />
 
       <section className="controls">
-        <label className="backend-select">
-          {t("nerModel")}
-          <select
-            value={nerBackend}
-            onChange={(event) => {
-              const nextBackend = event.target.value;
-              setNerBackend(nextBackend);
-              if (!isDemoMode) {
-                setEntities([]);
-                setSelectedCategories({});
-                setExcludedEntityKeys({});
-                setModelName(null);
-              }
-              setStatus(
-                isDemoMode
-                  ? `Model set to ${backendDisplayLabel(nextBackend, customModelId)}. Run Anonymization when you are ready.`
-                  : `Model set to ${backendDisplayLabel(nextBackend, customModelId)}. Run detection again.`,
-              );
-            }}
-            disabled={isDetecting}
-          >
-            <option value="camembert-dates">{NER_BACKENDS["camembert-dates"]}</option>
-            <option value="camembert">{NER_BACKENDS.camembert}</option>
-            <option value="bert-en">{NER_BACKENDS["bert-en"]}</option>
-            <option value="custom">{NER_BACKENDS.custom}</option>
-          </select>
-        </label>
-        {nerBackend === "custom" ? (
-          <label className="backend-select custom-model-field">
-            {t("modelId")}
-            <input
-              type="text"
-              value={customModelId}
-              onChange={(event) => {
-                setCustomModelId(event.target.value);
-                if (!isDemoMode) {
-                  setEntities([]);
-                  setSelectedCategories({});
-                  setExcludedEntityKeys({});
-                  setModelName(null);
-                }
-              }}
-              placeholder={`e.g. ${CUSTOM_MODEL_EXAMPLE}`}
-              spellCheck={false}
-              disabled={isDetecting}
-            />
-          </label>
-        ) : null}
-        <button onClick={detectEntities} disabled={!text.trim() || isDetecting}>
+        <button
+          onClick={detectEntities}
+          disabled={!text.trim() || isDetecting || !selectedDetectionLabels.length}
+        >
           {isDetecting ? t("anonymizing") : t("runAnonymization")}
         </button>
         {!batchMode && !isDemoMode ? (
@@ -1176,25 +1421,37 @@ export default function CamembertWorkflowSection() {
         <button className="secondary" onClick={clearSession} disabled={isBatchLoading}>
           {batchMode ? t("closeBatch") : t("clear")}
         </button>
+        <label className="backend-select gliner-threshold-field">
+          <span>{t("glinerThreshold")}</span>
+          <input
+            type="range"
+            min="0.2"
+            max="0.7"
+            step="0.05"
+            value={threshold}
+            disabled={isDetecting}
+            onChange={(event) => setThreshold(Number(event.target.value))}
+          />
+          <span className="gliner-threshold-value">{threshold.toFixed(2)}</span>
+        </label>
         <span className="status">{status}</span>
       </section>
 
       <section className="batch-panel panel">
         <div className="batch-panel-intro">
           <h2>{t("batchProcessing")}</h2>
-        </div>
-
-        <div className="batch-load-actions">
-          <button onClick={openBatchFolderPicker} disabled={isDetecting || isBatchLoading}>
-            {isBatchLoading ? t("loading") : t("chooseFolder")}
-          </button>
-          <button
-            className="secondary"
-            onClick={openBatchFilePicker}
-            disabled={isDetecting || isBatchLoading}
-          >
-            {t("chooseFiles")}
-          </button>
+          <div className="batch-load-actions">
+            <button onClick={openBatchFolderPicker} disabled={isDetecting || isBatchLoading}>
+              {isBatchLoading ? t("loading") : t("chooseFolder")}
+            </button>
+            <button
+              className="secondary"
+              onClick={openBatchFilePicker}
+              disabled={isDetecting || isBatchLoading}
+            >
+              {t("chooseFiles")}
+            </button>
+          </div>
         </div>
 
         <input
@@ -1217,93 +1474,234 @@ export default function CamembertWorkflowSection() {
         />
 
         {batchMode ? (
-          <>
-            <div className="batch-navigation">
-              <div className="batch-navigation-main">
-                <button
-                  onClick={() => goToFile(currentFileIndex - 1)}
-                  disabled={currentFileIndex === 0 || isBatchLoading || isDetecting}
-                >
-                  {t("previousFile")}
-                </button>
-                <div className="batch-file-indicator">
-                  <strong>
-                    {currentFileIndex + 1} / {batchFiles.length}
-                  </strong>
-                  <span>{currentFile?.name}</span>
-                  <small>{batchFolderLabel}</small>
-                  {batchOutputLabel ? <small>{batchOutputLabel}.zip</small> : null}
-                </div>
-                <button
-                  onClick={() => goToFile(currentFileIndex + 1)}
-                  disabled={currentFileIndex >= batchFiles.length - 1 || isBatchLoading || isDetecting}
-                >
-                  {t("nextFile")}
-                </button>
+          <div className="batch-navigation">
+            <div className="batch-navigation-main">
+              <button
+                onClick={() => goToFile(currentFileIndex - 1)}
+                disabled={currentFileIndex === 0 || isBatchLoading || isDetecting}
+              >
+                {t("previousFile")}
+              </button>
+              <div
+                className="batch-file-indicator"
+                title={[batchFolderLabel, batchOutputLabel ? `${batchOutputLabel}.zip` : ""]
+                  .filter(Boolean)
+                  .join(" · ")}
+              >
+                <strong>
+                  {currentFileIndex + 1} / {batchFiles.length}
+                </strong>
+                <span>{currentFile?.name}</span>
               </div>
-
-              <div className="batch-jump-controls">
-                <form className="batch-jump-field" onSubmit={handleJumpToFileNumber}>
-                  <label htmlFor="camembert-batch-jump-number">{t("goToFileNumber")}</label>
-                  <div className="batch-jump-row">
-                    <input
-                      id="camembert-batch-jump-number"
-                      type="number"
-                      min={1}
-                      max={batchFiles.length}
-                      value={jumpFileNumber}
-                      onChange={(event) => setJumpFileNumber(event.target.value)}
-                      disabled={isBatchLoading || isDetecting}
-                    />
-                    <button type="submit" disabled={isBatchLoading || isDetecting}>
-                      {t("batchGo")}
-                    </button>
-                  </div>
-                </form>
-
-                <form className="batch-jump-field" onSubmit={handleJumpToFileName}>
-                  <label htmlFor="camembert-batch-jump-name">{t("goToFileName")}</label>
-                  <div className="batch-jump-row">
-                    <input
-                      id="camembert-batch-jump-name"
-                      list="camembert-batch-file-list"
-                      value={jumpFileName}
-                      onChange={(event) => setJumpFileName(event.target.value)}
-                      placeholder={t("fileNamePlaceholder")}
-                      disabled={isBatchLoading || isDetecting}
-                    />
-                    <datalist id="camembert-batch-file-list">
-                      {batchFiles.map((file, index) => (
-                        <option key={file.id} value={file.name}>
-                          {index + 1}. {file.name}
-                        </option>
-                      ))}
-                    </datalist>
-                    <button type="submit" disabled={isBatchLoading || isDetecting}>
-                      {t("batchGo")}
-                    </button>
-                  </div>
-                </form>
-              </div>
+              <button
+                onClick={() => goToFile(currentFileIndex + 1)}
+                disabled={currentFileIndex >= batchFiles.length - 1 || isBatchLoading || isDetecting}
+              >
+                {t("nextFile")}
+              </button>
             </div>
-          </>
+
+            <div className="batch-jump-controls">
+              <form className="batch-jump-field" onSubmit={handleJumpToFileNumber}>
+                <label htmlFor="camembert-batch-jump-number">{t("goToFileNumber")}</label>
+                <div className="batch-jump-row">
+                  <input
+                    id="camembert-batch-jump-number"
+                    type="number"
+                    min={1}
+                    max={batchFiles.length}
+                    value={jumpFileNumber}
+                    onChange={(event) => setJumpFileNumber(event.target.value)}
+                    disabled={isBatchLoading || isDetecting}
+                  />
+                  <button type="submit" disabled={isBatchLoading || isDetecting}>
+                    {t("batchGo")}
+                  </button>
+                </div>
+              </form>
+
+              <form className="batch-jump-field" onSubmit={handleJumpToFileName}>
+                <label htmlFor="camembert-batch-jump-name">{t("goToFileName")}</label>
+                <div className="batch-jump-row">
+                  <input
+                    id="camembert-batch-jump-name"
+                    list="camembert-batch-file-list"
+                    value={jumpFileName}
+                    onChange={(event) => setJumpFileName(event.target.value)}
+                    placeholder={t("fileNamePlaceholder")}
+                    disabled={isBatchLoading || isDetecting}
+                  />
+                  <datalist id="camembert-batch-file-list">
+                    {batchFiles.map((file, index) => (
+                      <option key={file.id} value={file.name}>
+                        {index + 1}. {file.name}
+                      </option>
+                    ))}
+                  </datalist>
+                  <button type="submit" disabled={isBatchLoading || isDetecting}>
+                    {t("batchGo")}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         ) : null}
 
-        <label className="batch-auto-ner">
-          <input
-            type="checkbox"
-            checked={autoRunNer}
-            onChange={(event) => toggleAutoRunNer(event.target.checked)}
-            disabled={isDetecting}
-          />
-          <span>
-            {t("autoRunNer")}
-            <small>
-              {t("autoRunNerHint", { model: backendDisplayLabel(nerBackend, customModelId) })}
-            </small>
-          </span>
-        </label>
+        <div className="batch-options-row">
+          <label
+            className="batch-auto-ner"
+            title={t("autoRunNerHint", { model: nerEngineMeta.id })}
+          >
+            <input
+              type="checkbox"
+              checked={autoRunNer}
+              onChange={(event) => toggleAutoRunNer(event.target.checked)}
+              disabled={isDetecting}
+            />
+            <span>{t("autoRunNer")}</span>
+          </label>
+
+          <label
+            className="batch-auto-ner batch-process-count"
+            title={t("batchProcessCountHint")}
+          >
+            <span>{t("batchProcessCount")}</span>
+            <select
+              value={batchProcessCount}
+              onChange={(event) => setBatchProcessCount(event.target.value)}
+              disabled={isDetecting || isBatchLoading}
+              aria-label={t("batchProcessCount")}
+            >
+              <option value="all">{t("batchProcessAll")}</option>
+              <option value="1">1</option>
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="25">25</option>
+            </select>
+          </label>
+        </div>
       </section>
+
+      <div className="panel basic-ner-engine-panel">
+        <div className="panel-header">
+          <h3>{t("basicNerModelTitle")}</h3>
+          <span>{t("basicNerModelHint")}</span>
+        </div>
+        <div
+          className="basic-ner-engine-options"
+          role="radiogroup"
+          aria-label={t("basicNerModelTitle")}
+        >
+          <label className="basic-ner-engine-option">
+            <input
+              type="radio"
+              name={`ner-engine-${variant}`}
+              value={BASIC_NER_ENGINE_MULTI}
+              checked={nerEngine === BASIC_NER_ENGINE_MULTI}
+              disabled={isDetecting}
+              onChange={() => handleNerEngineChange(BASIC_NER_ENGINE_MULTI)}
+            />
+            <span>
+              {t("basicNerModelMultiOption")}{" "}
+              <a
+                className="model-hub-link"
+                href={GLINER2_MULTI_HF_URL}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {t("gliner2MultiShortName")}
+              </a>
+            </span>
+          </label>
+          <label className="basic-ner-engine-option">
+            <input
+              type="radio"
+              name={`ner-engine-${variant}`}
+              value={BASIC_NER_ENGINE_PII_ONNX}
+              checked={nerEngine === BASIC_NER_ENGINE_PII_ONNX}
+              disabled={isDetecting}
+              onChange={() => handleNerEngineChange(BASIC_NER_ENGINE_PII_ONNX)}
+            />
+            <span>
+              {t("basicNerModelPiiOption")}{" "}
+              <a
+                className="model-hub-link"
+                href={GLINER2_PII_ONNX_HF_URL}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {t("gliner2PiiOnnxShortName")}
+              </a>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div className="panel gliner-labels-panel">
+        <div className="panel-header">
+          <h3>{t("glinerLabelsTitle")}</h3>
+          <span>{t("glinerLabelsHint", { count: selectedDetectionLabels.length })}</span>
+        </div>
+        <div className="gliner-label-list">
+          {availableDetectionLabels.map((label) => {
+            const active = activeLabels.has(label);
+            const isCustom = !GLINER_LABELS.includes(label);
+            return (
+              <span key={label} className="gliner-label-chip-wrap">
+                <button
+                  type="button"
+                  className={`gliner-label-chip${active ? " is-active" : ""}`}
+                  disabled={isDetecting}
+                  onClick={() => toggleDetectionLabel(label)}
+                >
+                  {label}
+                </button>
+                {isCustom ? (
+                  <button
+                    type="button"
+                    className="gliner-label-remove"
+                    disabled={isDetecting}
+                    aria-label={t("basicRemoveLabel", { label })}
+                    title={t("basicRemoveLabel", { label })}
+                    onClick={() => removeCustomDetectionLabel(label)}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </span>
+            );
+          })}
+        </div>
+        <form className="gliner-add-label-row" onSubmit={handleAddDetectionLabel}>
+          <input
+            id="basic-add-label"
+            type="text"
+            value={newLabelDraft}
+            disabled={isDetecting}
+            aria-label={t("basicAddLabel")}
+            placeholder={t("basicAddLabelPlaceholder")}
+            onChange={(event) => setNewLabelDraft(event.target.value)}
+          />
+          <button type="submit" className="secondary" disabled={isDetecting || !newLabelDraft.trim()}>
+            {t("basicAddLabel")}
+          </button>
+        </form>
+        <p className="category-hint gliner-labels-footnote">
+          {t("basicLabelsFootnoteBefore")}
+          <a
+            className="model-hub-link"
+            href={nerEngineMeta.hfUrl}
+            target="_blank"
+            rel="noreferrer"
+            title={nerEngineMeta.id}
+          >
+            {t(nerEngineMeta.shortNameKey)}
+          </a>
+          {t("basicLabelsFootnoteAfter")}
+        </p>
+      </div>
 
       {error ? (
         <section className="error-card">
@@ -1313,21 +1711,45 @@ export default function CamembertWorkflowSection() {
         </section>
       ) : null}
 
-      <section className="workspace workspace-four-col gen-workspace">
+      <section
+        className={`workspace gen-workspace ${
+          showPersonGraph ? "workspace-four-col" : "workspace-three-col"
+        }`}
+      >
         <div className="panel workspace-sidebar gen-sidebar">
           <div className="panel-header">
             <h2>{t("panel2Title")}</h2>
             <span>
-              {isDemoMode
-                ? `${t("demoModelLabel")} — ${t("demoPanelHint")}`
-                : modelName
-                  ? t("modelLine", {
-                      model: modelName,
-                      backend: backendDisplayLabel(nerBackend, customModelId),
-                    })
-                  : t("backendLine", {
-                      backend: backendDisplayLabel(nerBackend, customModelId),
-                    })}
+              {isDemoMode ? (
+                `${t("demoModelLabel")} — ${t("demoPanelHint")}`
+              ) : modelName ? (
+                <>
+                  {t("modelLinePrefix")}{" "}
+                  <a
+                    className="model-hub-link"
+                    href={nerEngineMeta.hfUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={modelName}
+                  >
+                    {t(nerEngineMeta.shortNameKey)}
+                  </a>{" "}
+                  {t("modelLineSuffix")}
+                </>
+              ) : (
+                <>
+                  {t("backendLinePrefix")}{" "}
+                  <a
+                    className="model-hub-link"
+                    href={nerEngineMeta.hfUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={nerEngineMeta.id}
+                  >
+                    {t(nerEngineMeta.shortNameKey)}
+                  </a>
+                </>
+              )}
             </span>
           </div>
           <CategoryReview
@@ -1355,11 +1777,15 @@ export default function CamembertWorkflowSection() {
                 <button
                   type="button"
                   className="link-button"
-                  onClick={() => setIsEditingSource(true)}
+                  onClick={beginEditSourceText}
                 >
                   {t("editSourceText")}
                 </button>
-              ) : null}
+              ) : (
+                <span className="workspace-source-header-spacer" aria-hidden="true">
+                  {t("editSourceText")}
+                </span>
+              )}
             </div>
             <span className="panel-header-meta">
               {batchMode && currentFile ? `${currentFile.name} · ` : ""}
@@ -1368,129 +1794,354 @@ export default function CamembertWorkflowSection() {
                 : t("characters", { count: text.length })}
             </span>
           </div>
-          {showSourceHighlight ? (
-            <HighlightedText
-              ref={sourceScrollRef}
-              text={text}
-              segments={highlightedSegments}
-              categoryLabels={categoryLabels}
-              selectedCategories={selectedCategories}
-              excludedEntityKeys={excludedEntityKeys}
-              focusRanges={personFocusRanges}
-              persons={persons}
-              pinnedPlaceholder={pinnedPersonPlaceholder}
-              onPinPerson={setPinnedPersonPlaceholder}
-              onAddSelection={(selection) => {
-                const nextMenu = {
-                  mode: "add",
-                  scope: "all",
-                  ...selection,
-                };
-                entityMenuRef.current = nextMenu;
-                setEntityMenu(nextMenu);
-              }}
-              onEntityClick={(entity, position) => {
-                const nextMenu = {
-                  mode: "remove",
-                  entity,
-                  ...position,
-                };
-                entityMenuRef.current = nextMenu;
-                setEntityMenu(nextMenu);
-              }}
-            />
-          ) : (
-            <textarea
-              value={text}
-              onChange={(event) => {
-                setText(event.target.value);
-                setEntities([]);
-                setPersons([]);
-                relationOverridesRef.current = {};
-                setExcludedPlaceholders({});
-                setExcludedSurfaces({});
-                setPersonGraphNote("");
-                setSelectedCategories({});
-                setExcludedEntityKeys({});
-                setModelName(null);
-                setIsDemoMode(false);
-                setIsEditingSource(true);
-                setEntityMenu(null);
-              }}
-              placeholder={t("textPlaceholder")}
-            />
-          )}
-        </div>
-
-        <div className="panel workspace-graph">
-          <div className="panel-header">
-            <h2>{t("generativeGraphTitle")}</h2>
-            <div className="panel-header-actions">
-              <PersonGraphExportButton
-                persons={persons}
-                excludedPlaceholders={excludedPlaceholders}
-                excludedSurfaces={excludedSurfaces}
-                onExported={(mode) =>
-                  setStatus(
-                    t(mode === "byPerson" ? "personGraphExportByPersonDone" : "personGraphExportDone"),
-                  )
-                }
-              />
+          <DomReconcileErrorBoundary
+            onRecover={() =>
+              setStatus(
+                "Recovered from a browser DOM glitch in the source panel — try again if the text looks wrong.",
+              )
+            }
+          >
+            <div
+              key={`${showSourceHighlight ? "highlight" : "edit"}-${sourceBodyKey}`}
+              className="workspace-source-body"
+              translate="no"
+            >
+              {showSourceHighlight ? (
+                <HighlightedText
+                  ref={sourceScrollRef}
+                  text={text}
+                  segments={highlightedSegments}
+                  categoryLabels={categoryLabels}
+                  selectedCategories={selectedCategories}
+                  excludedEntityKeys={excludedEntityKeys}
+                  focusRanges={personFocusRanges}
+                  persons={persons}
+                  pinnedPlaceholder={pinnedPersonPlaceholder}
+                  onPinPerson={setPinnedPersonPlaceholder}
+                  onAddSelection={(selection) => {
+                    const nextMenu = {
+                      mode: "add",
+                      scope: "all",
+                      ...selection,
+                    };
+                    entityMenuRef.current = nextMenu;
+                    setEntityMenu(nextMenu);
+                  }}
+                  onEntityClick={(entity, position) => {
+                    const nextMenu = {
+                      mode: "remove",
+                      entity,
+                      ...position,
+                    };
+                    entityMenuRef.current = nextMenu;
+                    setEntityMenu(nextMenu);
+                  }}
+                />
+              ) : (
+                <textarea
+                  value={text}
+                  onChange={(event) => {
+                    setText(event.target.value);
+                    setEntities([]);
+                    clearPersonGraph();
+                    setSelectedCategories({});
+                    setExcludedEntityKeys({});
+                    setModelName(null);
+                    setIsDemoMode(false);
+                    setIsEditingSource(true);
+                    setEntityMenu(null);
+                  }}
+                  placeholder={t("textPlaceholder")}
+                />
+              )}
             </div>
-            <span>
-              {personGraphNote || t("generativeGraphHint", { count: persons.length })}
-            </span>
-          </div>
-          <div className="workspace-graph-body">
-            {persons.length ? (
-              <div className="gen-graph-list gen-graph-list-sidebar">
-                {persons.map((person, personIndex) => (
-                  <PersonGraphCard
-                    key={`${person.placeholder}-${person.name}-${personIndex}`}
-                    person={person}
-                    excluded={Boolean(excludedPlaceholders[person.placeholder])}
-                    excludedSurfaces={excludedSurfaces}
-                    focused={focusedPersonPlaceholder === person.placeholder}
-                    pinned={pinnedPersonPlaceholder === person.placeholder}
-                    onHoverPerson={setHoveredPersonPlaceholder}
-                    onPinPerson={(placeholder) => {
-                      setPinnedPersonPlaceholder((current) =>
-                        current === placeholder ? null : placeholder,
-                      );
-                    }}
-                    onTogglePerson={handleTogglePerson}
-                    onToggleSurface={handleToggleGraphSurface}
-                    onToggleAttr={(placeholder, value) => {
-                      const personMatch = persons.find((item) =>
-                        (item.attrs || []).some((attr) => attr.value === value),
-                      );
-                      const attr = personMatch?.attrs?.find((item) => item.value === value);
-                      handleToggleGraphSurface(
-                        placeholder || personMatch?.placeholder,
-                        value,
-                        attr?.key,
-                        attr?.entityLabel,
-                      );
-                    }}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="gen-maps-empty">{t("generativeGraphEmpty")}</p>
-            )}
-            <p className="category-hint">{t("personGraphFocusHint")}</p>
-            <p className="category-hint">{t("personGraphLicenseHint")}</p>
-          </div>
+          </DomReconcileErrorBoundary>
         </div>
 
-        <div className="panel workspace-preview">
-          <div className="panel-header">
-            <h2>{t("panel4Title")}</h2>
-            <span>{t("panel4Subtitle")}</span>
+        {showPersonGraph ? (
+          <div className="panel workspace-graph">
+            <div className="panel-header">
+              <h2>{t("generativeGraphTitle")}</h2>
+              <div className="panel-header-actions">
+                <PersonGraphViewButton
+                  persons={persons}
+                  excludedPlaceholders={excludedPlaceholders}
+                  excludedSurfaces={excludedSurfaces}
+                  title={t("personGraphViewWindowTitle")}
+                  subtitle={t("personGraphViewWindowSubtitle", { count: persons.length })}
+                />
+                <PersonGraphExportButton
+                  persons={persons}
+                  excludedPlaceholders={excludedPlaceholders}
+                  excludedSurfaces={excludedSurfaces}
+                  onExported={(mode) =>
+                    setStatus(
+                      t(
+                        mode === "byPerson"
+                          ? "personGraphExportByPersonDone"
+                          : "personGraphExportDone",
+                      ),
+                    )
+                  }
+                />
+              </div>
+              <span>
+                {personGraphNote || t("generativeGraphHint", { count: persons.length })}
+              </span>
+            </div>
+            <div className="workspace-graph-body">
+              {persons.length ? (
+                <div className="gen-graph-list gen-graph-list-sidebar">
+                  {persons.map((person, personIndex) => (
+                    <PersonGraphCard
+                      key={`${person.placeholder}-${person.name}-${personIndex}`}
+                      person={person}
+                      persons={persons}
+                      excluded={Boolean(excludedPlaceholders[person.placeholder])}
+                      excludedSurfaces={excludedSurfaces}
+                      focused={focusedPersonPlaceholder === person.placeholder}
+                      pinned={pinnedPersonPlaceholder === person.placeholder}
+                      dropActive={graphDropTarget === person.placeholder}
+                      onHoverPerson={setHoveredPersonPlaceholder}
+                      onPinPerson={(placeholder) => {
+                        setPinnedPersonPlaceholder((current) =>
+                          current === placeholder ? null : placeholder,
+                        );
+                      }}
+                      onTogglePerson={(placeholder) =>
+                        handleTogglePerson(placeholder, setExcludedEntityKeys)
+                      }
+                      onToggleSurface={(placeholder, surface, attrKey, entityLabel) =>
+                        handleToggleGraphSurface(
+                          placeholder,
+                          surface,
+                          setExcludedEntityKeys,
+                          attrKey,
+                          entityLabel,
+                        )
+                      }
+                      onToggleAttr={(placeholder, value) => {
+                        const personMatch = persons.find((item) =>
+                          (item.attrs || []).some((attr) => attr.value === value),
+                        );
+                        const attr = personMatch?.attrs?.find((item) => item.value === value);
+                        handleToggleGraphSurface(
+                          placeholder || personMatch?.placeholder,
+                          value,
+                          setExcludedEntityKeys,
+                          attr?.key,
+                          attr?.entityLabel,
+                        );
+                      }}
+                      onMoveSurface={(fromPlaceholder, toPlaceholder, surface, meta) => {
+                        const result = moveSurfaceToPerson(
+                          fromPlaceholder,
+                          toPlaceholder,
+                          surface,
+                          meta,
+                        );
+                        if (result) {
+                          setStatus(
+                            t("personGraphMoved", {
+                              surface,
+                              person: result.name,
+                            }),
+                          );
+                        }
+                      }}
+                      onRelatePerson={(fromPlaceholder, toPlaceholder) => {
+                        const from = persons.find((item) => item.placeholder === fromPlaceholder);
+                        const to = persons.find((item) => item.placeholder === toPlaceholder);
+                        const result = relatePersonToPerson(fromPlaceholder, toPlaceholder);
+                        if (result && from && to) {
+                          setStatus(
+                            t(result.removed ? "personGraphUnrelated" : "personGraphRelated", {
+                              from: from.name,
+                              to: to.name,
+                            }),
+                          );
+                        }
+                      }}
+                      onRenameEdgeLabel={(placeholder, kind, value, nextLabel) => {
+                        const result = renameEdgeLabel(placeholder, kind, value, nextLabel);
+                        if (result) {
+                          setStatus(
+                            t("personGraphRenamedLabel", {
+                              label: result.label,
+                              value: result.value,
+                            }),
+                          );
+                        }
+                      }}
+                      onRenameEdgeValue={(placeholder, kind, currentValue, nextValue) => {
+                        const result = renameEdgeValue(
+                          placeholder,
+                          kind,
+                          currentValue,
+                          nextValue,
+                        );
+                        if (result) {
+                          setStatus(
+                            t("personGraphRenamedValue", {
+                              previous: result.previous,
+                              value: result.value,
+                            }),
+                          );
+                        }
+                      }}
+                      onDragSurfaceStart={() => setGraphDropTarget(null)}
+                      onDragSurfaceEnd={() => setGraphDropTarget(null)}
+                      onDragOverPerson={setGraphDropTarget}
+                      onDragLeavePerson={(placeholder) => {
+                        setGraphDropTarget((current) =>
+                          current === placeholder ? null : current,
+                        );
+                      }}
+                      onDropOnPerson={(toPlaceholder, event) => {
+                        setGraphDropTarget(null);
+                        let payload = null;
+                        try {
+                          payload = JSON.parse(event.dataTransfer.getData(MOVE_MIME) || "null");
+                        } catch {
+                          payload = null;
+                        }
+                        if (!payload?.surface || !payload?.fromPlaceholder) {
+                          return;
+                        }
+                        const result = moveSurfaceToPerson(
+                          payload.fromPlaceholder,
+                          toPlaceholder,
+                          payload.surface,
+                          payload,
+                        );
+                        if (result) {
+                          setStatus(
+                            t("personGraphMoved", {
+                              surface: payload.surface,
+                              person: result.name,
+                            }),
+                          );
+                        }
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="gen-maps-empty">{t("generativeGraphEmpty")}</p>
+              )}
+              <p className="category-hint">{t("personGraphMoveHint")}</p>
+              <p className="category-hint">{t("personGraphFocusHint")}</p>
+              <p className="category-hint">
+                {t("personGraphGliner2MultiHintBefore")}
+                <a
+                  className="model-hub-link"
+                  href={nerEngineMeta.hfUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={nerEngineMeta.id}
+                >
+                  {nerEngineMeta.id}
+                </a>
+                {t("personGraphGliner2MultiHintAfter")}
+              </p>
+            </div>
           </div>
-          <pre className="text-preview" ref={previewScrollRef}>
-            {anonymizedText || t("panel4Empty")}
-          </pre>
+        ) : null}
+
+        <div
+          className={`workspace-preview-row${
+            showPersonGraph && showAnonymizedPersonGraph ? "" : " is-anon-graph-hidden"
+          }`}
+        >
+          <div className="panel workspace-preview">
+            <div className="panel-header">
+              <h2>{t("panel4Title")}</h2>
+              <div className="panel-header-actions">
+                {showPersonGraph && !showAnonymizedPersonGraph ? (
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setShowAnonymizedPersonGraph(true)}
+                  >
+                    {t("anonymizedPersonGraphShow")}
+                  </button>
+                ) : null}
+              </div>
+              <span>{t("panel4Subtitle")}</span>
+            </div>
+            <DomReconcileErrorBoundary>
+              <AnonymizedSplitPreview
+                text={text}
+                entities={entities}
+                segments={highlightedSegments}
+                categoryLabels={categoryLabels}
+                selectedCategories={selectedCategories}
+                excludedEntityKeys={excludedEntityKeys}
+                categoryMethods={categoryMethods}
+                onCategoryMethodChange={setCategoryMethods}
+                anonymizedText={anonymizedPreview.anonymizedText}
+                anonymizedSegments={anonymizedSegments}
+                surfaceOverrides={surfaceOverrides}
+                onSurfaceOverrideChange={setSurfaceOverrides}
+                anonymizedTextOverride={anonymizedTextOverride}
+                onAnonymizedTextOverrideChange={setAnonymizedTextOverride}
+                emptyLabel={t("panel4Empty")}
+                previewRef={previewScrollRef}
+                generalizationMode={generalizationMode}
+                generalizationLoading={generalizationLoading}
+                generalizationError={generalizationError}
+              />
+            </DomReconcileErrorBoundary>
+          </div>
+          {showPersonGraph && showAnonymizedPersonGraph ? (
+            <AnonymizedPersonGraphPanel
+              persons={anonymizedPersons}
+              excludedPlaceholders={excludedPlaceholders}
+              excludedSurfaces={excludedSurfaces}
+              onHide={() => setShowAnonymizedPersonGraph(false)}
+              onRenameEdgeValue={(placeholder, kind, currentValue, nextValue) => {
+                const person = anonymizedPersons.find(
+                  (item) => item.placeholder === placeholder,
+                );
+                const origin = resolveAnonymizedGraphEdgeOrigin(person, kind, currentValue);
+                if (!origin) {
+                  return;
+                }
+                const result = applyAnonymizedGraphValueEdit({
+                  surfaceOverrides,
+                  replacementMap: anonymizedReplacementMap,
+                  category: origin.category,
+                  originalSurface: origin.originalSurface,
+                  previousReplacement: origin.previousReplacement || currentValue,
+                  nextReplacement: nextValue,
+                  anonymizedTextOverride,
+                  generatedAnonymizedText: anonymizedPreview.anonymizedText,
+                });
+                if (!result) {
+                  return;
+                }
+                setSurfaceOverrides(result.surfaceOverrides);
+                if (result.anonymizedTextOverride != null) {
+                  setAnonymizedTextOverride(result.anonymizedTextOverride);
+                }
+                setStatus(
+                  t("personGraphRenamedValue", {
+                    previous: currentValue,
+                    value: nextValue,
+                  }),
+                );
+              }}
+              onExported={(mode) =>
+                setStatus(
+                  t(
+                    mode === "byPerson"
+                      ? "anonymizedPersonGraphExportByPersonDone"
+                      : "anonymizedPersonGraphExportDone",
+                  ),
+                )
+              }
+            />
+          ) : null}
         </div>
       </section>
 
@@ -1501,6 +2152,11 @@ export default function CamembertWorkflowSection() {
           menuCategories={menuCategories}
           categoryLabels={categoryLabels}
           persons={persons}
+          relatedPlaceholders={
+            entityMenu.entity?.text
+              ? getRelatedPlaceholdersForSurface(entityMenu.entity.text)
+              : []
+          }
           onScopeChange={setEntityMenuScope}
           onAdd={handleAddEntity}
           onAddCustom={handleAddCustomCategory}

@@ -2,17 +2,31 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import WorkflowSectionHeader from "./WorkflowSectionHeader.jsx";
 import GenerativeRelationView from "./GenerativeRelationView.jsx";
 import GenerativeEditMenu from "./GenerativeEditMenu.jsx";
+import EntityEditMenu from "./EntityEditMenu.jsx";
+import HighlightedText from "./HighlightedText.jsx";
 import PersonGraphCard from "./PersonGraphCard.jsx";
 import PersonGraphExportButton from "./PersonGraphExportButton.jsx";
+import PersonGraphViewButton from "./PersonGraphViewButton.jsx";
 import CategoryReview from "./CategoryReview.jsx";
 import { useUiLocale } from "../context/UiLocaleContext.jsx";
+import { useGeneralizationLadders } from "../hooks/useGeneralizationLadders.js";
 import { useSyncedScroll } from "../hooks/useSyncedScroll.js";
 import {
+  ALBERT_GRAPH_SYSTEM_PROMPT,
+  buildAlbertGraphUserPrompt,
+  entitiesToAlbertCandidates,
   listAlbertChatModels,
   resolveInitialAlbertApiKey,
+  runAlbertEntityDetection,
   runAlbertGenerativeAnonymization,
   storeAlbertApiKey,
 } from "../lib/albertClient.js";
+import {
+  ALBERT_ENTITY_DETECTION_SYSTEM_PROMPT,
+  buildAlbertEntityDetectionUserPrompt,
+} from "../lib/albertEntityDetection.js";
+import { GLINER_LABELS } from "../lib/glinerConstants.js";
+import AlbertPromptPreview from "./AlbertPromptPreview.jsx";
 import {
   addSurfaceAsCategory,
   addSurfaceAsNewPerson,
@@ -20,6 +34,7 @@ import {
   buildGenerativeCategoryView,
   rebuildGenerativeOutputs,
   relateSurfaceToPerson,
+  resolveGroupCategory,
   surfaceExcludeKey,
   toggleEntityExclusionSynced,
   togglePlaceholderExclusionSynced,
@@ -33,21 +48,50 @@ import {
   ALBERT_SAMPLE_TEXT,
 } from "../lib/albertConstants.js";
 import {
+  GLINER2_MULTI_BASIC_LABEL_MAP,
+  GLINER2_MULTI_DEFAULT_THRESHOLD,
+} from "../lib/gliner2MultiConstants.js";
+import {
+  addEntitySpans,
   buildCategoryLabels,
   buildMenuCategories,
+  createCategorySelectionFromEntities,
   createCustomCategoryId,
+  createHighlightSegments,
+  finalizeDetectedEntities,
+  findAllOccurrenceRanges,
+  getEntityValueKey,
+  groupEntities,
+  inferCustomCategoriesFromEntities,
+  isEntityActive,
+  removeEntityById,
+  buildAnonymizedPreviewModel,
 } from "../lib/entityUtils.js";
+import AnonymizedSplitPreview from "./AnonymizedSplitPreview.jsx";
 import "./generativeWorkflow.css";
 
-export default function GenerativeWorkflowSection() {
+/**
+ * @param {{ variant?: "basic" | "advanced" }} props
+ * basic — local GLiNER2-multi detection, then Albert person graph
+ * advanced — Albert LLM detection (Basic+Advanced labels + NL categories), then Albert person graph
+ */
+export default function GenerativeWorkflowSection({ variant = "basic" }) {
+  const isAdvanced = variant === "advanced";
   const { t } = useUiLocale();
   const sourceScrollRef = useRef(null);
   const previewScrollRef = useRef(null);
+  const entityMenuRef = useRef(null);
   const [apiKey, setApiKey] = useState(() => resolveInitialAlbertApiKey());
   const [model, setModel] = useState(ALBERT_DEFAULT_MODEL);
   const [models, setModels] = useState(ALBERT_DEFAULT_MODELS);
   const [text, setText] = useState(ALBERT_SAMPLE_TEXT);
   const [extraInstructions, setExtraInstructions] = useState("");
+  const [categoryInstructions, setCategoryInstructions] = useState("");
+  const [activeLabels, setActiveLabels] = useState(() => new Set(GLINER_LABELS));
+  const [categoryMethods, setCategoryMethods] = useState({});
+  const [surfaceOverrides, setSurfaceOverrides] = useState({});
+  const [anonymizedTextOverride, setAnonymizedTextOverride] = useState(null);
+  const [entities, setEntities] = useState([]);
   const [anonymizedText, setAnonymizedText] = useState("");
   const [replacements, setReplacements] = useState([]);
   const [persons, setPersons] = useState([]);
@@ -58,26 +102,120 @@ export default function GenerativeWorkflowSection() {
   const [excludedEntityKeys, setExcludedEntityKeys] = useState({});
   const [customCategories, setCustomCategories] = useState({});
   const [usedModel, setUsedModel] = useState(null);
+  const [isDetecting, setIsDetecting] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [isEditingSource, setIsEditingSource] = useState(true);
   const [editMenu, setEditMenu] = useState(null);
+  const [entityMenu, setEntityMenu] = useState(null);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
 
   const charCount = text.length;
-  const canRun = Boolean(apiKey.trim() && text.trim() && !isRunning);
+  const busy = isDetecting || isRunning;
+  const canDetect = Boolean(
+    text.trim() && !busy && (!isAdvanced || apiKey.trim()),
+  );
+  const activeEntities = useMemo(
+    () => entities.filter((entity) => isEntityActive(entity, selectedCategories, excludedEntityKeys)),
+    [entities, selectedCategories, excludedEntityKeys],
+  );
+  const canSendToAlbert = Boolean(apiKey.trim() && activeEntities.length > 0 && !busy);
+  const titleKey = isAdvanced ? "generativeAdvancedTitle" : "generativeTitle";
+  const eyebrowKey = isAdvanced ? "generativeAdvancedEyebrow" : "generativeEyebrow";
+  const stepKeys = isAdvanced
+    ? ["generativeAdvancedStep1", "generativeAdvancedStep2", "generativeAdvancedStep3"]
+    : ["generativeStep1", "generativeStep2", "generativeStep3"];
+  const privacyBodyKey = isAdvanced ? "generativeAdvancedPrivacyBody" : "generativePrivacyBody";
+  const sectionId = isAdvanced ? "generative-advanced-section-title" : "generative-section-title";
   const showRelationView = persons.length > 0 && !isEditingSource;
+  const showEntityReview = entities.length > 0 && !showRelationView && !isEditingSource;
 
+  const selectedDetectionLabels = useMemo(
+    () => GLINER_LABELS.filter((label) => activeLabels.has(label)),
+    [activeLabels],
+  );
+
+  const detectionUserPrompt = useMemo(() => {
+    if (!isAdvanced) {
+      return "";
+    }
+    return buildAlbertEntityDetectionUserPrompt({
+      sourceText: text.trim(),
+      labels: selectedDetectionLabels.length ? selectedDetectionLabels : GLINER_LABELS,
+      categoryInstructions,
+    });
+  }, [isAdvanced, text, categoryInstructions, selectedDetectionLabels]);
+
+  const graphCandidates = useMemo(
+    () => (isAdvanced ? entitiesToAlbertCandidates(activeEntities) : []),
+    [isAdvanced, activeEntities],
+  );
+
+  const graphUserPrompt = useMemo(() => {
+    if (!isAdvanced) {
+      return "";
+    }
+    return buildAlbertGraphUserPrompt({
+      sourceText: text.trim(),
+      extraInstructions,
+      candidates: graphCandidates,
+    });
+  }, [isAdvanced, text, extraInstructions, graphCandidates]);
+
+  // Only sync the main source pane with the preview when showing the relation
+  // view. The split preview owns its own left/right sync; wiring both to the
+  // same preview node caused Chromium removeChild crashes during updates.
   useSyncedScroll(
     sourceScrollRef,
     previewScrollRef,
-    anonymizedText ? (showRelationView ? "relation" : "source") : false,
+    Boolean(anonymizedText) && showRelationView,
   );
 
   useEffect(() => {
     storeAlbertApiKey(apiKey.trim());
   }, [apiKey]);
+
+  const {
+    ladders: generalizationLadders,
+    loading: generalizationLoading,
+    mode: generalizationMode,
+    error: generalizationError,
+  } = useGeneralizationLadders({
+    entities,
+    groups,
+    categoryMethods,
+    selectedCategories,
+    resolveGroupCategory: (group) => resolveGroupCategory(group, customCategories),
+  });
+  const generalizationLaddersRef = useRef(generalizationLadders);
+  generalizationLaddersRef.current = generalizationLadders;
+
+  useEffect(() => {
+    if (!groups.length) {
+      return;
+    }
+    try {
+      const outputs = rebuildGenerativeOutputs(
+        text,
+        groups,
+        excludedPlaceholders,
+        excludedSurfaces,
+        selectedCategories,
+        excludedEntityKeys,
+        customCategories,
+        { categoryMethods, salt: text, generalizationLadders, surfaceOverrides },
+      );
+      setAnonymizedText(outputs.anonymizedText);
+      setReplacements(outputs.replacements);
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : String(caughtError);
+      setError(message);
+      setStatus(t("generativeStatusFailed"));
+    }
+    // Intentionally rebuild when methods/ladders/overrides change; graph state deps are intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryMethods, generalizationLadders, surfaceOverrides]);
 
   useEffect(() => {
     if (!apiKey.trim()) {
@@ -88,26 +226,42 @@ export default function GenerativeWorkflowSection() {
     let cancelled = false;
     setIsLoadingModels(true);
 
-    listAlbertChatModels(apiKey.trim())
-      .then((ids) => {
-        if (cancelled) return;
-        setModels(ids);
-        if (!ids.includes(model)) {
-          setModel(ids[0] || ALBERT_DEFAULT_MODEL);
-        }
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setModels(ALBERT_DEFAULT_MODELS);
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsLoadingModels(false);
-        }
-      });
+    // Defer until after first paint so Chromium is not reconciling <select>
+    // options in the same commit as the generative panel mount.
+    const timer = window.setTimeout(() => {
+      listAlbertChatModels(apiKey.trim())
+        .then((ids) => {
+          if (cancelled) return;
+          const nextIds = ids?.length ? ids : ALBERT_DEFAULT_MODELS;
+          // Avoid needless <select> option churn — Chromium can throw removeChild
+          // when React reconciles option lists that password/autofill has touched.
+          setModels((current) => {
+            if (
+              current.length === nextIds.length &&
+              current.every((id, index) => id === nextIds[index])
+            ) {
+              return current;
+            }
+            return nextIds;
+          });
+          setModel((current) =>
+            nextIds.includes(current) ? current : nextIds[0] || ALBERT_DEFAULT_MODEL,
+          );
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setModels(ALBERT_DEFAULT_MODELS);
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsLoadingModels(false);
+          }
+        });
+    }, 0);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [apiKey]);
 
@@ -123,9 +277,54 @@ export default function GenerativeWorkflowSection() {
     () => buildGenerativeCategoryView(groups, text, customCategories),
     [groups, text, customCategories],
   );
+  const groupedEntities = useMemo(() => groupEntities(entities), [entities]);
+  const highlightSegments = useMemo(
+    () => createHighlightSegments(text, entities),
+    [text, entities],
+  );
+
+  const sidebarGrouped = persons.length
+    ? categoryView.groupedEntities
+    : groupedEntities;
+  const sidebarEntities = persons.length ? categoryView.entities : entities;
+
+  const anonymizedPreview = useMemo(
+    () =>
+      buildAnonymizedPreviewModel(
+        text,
+        sidebarEntities,
+        sidebarGrouped,
+        selectedCategories,
+        excludedEntityKeys,
+        customCategories,
+        {
+          categoryMethods,
+          salt: text,
+          generalizationLadders,
+          persons,
+          surfaceOverrides,
+        },
+      ),
+    [
+      text,
+      sidebarEntities,
+      sidebarGrouped,
+      selectedCategories,
+      excludedEntityKeys,
+      customCategories,
+      categoryMethods,
+      generalizationLadders,
+      persons,
+      surfaceOverrides,
+    ],
+  );
+  const generatedAnonymizedText = anonymizedPreview.anonymizedText || anonymizedText;
+  const previewAnonymizedText =
+    anonymizedTextOverride != null ? anonymizedTextOverride : generatedAnonymizedText;
+  const anonymizedSegments = anonymizedPreview.segments;
 
   useEffect(() => {
-    const categories = Object.keys(categoryView.groupedEntities);
+    const categories = Object.keys(sidebarGrouped);
     if (!categories.length) {
       return;
     }
@@ -140,7 +339,19 @@ export default function GenerativeWorkflowSection() {
       }
       return changed ? next : current;
     });
-  }, [categoryView.groupedEntities]);
+  }, [sidebarGrouped]);
+
+  function clearAlbertOutputs({ clearModel = true } = {}) {
+    setPersons([]);
+    setGroups([]);
+    setExcludedPlaceholders({});
+    setExcludedSurfaces({});
+    setAnonymizedText("");
+    setReplacements([]);
+    if (clearModel) {
+      setUsedModel(null);
+    }
+  }
 
   function applyGraphState(
     nextPersons,
@@ -164,13 +375,97 @@ export default function GenerativeWorkflowSection() {
       nextSelectedCategories,
       nextExcludedEntityKeys,
       customCategories,
+      {
+        categoryMethods,
+        salt: text,
+        generalizationLadders: generalizationLaddersRef.current,
+        surfaceOverrides,
+      },
     );
     setAnonymizedText(outputs.anonymizedText);
     setReplacements(outputs.replacements);
   }
 
+  async function detectEntities() {
+    if (!canDetect) {
+      return;
+    }
+
+    setIsDetecting(true);
+    setError("");
+    setEditMenu(null);
+    setEntityMenu(null);
+    setStatus(
+      t(isAdvanced ? "generativeAdvancedStatusDetecting" : "generativeStatusDetecting"),
+    );
+
+    try {
+      let normalized;
+      let nextCustom = {};
+
+      let detectionModel = null;
+      if (isAdvanced) {
+        const detectionLabels = selectedDetectionLabels.length
+          ? selectedDetectionLabels
+          : GLINER_LABELS;
+        const result = await runAlbertEntityDetection({
+          apiKey: apiKey.trim(),
+          model,
+          text,
+          categoryInstructions,
+          labels: detectionLabels,
+        });
+        normalized = result.entities || [];
+        nextCustom = result.customCategories || {};
+        detectionModel = result.model || model;
+      } else {
+        const { runGliner2MultiDetection } = await import("../lib/gliner2MultiService.js");
+        const result = await runGliner2MultiDetection({
+          text,
+          labelMap: GLINER2_MULTI_BASIC_LABEL_MAP,
+          threshold: GLINER2_MULTI_DEFAULT_THRESHOLD,
+          onProgress: (progress) => {
+            if (progress?.phase === "download") {
+              const pct =
+                typeof progress.percent === "number" ? ` ${Math.round(progress.percent)}%` : "";
+              setStatus(`Downloading GLiNER2-multi (${progress.file || "model"})${pct}…`);
+            }
+          },
+        });
+        normalized = finalizeDetectedEntities(text, result.entities || []);
+        nextCustom = inferCustomCategoriesFromEntities(normalized, {});
+      }
+
+      const categorySelection = createCategorySelectionFromEntities(normalized);
+
+      clearAlbertOutputs({ clearModel: !detectionModel });
+      if (detectionModel) {
+        setUsedModel(detectionModel);
+      }
+      setEntities(normalized);
+      setSelectedCategories(categorySelection);
+      setExcludedEntityKeys({});
+      setCustomCategories(nextCustom);
+      setIsEditingSource(false);
+      setStatus(
+        t("generativeStatusDetected", {
+          count: normalized.length,
+        }),
+      );
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : String(caughtError);
+      setError(message);
+      setStatus(t("generativeStatusDetectFailed"));
+    } finally {
+      setIsDetecting(false);
+    }
+  }
+
   async function runGenerativeAnonymization() {
-    if (!canRun) {
+    if (!canSendToAlbert) {
+      if (!activeEntities.length) {
+        setStatus(t("generativeNeedEntities"));
+      }
       return;
     }
 
@@ -178,13 +473,16 @@ export default function GenerativeWorkflowSection() {
     setError("");
     setStatus(t("generativeStatusRunning"));
     setEditMenu(null);
+    setEntityMenu(null);
 
     try {
+      const candidates = entitiesToAlbertCandidates(activeEntities);
       const result = await runAlbertGenerativeAnonymization({
         apiKey: apiKey.trim(),
         model,
         text,
         extraInstructions,
+        candidates,
       });
       setPersons(result.persons || []);
       setGroups(result.groups || []);
@@ -193,7 +491,7 @@ export default function GenerativeWorkflowSection() {
       const view = buildGenerativeCategoryView(result.groups || [], text, customCategories);
       setSelectedCategories(view.selectedCategories);
       setExcludedEntityKeys({});
-      setUsedModel(result.model);
+      setUsedModel(result.model || model);
       setIsEditingSource(false);
       const outputs = rebuildGenerativeOutputs(
         text,
@@ -203,6 +501,12 @@ export default function GenerativeWorkflowSection() {
         view.selectedCategories,
         {},
         customCategories,
+        {
+          categoryMethods,
+          salt: text,
+          generalizationLadders: generalizationLaddersRef.current,
+          surfaceOverrides,
+        },
       );
       setAnonymizedText(outputs.anonymizedText);
       setReplacements(outputs.replacements);
@@ -221,95 +525,201 @@ export default function GenerativeWorkflowSection() {
     }
   }
 
+  function toggleDetectionLabel(label) {
+    setActiveLabels((current) => {
+      const next = new Set(current);
+      if (next.has(label)) {
+        if (next.size <= 1) {
+          return current;
+        }
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      return next;
+    });
+  }
+
   function resetSample() {
     setText(ALBERT_SAMPLE_TEXT);
-    setAnonymizedText("");
-    setReplacements([]);
-    setPersons([]);
-    setGroups([]);
-    setExcludedPlaceholders({});
-    setExcludedSurfaces({});
+    setEntities([]);
+    clearAlbertOutputs();
     setSelectedCategories({});
     setExcludedEntityKeys({});
     setCustomCategories({});
-    setUsedModel(null);
+    setCategoryInstructions("");
+    setActiveLabels(new Set(GLINER_LABELS));
+    setCategoryMethods({});
+    setSurfaceOverrides({});
+    setAnonymizedTextOverride(null);
     setIsEditingSource(true);
     setEditMenu(null);
+    setEntityMenu(null);
     setError("");
     setStatus(t("generativeStatusSampleRestored"));
   }
 
   function clearAll() {
     setText("");
-    setAnonymizedText("");
-    setReplacements([]);
-    setPersons([]);
-    setGroups([]);
-    setExcludedPlaceholders({});
-    setExcludedSurfaces({});
+    setEntities([]);
+    clearAlbertOutputs();
     setSelectedCategories({});
     setExcludedEntityKeys({});
     setCustomCategories({});
-    setUsedModel(null);
     setExtraInstructions("");
+    setCategoryInstructions("");
+    setActiveLabels(new Set(GLINER_LABELS));
+    setCategoryMethods({});
+    setSurfaceOverrides({});
+    setAnonymizedTextOverride(null);
     setIsEditingSource(true);
     setEditMenu(null);
+    setEntityMenu(null);
     setError("");
     setStatus("");
   }
 
   function copyAnonymized() {
-    if (!anonymizedText) return;
-    navigator.clipboard.writeText(anonymizedText);
+    const payload = previewAnonymizedText || anonymizedText;
+    if (!payload) return;
+    navigator.clipboard.writeText(payload);
     setStatus(t("generativeStatusCopied"));
   }
 
   function beginEditSource() {
     setIsEditingSource(true);
     setEditMenu(null);
+    setEntityMenu(null);
   }
 
   function onSourceChange(event) {
     const next = event.target.value;
     setText(next);
-    if (persons.length || anonymizedText || replacements.length) {
-      setPersons([]);
-      setGroups([]);
-      setExcludedPlaceholders({});
-      setExcludedSurfaces({});
+    if (entities.length || persons.length || anonymizedText || replacements.length) {
+      setEntities([]);
+      clearAlbertOutputs();
       setSelectedCategories({});
       setExcludedEntityKeys({});
       setCustomCategories({});
-      setAnonymizedText("");
-      setReplacements([]);
-      setUsedModel(null);
       setEditMenu(null);
+      setEntityMenu(null);
     }
   }
 
   function handleAddSelection(selection) {
-    setEditMenu({
+    if (showRelationView) {
+      setEditMenu({
+        mode: "add",
+        text: selection.text,
+        start: selection.start,
+        end: selection.end,
+        x: selection.x,
+        y: selection.y,
+      });
+      return;
+    }
+
+    const next = {
       mode: "add",
       text: selection.text,
       start: selection.start,
       end: selection.end,
       x: selection.x,
       y: selection.y,
-    });
+      scope: "all",
+    };
+    entityMenuRef.current = next;
+    setEntityMenu(next);
   }
 
   function handleEntityClick(entity, position) {
-    setEditMenu({
+    if (showRelationView) {
+      setEditMenu({
+        mode: "remove",
+        text: entity.text,
+        start: entity.start,
+        end: entity.end,
+        placeholder: entity.placeholder,
+        personIndex: entity.personIndex,
+        excluded: entity.excluded,
+        x: position.x,
+        y: position.y,
+      });
+      return;
+    }
+
+    const next = {
       mode: "remove",
+      entity,
       text: entity.text,
       start: entity.start,
       end: entity.end,
-      placeholder: entity.placeholder,
-      personIndex: entity.personIndex,
-      excluded: entity.excluded,
       x: position.x,
       y: position.y,
+    };
+    entityMenuRef.current = next;
+    setEntityMenu(next);
+  }
+
+  function closeEntityMenu() {
+    entityMenuRef.current = null;
+    setEntityMenu(null);
+  }
+
+  function setEntityMenuScope(scope) {
+    setEntityMenu((current) => {
+      if (!current) {
+        return current;
+      }
+      const next = { ...current, scope };
+      entityMenuRef.current = next;
+      return next;
     });
+  }
+
+  function addManualEntity(categoryId) {
+    const menu = entityMenuRef.current;
+    if (!menu || menu.mode !== "add") return;
+
+    const scope = menu.scope === "single" ? "single" : "all";
+    const spans =
+      scope === "single"
+        ? [{ start: menu.start, end: menu.end, text: menu.text }]
+        : findAllOccurrenceRanges(text, menu.text);
+
+    const next = addEntitySpans(entities, spans, categoryId, text);
+    setEntities(next);
+    setSelectedCategories((current) => ({
+      ...current,
+      [categoryId]: current[categoryId] ?? true,
+    }));
+    clearAlbertOutputs();
+    closeEntityMenu();
+    setStatus(t("generativeStatusAddedAlias", { text: menu.text }));
+  }
+
+  function handleAddEntity(label) {
+    addManualEntity(label);
+  }
+
+  function handleAddCustomEntityCategory(displayName) {
+    const trimmed = String(displayName || "").trim();
+    const menu = entityMenuRef.current;
+    if (!trimmed || !menu || menu.mode !== "add") {
+      return;
+    }
+    const categoryId = createCustomCategoryId(trimmed, customCategories);
+    setCustomCategories((current) => ({ ...current, [categoryId]: trimmed }));
+    addManualEntity(categoryId);
+  }
+
+  function handleRemoveEntity() {
+    if (!entityMenu || entityMenu.mode !== "remove") return;
+    const next = removeEntityById(entities, entityMenu.entity.id, entityMenu.entity);
+    setEntities(next);
+    clearAlbertOutputs();
+    closeEntityMenu();
+    setStatus(t("generativeStatusRemoved", { text: entityMenu.entity.text }));
   }
 
   function handleAddToPerson(personIndex) {
@@ -470,49 +880,67 @@ export default function GenerativeWorkflowSection() {
       ...selectedCategories,
       [category]: !selectedCategories[category],
     };
-    applyGraphState(
-      persons,
-      groups,
-      excludedPlaceholders,
-      excludedSurfaces,
-      nextSelected,
-      excludedEntityKeys,
-    );
+    if (persons.length) {
+      applyGraphState(
+        persons,
+        groups,
+        excludedPlaceholders,
+        excludedSurfaces,
+        nextSelected,
+        excludedEntityKeys,
+      );
+      return;
+    }
+    setSelectedCategories(nextSelected);
   }
 
   function handleToggleEntityValue(category, entityText) {
-    const synced = toggleEntityExclusionSynced(
-      groups,
-      excludedSurfaces,
-      excludedEntityKeys,
-      category,
-      entityText,
-      customCategories,
-    );
-    applyGraphState(
-      persons,
-      groups,
-      excludedPlaceholders,
-      synced.excludedSurfaces,
-      selectedCategories,
-      synced.excludedEntityKeys,
-    );
+    if (persons.length) {
+      const synced = toggleEntityExclusionSynced(
+        groups,
+        excludedSurfaces,
+        excludedEntityKeys,
+        category,
+        entityText,
+        customCategories,
+      );
+      applyGraphState(
+        persons,
+        groups,
+        excludedPlaceholders,
+        synced.excludedSurfaces,
+        selectedCategories,
+        synced.excludedEntityKeys,
+      );
+      return;
+    }
+
+    const key = getEntityValueKey(category, entityText);
+    setExcludedEntityKeys((current) => {
+      const next = { ...current };
+      if (next[key]) {
+        delete next[key];
+      } else {
+        next[key] = true;
+      }
+      return next;
+    });
   }
 
   return (
-    <section className="gen-workflow" aria-labelledby="generative-section-title">
+    <section className="gen-workflow" aria-labelledby={sectionId} translate="no">
       <WorkflowSectionHeader
-        id="generative-section-title"
-        eyebrow={t("generativeEyebrow")}
-        title={t("generativeTitle")}
-        steps={[t("generativeStep1"), t("generativeStep2"), t("generativeStep3")]}
-        badge={t("generativeBadge")}
+        id={sectionId}
+        eyebrow={t(eyebrowKey)}
+        title={t(titleKey)}
+        steps={stepKeys.map((key) => t(key))}
+        badge={t(isAdvanced ? "generativeAdvancedBadge" : "generativeBadge")}
         badgeClassName="gen-workflow-badge"
       />
 
       <aside className="gen-privacy" role="note">
         <strong>{t("generativePrivacyTitle")}</strong>
-        <p>{t("generativePrivacyBody")}</p>
+        <p>{t(privacyBodyKey)}</p>
         <p>
           <a href={ALBERT_DOCS_URL} target="_blank" rel="noreferrer">
             {t("generativeDocsLink")}
@@ -523,10 +951,22 @@ export default function GenerativeWorkflowSection() {
       <section className="gen-toolbar">
         <label className="gen-field gen-field-key">
           <span>{t("generativeApiKey")}</span>
+          {/*
+            Use type="text" + CSS masking. Chromium password managers inject DOM
+            into type="password" fields and can trigger React removeChild crashes.
+          */}
           <input
-            type="password"
+            type="text"
+            className="gen-api-key-input"
             autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
             spellCheck={false}
+            name="incognito-albert-api-key"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-bwignore="true"
+            data-form-type="other"
             value={apiKey}
             placeholder={t("generativeApiKeyPlaceholder")}
             onChange={(event) => setApiKey(event.target.value)}
@@ -535,8 +975,9 @@ export default function GenerativeWorkflowSection() {
         <label className="gen-field">
           <span>{t("generativeModel")}</span>
           <select
-            value={model}
-            disabled={isRunning || isLoadingModels}
+            key={`albert-model-select-${models.join("|")}`}
+            value={models.includes(model) ? model : models[0] || ALBERT_DEFAULT_MODEL}
+            disabled={busy || isLoadingModels}
             onChange={(event) => setModel(event.target.value)}
           >
             {models.map((id) => (
@@ -546,13 +987,18 @@ export default function GenerativeWorkflowSection() {
             ))}
           </select>
         </label>
-        <button type="button" onClick={runGenerativeAnonymization} disabled={!canRun}>
+        <button type="button" onClick={detectEntities} disabled={!canDetect}>
+          {isDetecting
+            ? t(isAdvanced ? "generativeAdvancedDetecting" : "generativeDetecting")
+            : t(isAdvanced ? "generativeAdvancedDetect" : "generativeDetect")}
+        </button>
+        <button type="button" onClick={runGenerativeAnonymization} disabled={!canSendToAlbert}>
           {isRunning ? t("generativeRunning") : t("generativeRun")}
         </button>
-        <button type="button" className="secondary" onClick={resetSample} disabled={isRunning}>
+        <button type="button" className="secondary" onClick={resetSample} disabled={busy}>
           {t("generativeResetSample")}
         </button>
-        <button type="button" className="secondary" onClick={clearAll} disabled={isRunning}>
+        <button type="button" className="secondary" onClick={clearAll} disabled={busy}>
           {t("clear")}
         </button>
         <button type="button" className="secondary" onClick={copyAnonymized} disabled={!anonymizedText}>
@@ -560,6 +1006,46 @@ export default function GenerativeWorkflowSection() {
         </button>
         <span className="gen-status">{status}</span>
       </section>
+
+      {isAdvanced ? (
+        <>
+          <div className="gen-label-catalog" aria-label={t("generativeAdvancedLabelsTitle")}>
+            <div className="gen-label-catalog-header">
+              <strong>{t("generativeAdvancedLabelsTitle")}</strong>
+              <span>
+                {t("generativeAdvancedLabelsHint", { count: selectedDetectionLabels.length })}
+              </span>
+            </div>
+            <div className="gen-label-catalog-list" role="group" aria-label={t("generativeAdvancedLabelsTitle")}>
+              {GLINER_LABELS.map((label) => {
+                const active = activeLabels.has(label);
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    className={`gen-label-chip${active ? " is-active" : ""}`}
+                    aria-pressed={active}
+                    disabled={busy}
+                    onClick={() => toggleDetectionLabel(label)}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <label className="gen-notes">
+            <span className="gen-notes-label">{t("generativeAdvancedCategories")}</span>
+            <textarea
+              className="gen-notes-input"
+              value={categoryInstructions}
+              onChange={(event) => setCategoryInstructions(event.target.value)}
+              placeholder={t("generativeAdvancedCategoriesPlaceholder")}
+              rows={2}
+            />
+          </label>
+        </>
+      ) : null}
 
       <label className="gen-notes">
         <span className="gen-notes-label">{t("generativeInstructions")}</span>
@@ -571,6 +1057,31 @@ export default function GenerativeWorkflowSection() {
           rows={2}
         />
       </label>
+
+      {isAdvanced ? (
+        <section className="gen-prompt-live" aria-label={t("generativePromptLiveTitle")}>
+          <div className="gen-prompt-live-header">
+            <strong>{t("generativePromptLiveTitle")}</strong>
+            <span>{t("generativePromptLiveHint")}</span>
+          </div>
+          <AlbertPromptPreview
+            title={t("generativePromptDetectionTitle")}
+            hint={t("generativePromptDetectionHint")}
+            systemPrompt={ALBERT_ENTITY_DETECTION_SYSTEM_PROMPT}
+            userPrompt={detectionUserPrompt}
+          />
+          <AlbertPromptPreview
+            title={t("generativePromptGraphTitle")}
+            hint={
+              graphCandidates.length
+                ? t("generativePromptGraphHint", { count: graphCandidates.length })
+                : t("generativePromptGraphEmptyHint")
+            }
+            systemPrompt={ALBERT_GRAPH_SYSTEM_PROMPT}
+            userPrompt={graphUserPrompt}
+          />
+        </section>
+      ) : null}
 
       {error ? (
         <section className="gen-error">
@@ -587,13 +1098,15 @@ export default function GenerativeWorkflowSection() {
             <span>
               {usedModel
                 ? t("generativeModelLine", { model: usedModel })
-                : t("generativeReplacementsEmpty")}
+                : entities.length
+                  ? t("generativeReviewHint", { count: entities.length })
+                  : t("generativeEntitiesEmpty")}
             </span>
           </div>
-          {Object.keys(categoryView.groupedEntities).length ? (
+          {Object.keys(sidebarGrouped).length ? (
             <CategoryReview
-              entities={categoryView.entities}
-              groupedEntities={categoryView.groupedEntities}
+              entities={sidebarEntities}
+              groupedEntities={sidebarGrouped}
               categoryLabels={categoryLabels}
               selectedCategories={selectedCategories}
               excludedEntityKeys={excludedEntityKeys}
@@ -607,30 +1120,34 @@ export default function GenerativeWorkflowSection() {
 
         <div className="panel workspace-source gen-board">
           <div className="panel-header workspace-source-header">
-            <h2>{showRelationView ? t("panelSourceHighlight") : t("panel1Single")}</h2>
+            <h2>
+              {showRelationView || showEntityReview ? t("panelSourceHighlight") : t("panel1Single")}
+            </h2>
             <div className="workspace-source-header-center">
-              {showRelationView ? (
+              {showRelationView || showEntityReview ? (
                 <button type="button" className="link-button" onClick={beginEditSource}>
                   {t("generativeEditSource")}
                 </button>
-              ) : persons.length > 0 ? (
+              ) : entities.length > 0 || persons.length > 0 ? (
                 <button
                   type="button"
                   className="link-button"
                   onClick={() => setIsEditingSource(false)}
                 >
-                  {t("generativeShowRelations")}
+                  {persons.length ? t("generativeShowRelations") : t("panelSourceHighlight")}
                 </button>
               ) : null}
             </div>
             <span className="panel-header-meta">
               {showRelationView
                 ? t("generativeRelationHint", { count: persons.length })
-                : `${t("characters", { count: charCount })}${
-                    charCount > ALBERT_MAX_INPUT_CHARS
-                      ? ` · ${t("generativeTooLong", { max: ALBERT_MAX_INPUT_CHARS })}`
-                      : ""
-                  }`}
+                : showEntityReview
+                  ? t("generativeReviewHint", { count: entities.length })
+                  : `${t("characters", { count: charCount })}${
+                      charCount > ALBERT_MAX_INPUT_CHARS
+                        ? ` · ${t("generativeTooLong", { max: ALBERT_MAX_INPUT_CHARS })}`
+                        : ""
+                    }`}
             </span>
           </div>
           {showRelationView ? (
@@ -641,6 +1158,17 @@ export default function GenerativeWorkflowSection() {
               excludedPlaceholders={excludedPlaceholders}
               excludedSurfaces={excludedSurfaces}
               emptyLabel={t("generativeInputPlaceholder")}
+              onAddSelection={handleAddSelection}
+              onEntityClick={handleEntityClick}
+            />
+          ) : showEntityReview ? (
+            <HighlightedText
+              ref={sourceScrollRef}
+              text={text}
+              segments={highlightSegments}
+              categoryLabels={categoryLabels}
+              selectedCategories={selectedCategories}
+              excludedEntityKeys={excludedEntityKeys}
               onAddSelection={handleAddSelection}
               onEntityClick={handleEntityClick}
             />
@@ -659,6 +1187,13 @@ export default function GenerativeWorkflowSection() {
           <div className="panel-header">
             <h2>{t("generativeGraphTitle")}</h2>
             <div className="panel-header-actions">
+              <PersonGraphViewButton
+                persons={persons}
+                excludedPlaceholders={excludedPlaceholders}
+                excludedSurfaces={excludedSurfaces}
+                title={t("personGraphViewWindowTitle")}
+                subtitle={t("personGraphViewWindowSubtitle", { count: persons.length })}
+              />
               <PersonGraphExportButton
                 persons={persons}
                 excludedPlaceholders={excludedPlaceholders}
@@ -700,13 +1235,30 @@ export default function GenerativeWorkflowSection() {
               {usedModel ? t("generativeModelLine", { model: usedModel }) : t("panel4Subtitle")}
             </span>
           </div>
-          <pre ref={previewScrollRef} className="gen-board-output text-preview">
-            {anonymizedText || t("generativeOutputEmpty")}
-          </pre>
+          <AnonymizedSplitPreview
+            text={text}
+            entities={sidebarEntities}
+            categoryLabels={categoryLabels}
+            selectedCategories={selectedCategories}
+            excludedEntityKeys={excludedEntityKeys}
+            categoryMethods={categoryMethods}
+            onCategoryMethodChange={setCategoryMethods}
+            anonymizedText={generatedAnonymizedText}
+            anonymizedSegments={anonymizedSegments}
+            surfaceOverrides={surfaceOverrides}
+            onSurfaceOverrideChange={setSurfaceOverrides}
+            anonymizedTextOverride={anonymizedTextOverride}
+            onAnonymizedTextOverrideChange={setAnonymizedTextOverride}
+            emptyLabel={t("generativeOutputEmpty")}
+            previewRef={previewScrollRef}
+            generalizationMode={generalizationMode}
+            generalizationLoading={generalizationLoading}
+            generalizationError={generalizationError}
+          />
         </div>
       </section>
 
-      {editMenu ? (
+      {editMenu && showRelationView ? (
         <GenerativeEditMenu
           menu={editMenu}
           persons={persons}
@@ -718,6 +1270,21 @@ export default function GenerativeWorkflowSection() {
           onRelateToPerson={handleRelateToPerson}
           onRemove={handleRemoveFromMenu}
           onClose={() => setEditMenu(null)}
+        />
+      ) : null}
+
+      {entityMenu && showEntityReview ? (
+        <EntityEditMenu
+          menu={entityMenu}
+          sourceText={text}
+          menuCategories={menuCategories}
+          categoryLabels={categoryLabels}
+          persons={[]}
+          onScopeChange={setEntityMenuScope}
+          onAdd={handleAddEntity}
+          onAddCustom={handleAddCustomEntityCategory}
+          onRemove={handleRemoveEntity}
+          onClose={closeEntityMenu}
         />
       ) : null}
     </section>

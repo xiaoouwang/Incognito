@@ -1,0 +1,1070 @@
+{
+  "modelId": "knowledgator/gliner-relex-base-v1.0",
+  "entityThreshold": 0.3,
+  "relationThreshold": 0.5,
+  "adjacencyThreshold": 0.5,
+  "entityLabels": [
+    "person",
+    "organization",
+    "location",
+    "address",
+    "email",
+    "url",
+    "phone number",
+    "date",
+    "age",
+    "profession",
+    "job title or project role",
+    "school",
+    "hospital",
+    "family member",
+    "nationality",
+    "disease",
+    "diploma"
+  ],
+  "relationLabels": [
+    "lives at",
+    "lives in",
+    "resides at",
+    "located in",
+    "born in",
+    "born on",
+    "works for",
+    "works at",
+    "employed by",
+    "studied at",
+    "colleague of",
+    "family of",
+    "spouse of",
+    "child of",
+    "parent of",
+    "sibling of",
+    "mother of",
+    "father of",
+    "son of",
+    "daughter of",
+    "brother of",
+    "sister of",
+    "reports to",
+    "manages",
+    "has email",
+    "has phone",
+    "has nationality",
+    "suffers from",
+    "has diploma",
+    "graduated from",
+    "has age",
+    "aged",
+    "has profession",
+    "works as",
+    "has job title"
+  ],
+  "entities": [
+    {
+      "label": "person",
+      "text": "Marie Dupont",
+      "start": 0,
+      "end": 12,
+      "score": 0.9926,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "age",
+      "text": "43 ans",
+      "start": 22,
+      "end": 28,
+      "score": 0.9965,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "address",
+      "text": "15 rue des Orangers",
+      "start": 40,
+      "end": 59,
+      "score": 0.999,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "location",
+      "text": "Nice",
+      "start": 62,
+      "end": 66,
+      "score": 0.9816,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "profession",
+      "text": "enseignante",
+      "start": 89,
+      "end": 100,
+      "score": 0.9565,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "school",
+      "text": "lycée Masséna",
+      "start": 104,
+      "end": 117,
+      "score": 0.9852,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "date",
+      "text": "septembre 2018",
+      "start": 125,
+      "end": 139,
+      "score": 0.5452,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "person",
+      "text": "Pierre Martin",
+      "start": 151,
+      "end": 164,
+      "score": 0.9302,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "profession",
+      "text": "médecin",
+      "start": 170,
+      "end": 177,
+      "score": 0.915,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "hospital",
+      "text": "l’hôpital Pasteur",
+      "start": 180,
+      "end": 197,
+      "score": 0.5976,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "hospital",
+      "text": "hôpital Pasteur",
+      "start": 182,
+      "end": 197,
+      "score": 0.9626,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "family member",
+      "text": "Lucas",
+      "start": 221,
+      "end": 226,
+      "score": 0.9884,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "age",
+      "text": "12 ans",
+      "start": 228,
+      "end": 234,
+      "score": 0.7381,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "family member",
+      "text": "Emma",
+      "start": 239,
+      "end": 243,
+      "score": 0.9719,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "age",
+      "text": "8 ans",
+      "start": 245,
+      "end": 250,
+      "score": 0.5036,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "date",
+      "text": "14 mars 1983",
+      "start": 270,
+      "end": 282,
+      "score": 0.9928,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "location",
+      "text": "Lyon",
+      "start": 285,
+      "end": 289,
+      "score": 0.9886,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "email",
+      "text": "marie.dupont@example.com",
+      "start": 327,
+      "end": 351,
+      "score": 0.989,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "phone number",
+      "text": "06 12 34 56 78",
+      "start": 378,
+      "end": 392,
+      "score": 0.9999,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "date",
+      "text": "5 octobre 2026",
+      "start": 426,
+      "end": 440,
+      "score": 0.5014,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "location",
+      "text": "quartier de Cimiez",
+      "start": 494,
+      "end": 512,
+      "score": 0.5372,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "location",
+      "text": "Cimiez",
+      "start": 506,
+      "end": 512,
+      "score": 0.581,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "family member",
+      "text": "Jean Dupont",
+      "start": 703,
+      "end": 714,
+      "score": 0.9797,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "profession",
+      "text": "professeur",
+      "start": 722,
+      "end": 732,
+      "score": 0.7411,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "organization",
+      "text": "Université Côte d’Azur",
+      "start": 737,
+      "end": 759,
+      "score": 0.9347,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "family member",
+      "text": "Sophie",
+      "start": 800,
+      "end": 806,
+      "score": 0.9621,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "organization",
+      "text": "mairie de Cannes",
+      "start": 833,
+      "end": 849,
+      "score": 0.8806,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "location",
+      "text": "Cannes",
+      "start": 843,
+      "end": 849,
+      "score": 0.4747,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "nationality",
+      "text": "chinois",
+      "start": 911,
+      "end": 918,
+      "score": 0.9835,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "location",
+      "text": "Pékin",
+      "start": 1002,
+      "end": 1007,
+      "score": 0.66,
+      "source": "gliner-relex-capture"
+    },
+    {
+      "label": "date",
+      "text": "2019",
+      "start": 1011,
+      "end": 1015,
+      "score": 0.4353,
+      "source": "gliner-relex-capture"
+    }
+  ],
+  "relations": [
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "43 ans",
+        "label": "age",
+        "start": 22,
+        "end": 28,
+        "score": null
+      },
+      "relation": "has age",
+      "score": 0.997
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "43 ans",
+        "label": "age",
+        "start": 22,
+        "end": 28,
+        "score": null
+      },
+      "relation": "aged",
+      "score": 0.9663
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "15 rue des Orangers",
+        "label": "address",
+        "start": 40,
+        "end": 59,
+        "score": null
+      },
+      "relation": "lives at",
+      "score": 0.9969
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "15 rue des Orangers",
+        "label": "address",
+        "start": 40,
+        "end": 59,
+        "score": null
+      },
+      "relation": "resides at",
+      "score": 0.9971
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "Nice",
+        "label": "location",
+        "start": 62,
+        "end": 66,
+        "score": null
+      },
+      "relation": "lives in",
+      "score": 0.9051
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "enseignante",
+        "label": "profession",
+        "start": 89,
+        "end": 100,
+        "score": null
+      },
+      "relation": "has profession",
+      "score": 0.9399
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "enseignante",
+        "label": "profession",
+        "start": 89,
+        "end": 100,
+        "score": null
+      },
+      "relation": "works as",
+      "score": 0.9294
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "enseignante",
+        "label": "profession",
+        "start": 89,
+        "end": 100,
+        "score": null
+      },
+      "relation": "has job title",
+      "score": 0.7816
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "lycée Masséna",
+        "label": "school",
+        "start": 104,
+        "end": 117,
+        "score": null
+      },
+      "relation": "works at",
+      "score": 0.7485
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "médecin",
+        "label": "profession",
+        "start": 170,
+        "end": 177,
+        "score": null
+      },
+      "relation": "has profession",
+      "score": 0.7852
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "médecin",
+        "label": "profession",
+        "start": 170,
+        "end": 177,
+        "score": null
+      },
+      "relation": "works as",
+      "score": 0.7494
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "médecin",
+        "label": "profession",
+        "start": 170,
+        "end": 177,
+        "score": null
+      },
+      "relation": "has job title",
+      "score": 0.6314
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "l’hôpital Pasteur",
+        "label": "hospital",
+        "start": 180,
+        "end": 197,
+        "score": null
+      },
+      "relation": "works at",
+      "score": 0.535
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "Lucas",
+        "label": "family member",
+        "start": 221,
+        "end": 226,
+        "score": null
+      },
+      "relation": "mother of",
+      "score": 0.7391
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "Lucas",
+        "label": "family member",
+        "start": 221,
+        "end": 226,
+        "score": null
+      },
+      "relation": "mother of",
+      "score": 0.7391
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "Emma",
+        "label": "family member",
+        "start": 239,
+        "end": 243,
+        "score": null
+      },
+      "relation": "mother of",
+      "score": 0.6101
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "14 mars 1983",
+        "label": "date",
+        "start": 270,
+        "end": 282,
+        "score": null
+      },
+      "relation": "born on",
+      "score": 0.9548
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "Lyon",
+        "label": "location",
+        "start": 285,
+        "end": 289,
+        "score": null
+      },
+      "relation": "born in",
+      "score": 0.773
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "marie.dupont@example.com",
+        "label": "email",
+        "start": 327,
+        "end": 351,
+        "score": null
+      },
+      "relation": "has email",
+      "score": 0.9044
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "06 12 34 56 78",
+        "label": "phone number",
+        "start": 378,
+        "end": 392,
+        "score": null
+      },
+      "relation": "has phone",
+      "score": 0.9559
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "Jean Dupont",
+        "label": "family member",
+        "start": 703,
+        "end": 714,
+        "score": null
+      },
+      "relation": "daughter of",
+      "score": 0.6704
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "professeur",
+        "label": "profession",
+        "start": 722,
+        "end": 732,
+        "score": null
+      },
+      "relation": "has profession",
+      "score": 0.6944
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "Université Côte d’Azur",
+        "label": "organization",
+        "start": 737,
+        "end": 759,
+        "score": null
+      },
+      "relation": "works for",
+      "score": 0.6312
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "Université Côte d’Azur",
+        "label": "organization",
+        "start": 737,
+        "end": 759,
+        "score": null
+      },
+      "relation": "works at",
+      "score": 0.7307
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "Université Côte d’Azur",
+        "label": "organization",
+        "start": 737,
+        "end": 759,
+        "score": null
+      },
+      "relation": "employed by",
+      "score": 0.5818
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "Université Côte d’Azur",
+        "label": "organization",
+        "start": 737,
+        "end": 759,
+        "score": null
+      },
+      "relation": "works for",
+      "score": 0.6312
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "Université Côte d’Azur",
+        "label": "organization",
+        "start": 737,
+        "end": 759,
+        "score": null
+      },
+      "relation": "works at",
+      "score": 0.7307
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "Université Côte d’Azur",
+        "label": "organization",
+        "start": 737,
+        "end": 759,
+        "score": null
+      },
+      "relation": "employed by",
+      "score": 0.5818
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "mairie de Cannes",
+        "label": "organization",
+        "start": 833,
+        "end": 849,
+        "score": null
+      },
+      "relation": "works for",
+      "score": 0.7187
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "mairie de Cannes",
+        "label": "organization",
+        "start": 833,
+        "end": 849,
+        "score": null
+      },
+      "relation": "works at",
+      "score": 0.5507
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "mairie de Cannes",
+        "label": "organization",
+        "start": 833,
+        "end": 849,
+        "score": null
+      },
+      "relation": "employed by",
+      "score": 0.5414
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "chinois",
+        "label": "nationality",
+        "start": 911,
+        "end": 918,
+        "score": null
+      },
+      "relation": "has nationality",
+      "score": 0.934
+    },
+    {
+      "head": {
+        "text": "15 rue des Orangers",
+        "label": "address",
+        "start": 40,
+        "end": 59,
+        "score": null
+      },
+      "tail": {
+        "text": "Nice",
+        "label": "location",
+        "start": 62,
+        "end": 66,
+        "score": null
+      },
+      "relation": "located in",
+      "score": 0.5414
+    },
+    {
+      "head": {
+        "text": "Pierre Martin",
+        "label": "person",
+        "start": 151,
+        "end": 164,
+        "score": null
+      },
+      "tail": {
+        "text": "Pierre Martin",
+        "label": "person",
+        "start": 151,
+        "end": 164,
+        "score": null
+      },
+      "relation": "spouse of",
+      "score": 0.7216
+    },
+    {
+      "head": {
+        "text": "Pierre Martin",
+        "label": "person",
+        "start": 151,
+        "end": 164,
+        "score": null
+      },
+      "tail": {
+        "text": "06 12 34 56 78",
+        "label": "phone number",
+        "start": 378,
+        "end": 392,
+        "score": null
+      },
+      "relation": "has phone",
+      "score": 0.5046
+    },
+    {
+      "head": {
+        "text": "Pierre Martin",
+        "label": "person",
+        "start": 151,
+        "end": 164,
+        "score": null
+      },
+      "tail": {
+        "text": "Pierre Martin",
+        "label": "person",
+        "start": 151,
+        "end": 164,
+        "score": null
+      },
+      "relation": "spouse of",
+      "score": 0.7216
+    },
+    {
+      "head": {
+        "text": "Pierre Martin",
+        "label": "person",
+        "start": 151,
+        "end": 164,
+        "score": null
+      },
+      "tail": {
+        "text": "06 12 34 56 78",
+        "label": "phone number",
+        "start": 378,
+        "end": 392,
+        "score": null
+      },
+      "relation": "has phone",
+      "score": 0.5046
+    },
+    {
+      "head": {
+        "text": "Lucas",
+        "label": "family member",
+        "start": 221,
+        "end": 226,
+        "score": null
+      },
+      "tail": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "relation": "son of",
+      "score": 0.5102
+    },
+    {
+      "head": {
+        "text": "Lucas",
+        "label": "family member",
+        "start": 221,
+        "end": 226,
+        "score": null
+      },
+      "tail": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "relation": "son of",
+      "score": 0.5102
+    },
+    {
+      "head": {
+        "text": "Emma",
+        "label": "family member",
+        "start": 239,
+        "end": 243,
+        "score": null
+      },
+      "tail": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "relation": "daughter of",
+      "score": 0.6122
+    },
+    {
+      "head": {
+        "text": "Jean Dupont",
+        "label": "family member",
+        "start": 703,
+        "end": 714,
+        "score": null
+      },
+      "tail": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "relation": "father of",
+      "score": 0.5443
+    },
+    {
+      "head": {
+        "text": "Marie Dupont",
+        "label": "person",
+        "start": 0,
+        "end": 12,
+        "score": null
+      },
+      "tail": {
+        "text": "Sophie",
+        "label": "person",
+        "start": 800,
+        "end": 806,
+        "score": null
+      },
+      "relation": "sister of",
+      "score": 0.72
+    }
+  ]
+}

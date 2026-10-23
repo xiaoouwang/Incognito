@@ -44,6 +44,63 @@
   gap: 0.75rem;
 }
 
+.gen-label-catalog {
+  background: rgba(255, 253, 248, 0.95);
+  border: 1px solid rgba(32, 58, 95, 0.12);
+  border-radius: 0.85rem;
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
+}
+
+.gen-label-catalog-header {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.85rem;
+  justify-content: space-between;
+}
+
+.gen-label-catalog-header strong {
+  color: #203a5f;
+  font-size: 0.95rem;
+}
+
+.gen-label-catalog-header span {
+  color: #697386;
+  font-size: 0.85rem;
+}
+
+.gen-label-catalog-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.gen-label-chip {
+  background: #fffdf8;
+  border: 1px solid rgba(32, 58, 95, 0.14);
+  border-radius: 999px;
+  color: #4b5563;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  padding: 0.28rem 0.65rem;
+}
+
+.gen-label-chip.is-active {
+  background: rgba(32, 58, 95, 0.1);
+  border-color: rgba(32, 58, 95, 0.28);
+  color: #203a5f;
+  font-weight: 600;
+}
+
+.gen-label-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .gen-field {
   display: grid;
   gap: 0.35rem;
@@ -78,9 +135,108 @@
   width: 100%;
 }
 
+.gen-api-key-input {
+  -webkit-text-security: disc;
+}
+
 .gen-status {
   color: #4b5563;
   font-size: 0.9rem;
+}
+
+.gen-prompt-live {
+  background: rgba(255, 253, 248, 0.98);
+  border: 1px solid rgba(32, 58, 95, 0.14);
+  border-radius: 0.85rem;
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem 1rem;
+}
+
+.gen-prompt-live-header {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.85rem;
+  justify-content: space-between;
+}
+
+.gen-prompt-live-header strong {
+  color: #203a5f;
+  font-size: 0.95rem;
+}
+
+.gen-prompt-live-header span {
+  color: #697386;
+  font-size: 0.85rem;
+}
+
+.gen-prompt-preview {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.gen-prompt-preview-header {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  justify-content: space-between;
+}
+
+.gen-prompt-preview-header strong {
+  color: #374151;
+  font-size: 0.88rem;
+}
+
+.gen-prompt-preview-header span {
+  color: #697386;
+  font-size: 0.8rem;
+}
+
+.gen-prompt-block {
+  background: #fff;
+  border: 1px solid rgba(32, 58, 95, 0.12);
+  border-radius: 0.65rem;
+  overflow: hidden;
+}
+
+.gen-prompt-block summary {
+  cursor: pointer;
+  color: #203a5f;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  list-style: none;
+  padding: 0.45rem 0.7rem;
+  user-select: none;
+}
+
+.gen-prompt-block summary::-webkit-details-marker {
+  display: none;
+}
+
+.gen-prompt-block summary::before {
+  content: "▸ ";
+  color: #697386;
+}
+
+.gen-prompt-block[open] summary::before {
+  content: "▾ ";
+}
+
+.gen-prompt-pre {
+  border-top: 1px solid rgba(32, 58, 95, 0.1);
+  color: #1f2937;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  margin: 0;
+  max-height: 14rem;
+  overflow: auto;
+  padding: 0.65rem 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .gen-notes {
@@ -133,20 +289,44 @@
 
 .gen-workspace.workspace-three-col,
 .gen-workspace.workspace-four-col {
-  grid-template-columns: minmax(200px, 0.85fr) minmax(0, 1.45fr) minmax(250px, 1fr);
+  --workspace-panel-height: min(88vh, 960px);
   grid-template-rows: minmax(0, 1fr) auto;
   margin-top: 0.25rem;
+  min-height: min(78vh, 880px);
+}
+
+.gen-workspace.workspace-three-col {
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+  justify-content: center;
+  margin-inline: auto;
+  max-width: min(1520px, 100%);
+  width: 100%;
+}
+
+.gen-workspace.workspace-four-col {
+  grid-template-columns: minmax(150px, 250px) minmax(0, 1fr) minmax(200px, 300px);
+  max-width: none;
 }
 
 .gen-workspace.workspace-three-col > .panel,
 .gen-workspace.workspace-four-col > .panel {
+  max-height: var(--workspace-panel-height);
   min-height: 0;
+}
+
+.gen-workspace.workspace-three-col > .workspace-source,
+.gen-workspace.workspace-four-col > .workspace-source,
+.gen-workspace.workspace-three-col > .gen-board,
+.gen-workspace.workspace-four-col > .gen-board {
+  height: var(--workspace-panel-height);
 }
 
 .gen-workspace.workspace-three-col > .workspace-preview,
 .gen-workspace.workspace-four-col > .workspace-preview {
   grid-column: 1 / -1;
-  max-height: min(34vh, 300px);
+  height: var(--workspace-panel-height);
+  max-height: var(--workspace-panel-height);
+  min-height: 0;
 }
 
 .gen-sidebar {
@@ -192,11 +372,12 @@
 
 .gen-workspace .gen-rel-scroll,
 .gen-workspace .gen-board-input,
-.gen-workspace .gen-board-output {
+.gen-workspace .gen-board-output,
+.gen-workspace .workspace-source .highlighted-text {
   flex: 1 1 auto;
   height: auto !important;
   max-height: none !important;
-  min-height: 0 !important;
+  min-height: 36rem !important;
   overflow-y: auto !important;
   resize: none;
 }
@@ -248,11 +429,11 @@
   display: block;
   font: inherit;
   font-size: 1rem;
-  height: 32rem !important;
+  height: 40rem !important;
   line-height: 1.7;
   margin: 0;
   max-height: none !important;
-  min-height: 32rem !important;
+  min-height: 40rem !important;
   outline: none;
   overflow: auto;
   padding: 1rem 1.15rem;
@@ -275,10 +456,43 @@
   min-height: 32rem !important;
 }
 
+/* Included = will be anonymized → discrete strikethrough. */
+.gen-graph-card:not(.is-excluded) .gen-graph-focus-name:not(.is-excluded),
+.gen-graph-edges li:not(.is-excluded) .gen-graph-label,
+.gen-graph-edges li:not(.is-excluded) .gen-graph-value,
+.gen-graph-edges li:not(.is-excluded) button.gen-graph-label,
+.gen-graph-edges li:not(.is-excluded) button.gen-graph-value {
+  text-decoration-line: line-through;
+  text-decoration-color: rgba(105, 115, 134, 0.38);
+  text-decoration-thickness: 1px;
+}
+
+/* Deselected / excluded = kept in clear → normal text, no strikethrough. */
+.gen-graph-card.is-excluded .gen-graph-focus-name,
+.gen-graph-card.is-excluded .gen-graph-label,
+.gen-graph-card.is-excluded .gen-graph-value,
+.gen-graph-focus-name.is-excluded,
 .gen-graph-edges li.is-excluded,
-.gen-graph-root strong.is-excluded {
-  opacity: 0.45;
-  text-decoration: line-through;
+.gen-graph-edges li.is-excluded .gen-graph-label,
+.gen-graph-edges li.is-excluded .gen-graph-value,
+.gen-graph-edges li.is-excluded .gen-graph-token-sm {
+  opacity: 1;
+  text-decoration: none;
+  text-decoration-line: none;
+}
+
+.gen-graph-card.is-excluded .gen-graph-focus-name,
+.gen-graph-focus-name.is-excluded {
+  color: #1f2937;
+}
+
+.gen-graph-edges li.is-excluded .gen-graph-label,
+.gen-graph-edges li.is-excluded button.gen-graph-label {
+  color: #697386;
+}
+
+.gen-graph-edges li.is-excluded .gen-graph-value {
+  color: #1f2937;
 }
 
 .gen-graph-remove.is-restore {
@@ -475,7 +689,7 @@
 
 .gen-graph-card.is-excluded,
 .gen-map-card.is-excluded {
-  opacity: 0.55;
+  opacity: 1;
 }
 
 .gen-graph-card.is-focused {
@@ -502,11 +716,6 @@
 .gen-graph-focus-name:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
-}
-
-.gen-graph-focus-name.is-excluded {
-  opacity: 0.45;
-  text-decoration: line-through;
 }
 
 .gen-graph-remove {
@@ -536,7 +745,6 @@
 .gen-graph-toggle.is-off {
   background: #e5e7eb;
   color: #6b7280;
-  text-decoration: line-through;
 }
 
 .gen-rel-chip.is-excluded,
@@ -644,6 +852,109 @@
   flex-wrap: wrap;
   gap: 0.35rem;
   line-height: 1.35;
+  position: relative;
+}
+
+.gen-graph-edges li.is-movable {
+  cursor: grab;
+}
+
+.gen-graph-edges li.is-movable:active {
+  cursor: grabbing;
+}
+
+.gen-graph-card.is-drop-target {
+  border-color: rgba(32, 58, 95, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(32, 58, 95, 0.22);
+  background: #f5f8fc;
+}
+
+.gen-graph-move {
+  display: inline-flex;
+  position: relative;
+  vertical-align: baseline;
+}
+
+.gen-graph-move-toggle {
+  background: transparent;
+  border: 0;
+  color: #697386;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+}
+
+.gen-graph-move-toggle:hover,
+.gen-graph-move-toggle.is-open {
+  color: #203a5f;
+}
+
+.gen-graph-move-menu {
+  background: #fff;
+  border: 1px solid rgba(32, 58, 95, 0.18);
+  border-radius: 0.55rem;
+  box-shadow: 0 10px 28px rgba(32, 58, 95, 0.14);
+  display: grid;
+  gap: 0.2rem;
+  min-width: 11rem;
+  padding: 0.4rem;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.25rem);
+  z-index: 5;
+}
+
+/* Portaled above overflow:hidden graph panes so the menu is never clipped. */
+.gen-graph-move-menu.is-portal {
+  position: fixed;
+  right: auto;
+  top: 0;
+  left: 0;
+  z-index: 80;
+  max-height: min(50vh, 20rem);
+  overflow-y: auto;
+}
+
+.gen-graph-move-menu-label {
+  color: #697386;
+  font-family: inherit;
+  font-size: 0.7rem;
+  margin: 0 0.2rem 0.15rem;
+}
+
+.gen-graph-move-option {
+  align-items: baseline;
+  background: transparent;
+  border: 0;
+  border-radius: 0.35rem;
+  color: #1f2937;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 0.78rem;
+  gap: 0.4rem;
+  justify-content: space-between;
+  padding: 0.3rem 0.4rem;
+  text-align: left;
+}
+
+.gen-graph-move-option:hover {
+  background: rgba(32, 58, 95, 0.08);
+}
+
+.gen-graph-move-option.is-current {
+  background: rgba(32, 58, 95, 0.1);
+}
+
+.gen-graph-move-option code {
+  color: #697386;
+  font-size: 0.7rem;
+}
+
+.gen-graph-relate {
+  margin-left: 0.1rem;
 }
 
 .gen-graph-branch {
@@ -655,6 +966,42 @@
   color: #697386;
 }
 
+button.gen-graph-label {
+  background: transparent;
+  border: 0;
+  border-radius: 0.25rem;
+  cursor: text;
+  font: inherit;
+  padding: 0 0.1rem;
+}
+
+button.gen-graph-label.is-editable:hover {
+  background: rgba(32, 58, 95, 0.08);
+  color: #203a5f;
+}
+
+.gen-graph-label-input,
+.gen-graph-value-input,
+.gen-graph-name-input {
+  background: #fff;
+  border: 1px solid rgba(32, 58, 95, 0.35);
+  border-radius: 0.3rem;
+  color: #1f2937;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  max-width: 12rem;
+  min-width: 4rem;
+  padding: 0.05rem 0.3rem;
+}
+
+.gen-graph-name-input {
+  font-family: inherit;
+  font-size: 0.98rem;
+  font-weight: 700;
+  max-width: 14rem;
+}
+
 .gen-graph-arrow {
   color: #9aa4b2;
 }
@@ -662,6 +1009,20 @@
 .gen-graph-value {
   color: #1f2937;
   word-break: break-word;
+}
+
+button.gen-graph-value {
+  background: transparent;
+  border: 0;
+  border-radius: 0.25rem;
+  cursor: text;
+  font: inherit;
+  padding: 0 0.1rem;
+  text-align: left;
+}
+
+button.gen-graph-value.is-editable:hover {
+  background: rgba(32, 58, 95, 0.08);
 }
 
 .gen-graph-token-sm {

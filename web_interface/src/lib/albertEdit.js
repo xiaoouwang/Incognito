@@ -22,7 +22,10 @@ export const ALBERT_TYPE_TO_CATEGORY = {
   URL: "url",
   ADR: "location",
   ID: "misc",
-  IBAN: "misc",
+  IBAN: "identity document number",
+  PASSPORT: "identity document number",
+  NIR: "identity document number",
+  SSN: "identity document number",
   PRO: "misc",
   OTH: "misc",
 };
@@ -275,6 +278,7 @@ export function rebuildGenerativeOutputs(
   selectedCategories = null,
   excludedEntityKeys = {},
   customCategories = {},
+  options = {},
 ) {
   function isAliasSoftExcluded(group, alias, category) {
     if (excludedPlaceholders[group.placeholder]) {
@@ -326,8 +330,24 @@ export function rebuildGenerativeOutputs(
     })
     .filter((group) => group.aliases.length > 0);
 
+  const {
+    style,
+    categoryMethods = {},
+    salt = text || "",
+    generalizationLadders = {},
+    surfaceOverrides = {},
+  } = options;
+
   return {
-    anonymizedText: applyAlbertReplacements(text, forAnonymization),
+    anonymizedText: applyAlbertReplacements(text, forAnonymization, {
+      style,
+      categoryMethods,
+      salt,
+      customCategories,
+      generalizationLadders,
+      surfaceOverrides,
+      resolveCategory: (group) => resolveGroupCategory(group, customCategories),
+    }),
     replacements: groupsToReplacementRows(groups).map((row) => {
       const group = groups.find((item) => item.placeholder === row.placeholder);
       const category = resolveGroupCategory(

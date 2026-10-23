@@ -1,17 +1,33 @@
-export const SAMPLE_TEXT = `Claire, ingénieure agronome de formation, doctorat en écologie appliquée, travaille au sein d'un laboratoire commun entre INRAE et l'Université de Montpellier situé sur le campus de Baillarguet. Impliquée dans le projet AgroResilience depuis 2022. Recrutée comme chargée de recherche sur le volet analyse des systèmes agricoles afin d'évaluer les stratégies de réduction des intrants chimiques à l'échelle territoriale.
+export const SAMPLE_TEXT = `Marie Dupont, âgée de 43 ans, habite au 15 rue des Orangers à Nice. Elle travaille comme enseignante au lycée Masséna depuis septembre 2018. Son mari, Pierre Martin, est médecin à l’hôpital Pasteur. Ils ont deux enfants, Lucas, 12 ans, et Emma, 8 ans.
 
-Julien…
+Marie est née le 14 mars 1983 à Lyon. Elle utilise l’adresse électronique marie.dupont@example.com et peut être contactée au 06 12 34 56 78.
 
-Interviewé : 5 ans chez AgroNova, responsable expérimentation terrain sur les cultures maraîchères (tomate, courgette, poivron), puis coordinateur technique chez Floralis. Travaille avec des coopératives agricoles dans le sud de la France et en Espagne. Assure le suivi des itinéraires techniques et la traçabilité des interventions culturales depuis les semis jusqu'à la commercialisation des produits. Très forte diversité d'exploitations partenaires. Responsable d'une équipe de trois techniciens.`;
+Lors d’un entretien réalisé le 5 octobre 2026, Marie explique qu’elle a récemment déménagé dans le quartier de Cimiez. Elle précise que son mari travaille souvent de nuit et que leur fils Lucas est scolarisé dans le même établissement où elle enseigne.
+
+Quelques minutes plus tard, elle ajoute : « Mon père, Jean Dupont, était professeur à l’Université Côte d’Azur. Il a pris sa retraite en 2020. Ma sœur Sophie travaille maintenant à la mairie de Cannes. »
+
+Enfin, Marie indique qu’elle est la seule enseignante de chinois de son établissement à avoir participé à un programme d’échange universitaire avec Pékin en 2019.`;
 
 export const CATEGORY_LABELS = {
   person: "People",
   location: "Locations",
   organization: "Organizations",
   date: "Dates",
+  age: "Ages",
   email: "Emails",
   phone: "Phone numbers",
+  "phone number": "Phone numbers",
+  "identity document number": "Identity document numbers",
+  address: "Addresses",
   url: "URLs",
+  profession: "Professions",
+  "job title or project role": "Job titles / roles",
+  school: "Schools",
+  hospital: "Hospitals",
+  "family member": "Family members",
+  nationality: "Nationalities",
+  disease: "Diseases",
+  diploma: "Diplomas",
   misc: "Other entities",
 };
 
@@ -20,9 +36,21 @@ export const CATEGORY_PREFIXES = {
   location: "LOCATION",
   organization: "ORG",
   date: "DATE",
+  age: "AGE",
   email: "EMAIL",
   phone: "PHONE",
+  "phone number": "PHONE",
+  "identity document number": "IDDOC",
+  address: "ADDRESS",
   url: "URL",
+  profession: "PROF",
+  "job title or project role": "ROLE",
+  school: "SCHOOL",
+  hospital: "HOSP",
+  "family member": "FAM",
+  nationality: "NAT",
+  disease: "DIS",
+  diploma: "DIP",
   misc: "ENTITY",
 };
 

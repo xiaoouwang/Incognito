@@ -5,12 +5,13 @@ import EntityEditMenu from "./EntityEditMenu.jsx";
 import GlinerJobProgress from "./GlinerJobProgress.jsx";
 import HighlightedText from "./HighlightedText.jsx";
 import BatchJobProgress from "./BatchJobProgress.jsx";
-import PersonGraphCard from "./PersonGraphCard.jsx";
+import PersonGraphCard, { MOVE_MIME } from "./PersonGraphCard.jsx";
 import PersonGraphExportButton from "./PersonGraphExportButton.jsx";
+import PersonGraphViewButton from "./PersonGraphViewButton.jsx";
 import WorkflowSectionHeader from "./WorkflowSectionHeader.jsx";
 import { useUiLocale } from "../context/UiLocaleContext.jsx";
+import { useGeneralizationLadders } from "../hooks/useGeneralizationLadders.js";
 import { useGlinerWorker } from "../hooks/useGlinerWorker.js";
-import { useDepWorker } from "../hooks/useDepWorker.js";
 import { usePersonGraphPanel } from "../hooks/usePersonGraphPanel.js";
 import { useSyncedScroll } from "../hooks/useSyncedScroll.js";
 import { createLabelStudioExport } from "../labelStudioExport.js";
@@ -31,12 +32,22 @@ import {
 } from "../lib/glinerConstants.js";
 import { buildGlinerSampleDemoState } from "../lib/glinerSampleDemo.js";
 import {
+  buildSampleDemoPersonGraph,
+  getSampleDemoRelexRelations,
+} from "../lib/sampleDemo.js";
+import {
   buildGlinerCategoryLabels,
   buildGlinerMenuCategories,
   finalizeGlinerEntities,
   getGlinerLabelHighlightClass,
-  replaceGlinerSelectedLabels,
 } from "../lib/glinerUtils.js";
+import AnonymizedSplitPreview from "./AnonymizedSplitPreview.jsx";
+import AnonymizedPersonGraphPanel from "./AnonymizedPersonGraphPanel.jsx";
+import {
+  applyAnonymizedGraphValueEdit,
+  resolveAnonymizedGraphEdgeOrigin,
+  resolveAnonymizedPersonGraph,
+} from "../lib/anonymizedPersonGraph.js";
 import {
   addEntitySpans,
   createCategorySelectionFromEntities,
@@ -52,12 +63,12 @@ import {
   inferCustomCategoriesFromEntities,
   isEntityActive,
   removeEntityById,
+  buildAnonymizedPreviewModel,
 } from "../lib/entityUtils.js";
 import "./generativeWorkflow.css";
 
 export default function GlinerWorkflowSection() {
   const { detectEntities: detectEntitiesWithGliner, jobProgress } = useGlinerWorker();
-  const { parseDependencies } = useDepWorker();
   const { t } = useUiLocale();
   const folderInputRef = useRef(null);
   const filesInputRef = useRef(null);
@@ -71,9 +82,18 @@ export default function GlinerWorkflowSection() {
   const [text, setText] = useState(initialDemo.text);
   const [entities, setEntities] = useState(initialDemo.entities);
   const [modelName, setModelName] = useState(initialDemo.modelName);
-  const [isDemoMode, setIsDemoMode] = useState(true);
+  const [isDemoMode, setIsDemoModeState] = useState(true);
+  const isDemoModeRef = useRef(true);
+  function setIsDemoMode(next) {
+    isDemoModeRef.current = next;
+    setIsDemoModeState(next);
+  }
   const [activeLabels, setActiveLabels] = useState(() => new Set(GLINER_LABELS));
   const [threshold, setThreshold] = useState(GLINER_DEFAULT_THRESHOLD);
+  const [categoryMethods, setCategoryMethods] = useState({});
+  const [surfaceOverrides, setSurfaceOverrides] = useState({});
+  const [anonymizedTextOverride, setAnonymizedTextOverride] = useState(null);
+  const [showAnonymizedPersonGraph, setShowAnonymizedPersonGraph] = useState(true);
   const [selectedCategories, setSelectedCategories] = useState(initialDemo.selectedCategories);
   const [excludedEntityKeys, setExcludedEntityKeys] = useState(initialDemo.excludedEntityKeys);
   const [reportOpen, setReportOpen] = useState(false);
@@ -107,24 +127,49 @@ export default function GlinerWorkflowSection() {
     setHoveredPersonPlaceholder,
     setPinnedPersonPlaceholder,
     refreshPersonGraph,
+    applyRelexPersonGraph,
     clearPersonGraph,
     handleTogglePerson,
     handleToggleGraphSurface,
     syncEntityChipToGraph,
     relateEntityToPerson,
+    relatePersonToPerson,
+    moveSurfaceToPerson,
+    renameEdgeLabel,
+    renameEdgeValue,
+    getRelatedPlaceholdersForSurface,
   } = usePersonGraphPanel({
     text,
     entities,
     t,
-    parseDependencies,
+    // Advanced: GLiNER ReLex (demo uses the same captured fixture as Basic — no download).
+    extractRelations: async (sourceText, nextEntities) => {
+      if (isDemoModeRef.current) {
+        return {
+          relations: getSampleDemoRelexRelations(),
+          fillProximity: true,
+          noteKey: "personGraphRelexDemoReady",
+        };
+      }
+      const { extractGlinerRelexRelations } = await import("../lib/glinerRelexService.js");
+      return extractGlinerRelexRelations(sourceText, nextEntities);
+    },
   });
+  const [graphDropTarget, setGraphDropTarget] = useState(null);
 
   const showSourceHighlight = entities.length > 0 && !isEditingSource;
 
-  useSyncedScroll(sourceScrollRef, previewScrollRef, showSourceHighlight);
+  // Split preview syncs its own panes; dual sync on previewScrollRef crashes Chromium.
+  useSyncedScroll(sourceScrollRef, previewScrollRef, false);
 
   useEffect(() => {
-    refreshPersonGraph(initialDemo.text, initialDemo.entities, { resetExclusions: true });
+    // Synchronous demo seed so person cards + "Show person graph" work before any model run.
+    const demoGraph = buildSampleDemoPersonGraph();
+    applyRelexPersonGraph(demoGraph.text, demoGraph.entities, demoGraph.relations, {
+      resetExclusions: true,
+      fillProximity: true,
+      noteKey: "personGraphRelexDemoReady",
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -178,14 +223,85 @@ export default function GlinerWorkflowSection() {
     [activeLabels, customCategories],
   );
   const groupedEntities = useMemo(() => groupEntities(entities), [entities]);
+  const {
+    ladders: generalizationLadders,
+    loading: generalizationLoading,
+    mode: generalizationMode,
+    error: generalizationError,
+  } = useGeneralizationLadders({
+    entities,
+    categoryMethods,
+    selectedCategories,
+  });
   const highlightedSegments = useMemo(
     () => createHighlightSegments(text, entities),
     [text, entities],
   );
-  const anonymizedText = useMemo(
-    () => replaceGlinerSelectedLabels(text, entities, selectedCategories, excludedEntityKeys),
-    [text, entities, selectedCategories, excludedEntityKeys],
+  const anonymizedPreview = useMemo(
+    () =>
+      buildAnonymizedPreviewModel(
+        text,
+        entities,
+        groupedEntities,
+        selectedCategories,
+        excludedEntityKeys,
+        customCategories,
+        {
+          categoryMethods,
+          salt: text,
+          generalizationLadders,
+          persons,
+          surfaceOverrides,
+        },
+      ),
+    [
+      text,
+      entities,
+      groupedEntities,
+      selectedCategories,
+      excludedEntityKeys,
+      customCategories,
+      categoryMethods,
+      generalizationLadders,
+      persons,
+      surfaceOverrides,
+    ],
   );
+  const anonymizedText =
+    anonymizedTextOverride != null ? anonymizedTextOverride : anonymizedPreview.anonymizedText;
+  const anonymizedSegments = anonymizedPreview.segments;
+  const anonymizedGraphModel = useMemo(
+    () =>
+      resolveAnonymizedPersonGraph({
+        text,
+        entities,
+        groupedEntities,
+        selectedCategories,
+        customCategories,
+        persons,
+        excludedPlaceholders,
+        excludedSurfaces,
+        categoryMethods,
+        generalizationLadders,
+        salt: text,
+        surfaceOverrides,
+      }),
+    [
+      text,
+      entities,
+      groupedEntities,
+      selectedCategories,
+      customCategories,
+      persons,
+      excludedPlaceholders,
+      excludedSurfaces,
+      categoryMethods,
+      generalizationLadders,
+      surfaceOverrides,
+    ],
+  );
+  const anonymizedPersons = anonymizedGraphModel.persons;
+  const anonymizedReplacementMap = anonymizedGraphModel.replacementMap;
   const activeEntities = useMemo(
     () =>
       entities.filter((entity) =>
@@ -207,6 +323,10 @@ export default function GlinerWorkflowSection() {
         nerBackend: "gliner",
         batchMode,
         customCategories,
+        categoryMethods,
+        generalizationLadders,
+        persons,
+        surfaceOverrides,
       }),
     [
       text,
@@ -218,7 +338,11 @@ export default function GlinerWorkflowSection() {
       modelName,
       currentFile,
       batchMode,
+      surfaceOverrides,
       customCategories,
+      categoryMethods,
+      generalizationLadders,
+      persons,
     ],
   );
   const labelStudioExport = useMemo(
@@ -251,13 +375,15 @@ export default function GlinerWorkflowSection() {
       modelName,
       customCategories,
       outputsModified: currentFileOutputsModified,
+      relations: fileStatesRef.current[currentFile.id]?.relations || [],
     };
   }
 
   function applyFileState(file, savedState, options = {}) {
     const { isBatchNavigation = batchMode } = options;
     const nextEntities = savedState?.entities ?? [];
-    setText(savedState?.text ?? file.text);
+    const nextText = savedState?.text ?? file.text;
+    setText(nextText);
     setEntities(nextEntities);
     setSelectedCategories(savedState?.selectedCategories ?? {});
     setExcludedEntityKeys(savedState?.excludedEntityKeys ?? {});
@@ -278,8 +404,11 @@ export default function GlinerWorkflowSection() {
     setError("");
     setIsEditingSource(nextEntities.length === 0);
 
-    const nextText = savedState?.text ?? file.text;
-    if (nextEntities.length) {
+    if (nextEntities.length && Array.isArray(savedState?.relations)) {
+      applyRelexPersonGraph(nextText, nextEntities, savedState.relations, {
+        resetExclusions: true,
+      });
+    } else if (nextEntities.length) {
       refreshPersonGraph(nextText, nextEntities, { resetExclusions: true });
     } else {
       clearPersonGraph();
@@ -306,21 +435,28 @@ export default function GlinerWorkflowSection() {
     setStatus(t("glinerStatusRunning"));
 
     try {
-      const result = await detectEntitiesWithGliner(
+      const { runGlinerRelexDetection } = await import("../lib/glinerRelexService.js");
+      const { GLINER_RELEX_MODEL_ID } = await import("../lib/glinerRelexConstants.js");
+      const result = await runGlinerRelexDetection({
+        text: textToAnalyze,
+        entityLabels: selectedDetectionLabels,
+      });
+      const normalized = finalizeGlinerEntities(
         textToAnalyze,
-        selectedDetectionLabels,
-        threshold,
+        result.entities || [],
+        "gliner-relex",
       );
-      const normalized = finalizeGlinerEntities(textToAnalyze, result.entities || []);
       const categorySelection = createCategorySelectionFromEntities(normalized);
 
       setEntities(normalized);
       setSelectedCategories(categorySelection);
       setExcludedEntityKeys({});
-      setModelName(GLINER_MODEL_ID);
+      setModelName(GLINER_RELEX_MODEL_ID);
       setIsDemoMode(false);
       setIsEditingSource(false);
-      refreshPersonGraph(textToAnalyze, normalized, { resetExclusions: true });
+      applyRelexPersonGraph(textToAnalyze, normalized, result.relations || [], {
+        resetExclusions: true,
+      });
 
       const uniqueCount = Object.values(
         normalized.reduce((groups, entity) => {
@@ -334,20 +470,18 @@ export default function GlinerWorkflowSection() {
         : batchMode && currentFile
           ? ` for ${currentFile.name}`
           : "";
-      const chunkNote =
-        result.chunkCount > 1
-          ? t("glinerStatusDoneChunks", { count: normalized.length, chunks: result.chunkCount })
-          : t("glinerStatusDone", { count: normalized.length });
-      setStatus(`${chunkNote}${fileNote}`);
+      setStatus(
+        `${t("glinerStatusDone", { count: normalized.length })} · ReLex · ${uniqueCount} unique${fileNote}`,
+      );
 
       return {
         entities: normalized,
         selectedCategories: categorySelection,
-        modelName: GLINER_MODEL_ID,
+        modelName: GLINER_RELEX_MODEL_ID,
       };
     } catch (caughtError) {
       setError(caughtError.message);
-      setStatus("GLiNER detection failed.");
+      setStatus("GLiNER ReLex detection failed.");
       return null;
     } finally {
       setIsDetecting(false);
@@ -383,12 +517,17 @@ export default function GlinerWorkflowSection() {
         });
         setStatus(`Detecting entities: ${index + 1} of ${files.length} — ${file.name}`);
 
-        const result = await detectEntitiesWithGliner(
+        const { runGlinerRelexDetection } = await import("../lib/glinerRelexService.js");
+        const { GLINER_RELEX_MODEL_ID } = await import("../lib/glinerRelexConstants.js");
+        const result = await runGlinerRelexDetection({
+          text: file.text,
+          entityLabels: selectedDetectionLabels,
+        });
+        const normalized = finalizeGlinerEntities(
           file.text,
-          selectedDetectionLabels,
-          threshold,
+          result.entities || [],
+          "gliner-relex",
         );
-        const normalized = finalizeGlinerEntities(file.text, result.entities || []);
         const categorySelection = createCategorySelectionFromEntities(normalized);
 
         fileStatesRef.current[file.id] = {
@@ -396,9 +535,10 @@ export default function GlinerWorkflowSection() {
           entities: normalized,
           selectedCategories: categorySelection,
           excludedEntityKeys: {},
-          modelName: GLINER_MODEL_ID,
+          modelName: GLINER_RELEX_MODEL_ID,
           customCategories: {},
           outputsModified: false,
+          relations: result.relations || [],
         };
 
         setBatchJobProgress({
@@ -652,7 +792,10 @@ export default function GlinerWorkflowSection() {
         files: batchFiles,
         fileStates: fileStatesRef.current,
         outputLabel: batchOutputLabel,
-        buildFileOutputs: buildGlinerBatchFileOutputs,
+        buildFileOutputs: (params) =>
+          buildGlinerBatchFileOutputs({ ...params, categoryMethods, generalizationLadders }),
+        categoryMethods,
+        generalizationLadders,
       });
       setStatus(`Downloaded ${batchOutputLabel}.zip with anonymized outputs and reports.`);
     } catch (caughtError) {
@@ -664,11 +807,14 @@ export default function GlinerWorkflowSection() {
   }
 
   function restoreSampleDemo() {
-    const demo = buildGlinerSampleDemoState();
+    const demo = buildSampleDemoPersonGraph();
     setText(demo.text);
     setEntities(demo.entities);
     setSelectedCategories(demo.selectedCategories);
     setExcludedEntityKeys(demo.excludedEntityKeys);
+    setCategoryMethods({});
+    setSurfaceOverrides({});
+    setAnonymizedTextOverride(null);
     setModelName(demo.modelName);
     setCustomCategories({});
     setEntityMenu(null);
@@ -676,7 +822,11 @@ export default function GlinerWorkflowSection() {
     setError("");
     setIsDemoMode(true);
     setIsEditingSource(false);
-    refreshPersonGraph(demo.text, demo.entities, { resetExclusions: true });
+    applyRelexPersonGraph(demo.text, demo.entities, demo.relations, {
+      resetExclusions: true,
+      fillProximity: true,
+      noteKey: "personGraphRelexDemoReady",
+    });
     setStatus(t("glinerStatusDemoRestored"));
   }
 
@@ -712,6 +862,9 @@ export default function GlinerWorkflowSection() {
     clearPersonGraph();
     setSelectedCategories({});
     setExcludedEntityKeys({});
+    setCategoryMethods({});
+    setSurfaceOverrides({});
+    setAnonymizedTextOverride(null);
     setModelName(null);
     setIsDemoMode(false);
     setIsEditingSource(true);
@@ -803,22 +956,23 @@ export default function GlinerWorkflowSection() {
     setEntityMenu(null);
   }
 
-  function handleRelateEntityToPerson(personPlaceholder) {
+  function handleRelateEntityToPerson(personPlaceholder, options = {}) {
     const entity = entityMenuRef.current?.entity;
     if (!entity?.text || !personPlaceholder) {
       return;
     }
-    const personName = relateEntityToPerson(entity, personPlaceholder);
-    if (!personName) {
+    const result = relateEntityToPerson(entity, personPlaceholder, options);
+    if (!result) {
       return;
     }
-    closeEntityMenu();
-    setStatus(
-      t(entity.label === "person" ? "entityMenuAliasStatus" : "entityMenuRelatedStatus", {
-        text: entity.text,
-        person: personName,
-      }),
-    );
+    const statusKey = result.removed
+      ? result.mode === "alias"
+        ? "entityMenuUnaliasStatus"
+        : "entityMenuUnrelatedStatus"
+      : result.mode === "alias"
+        ? "entityMenuAliasStatus"
+        : "entityMenuRelatedStatus";
+    setStatus(t(statusKey, { text: entity.text, person: result.name }));
   }
 
   function setEntityMenuScope(scope) {
@@ -1114,7 +1268,7 @@ export default function GlinerWorkflowSection() {
           />
           <span>
             {t("autoRunNer")}
-            <small>{t("glinerAutoRunHint", { model: GLINER_MODEL_ID })}</small>
+            <small>{t("glinerAutoRunHint", { model: "GLiNER ReLex" })}</small>
           </span>
         </label>
       </section>
@@ -1136,7 +1290,7 @@ export default function GlinerWorkflowSection() {
                 ? `${t("glinerDemoModelLabel")} — ${t("glinerDemoPanelHint")}`
                 : modelName
                   ? t("glinerModelLine", { model: modelName })
-                  : t("glinerModelLine", { model: GLINER_MODEL_ID })}
+                  : t("glinerModelLine", { model: modelName || "GLiNER ReLex" })}
             </span>
           </div>
           <CategoryReview
@@ -1168,7 +1322,11 @@ export default function GlinerWorkflowSection() {
                 >
                   {t("editSourceText")}
                 </button>
-              ) : null}
+              ) : (
+                <span className="workspace-source-header-spacer" aria-hidden="true">
+                  {t("editSourceText")}
+                </span>
+              )}
             </div>
             <span className="panel-header-meta">
               {batchMode && currentFile ? `${currentFile.name} · ` : ""}
@@ -1232,6 +1390,13 @@ export default function GlinerWorkflowSection() {
           <div className="panel-header">
             <h2>{t("generativeGraphTitle")}</h2>
             <div className="panel-header-actions">
+              <PersonGraphViewButton
+                persons={persons}
+                excludedPlaceholders={excludedPlaceholders}
+                excludedSurfaces={excludedSurfaces}
+                title={t("personGraphViewWindowTitle")}
+                subtitle={t("personGraphViewWindowSubtitle", { count: persons.length })}
+              />
               <PersonGraphExportButton
                 persons={persons}
                 excludedPlaceholders={excludedPlaceholders}
@@ -1254,10 +1419,12 @@ export default function GlinerWorkflowSection() {
                   <PersonGraphCard
                     key={`${person.placeholder}-${person.name}-${personIndex}`}
                     person={person}
+                    persons={persons}
                     excluded={Boolean(excludedPlaceholders[person.placeholder])}
                     excludedSurfaces={excludedSurfaces}
                     focused={focusedPersonPlaceholder === person.placeholder}
                     pinned={pinnedPersonPlaceholder === person.placeholder}
+                    dropActive={graphDropTarget === person.placeholder}
                     onHoverPerson={setHoveredPersonPlaceholder}
                     onPinPerson={(placeholder) => {
                       setPinnedPersonPlaceholder((current) =>
@@ -1289,25 +1456,200 @@ export default function GlinerWorkflowSection() {
                         attr?.entityLabel,
                       );
                     }}
+                    onMoveSurface={(fromPlaceholder, toPlaceholder, surface, meta) => {
+                      const result = moveSurfaceToPerson(
+                        fromPlaceholder,
+                        toPlaceholder,
+                        surface,
+                        meta,
+                      );
+                      if (result) {
+                        setStatus(
+                          t("personGraphMoved", {
+                            surface,
+                            person: result.name,
+                          }),
+                        );
+                      }
+                    }}
+                    onRelatePerson={(fromPlaceholder, toPlaceholder) => {
+                      const from = persons.find((item) => item.placeholder === fromPlaceholder);
+                      const to = persons.find((item) => item.placeholder === toPlaceholder);
+                      const result = relatePersonToPerson(fromPlaceholder, toPlaceholder);
+                      if (result && from && to) {
+                        setStatus(
+                          t(result.removed ? "personGraphUnrelated" : "personGraphRelated", {
+                            from: from.name,
+                            to: to.name,
+                          }),
+                        );
+                      }
+                    }}
+                    onRenameEdgeLabel={(placeholder, kind, value, nextLabel) => {
+                      const result = renameEdgeLabel(placeholder, kind, value, nextLabel);
+                      if (result) {
+                        setStatus(
+                          t("personGraphRenamedLabel", {
+                            label: result.label,
+                            value: result.value,
+                          }),
+                        );
+                      }
+                    }}
+                    onRenameEdgeValue={(placeholder, kind, currentValue, nextValue) => {
+                      const result = renameEdgeValue(
+                        placeholder,
+                        kind,
+                        currentValue,
+                        nextValue,
+                      );
+                      if (result) {
+                        setStatus(
+                          t("personGraphRenamedValue", {
+                            previous: result.previous,
+                            value: result.value,
+                          }),
+                        );
+                      }
+                    }}
+                    onDragSurfaceStart={() => setGraphDropTarget(null)}
+                    onDragSurfaceEnd={() => setGraphDropTarget(null)}
+                    onDragOverPerson={setGraphDropTarget}
+                    onDragLeavePerson={(placeholder) => {
+                      setGraphDropTarget((current) =>
+                        current === placeholder ? null : current,
+                      );
+                    }}
+                    onDropOnPerson={(toPlaceholder, event) => {
+                      setGraphDropTarget(null);
+                      let payload = null;
+                      try {
+                        payload = JSON.parse(event.dataTransfer.getData(MOVE_MIME) || "null");
+                      } catch {
+                        payload = null;
+                      }
+                      if (!payload?.surface || !payload?.fromPlaceholder) {
+                        return;
+                      }
+                      const result = moveSurfaceToPerson(
+                        payload.fromPlaceholder,
+                        toPlaceholder,
+                        payload.surface,
+                        payload,
+                      );
+                      if (result) {
+                        setStatus(
+                          t("personGraphMoved", {
+                            surface: payload.surface,
+                            person: result.name,
+                          }),
+                        );
+                      }
+                    }}
                   />
                 ))}
               </div>
             ) : (
               <p className="gen-maps-empty">{t("generativeGraphEmpty")}</p>
             )}
+            <p className="category-hint">{t("personGraphMoveHint")}</p>
             <p className="category-hint">{t("personGraphFocusHint")}</p>
-            <p className="category-hint">{t("personGraphLicenseHint")}</p>
+            <p className="category-hint">{t("personGraphRelexLicenseHint")}</p>
           </div>
         </div>
 
-        <div className="panel workspace-preview">
-          <div className="panel-header">
-            <h2>{t("panel4Title")}</h2>
-            <span>{t("panel4Subtitle")}</span>
+        <div
+          className={`workspace-preview-row${
+            showAnonymizedPersonGraph ? "" : " is-anon-graph-hidden"
+          }`}
+        >
+          <div className="panel workspace-preview">
+            <div className="panel-header">
+              <h2>{t("panel4Title")}</h2>
+              <div className="panel-header-actions">
+                {!showAnonymizedPersonGraph ? (
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setShowAnonymizedPersonGraph(true)}
+                  >
+                    {t("anonymizedPersonGraphShow")}
+                  </button>
+                ) : null}
+              </div>
+              <span>{t("panel4Subtitle")}</span>
+            </div>
+            <AnonymizedSplitPreview
+              text={text}
+              entities={entities}
+              segments={highlightedSegments}
+              categoryLabels={categoryLabels}
+              selectedCategories={selectedCategories}
+              excludedEntityKeys={excludedEntityKeys}
+              categoryMethods={categoryMethods}
+              onCategoryMethodChange={setCategoryMethods}
+              anonymizedText={anonymizedPreview.anonymizedText}
+              anonymizedSegments={anonymizedSegments}
+              surfaceOverrides={surfaceOverrides}
+              onSurfaceOverrideChange={setSurfaceOverrides}
+              anonymizedTextOverride={anonymizedTextOverride}
+              onAnonymizedTextOverrideChange={setAnonymizedTextOverride}
+              emptyLabel={t("panel4Empty")}
+              previewRef={previewScrollRef}
+              generalizationMode={generalizationMode}
+              generalizationLoading={generalizationLoading}
+              generalizationError={generalizationError}
+            />
           </div>
-          <pre className="text-preview" ref={previewScrollRef}>
-            {anonymizedText || t("panel4Empty")}
-          </pre>
+          {showAnonymizedPersonGraph ? (
+            <AnonymizedPersonGraphPanel
+              persons={anonymizedPersons}
+              excludedPlaceholders={excludedPlaceholders}
+              excludedSurfaces={excludedSurfaces}
+              onHide={() => setShowAnonymizedPersonGraph(false)}
+              onRenameEdgeValue={(placeholder, kind, currentValue, nextValue) => {
+                const person = anonymizedPersons.find(
+                  (item) => item.placeholder === placeholder,
+                );
+                const origin = resolveAnonymizedGraphEdgeOrigin(person, kind, currentValue);
+                if (!origin) {
+                  return;
+                }
+                const result = applyAnonymizedGraphValueEdit({
+                  surfaceOverrides,
+                  replacementMap: anonymizedReplacementMap,
+                  category: origin.category,
+                  originalSurface: origin.originalSurface,
+                  previousReplacement: origin.previousReplacement || currentValue,
+                  nextReplacement: nextValue,
+                  anonymizedTextOverride,
+                  generatedAnonymizedText: anonymizedPreview.anonymizedText,
+                });
+                if (!result) {
+                  return;
+                }
+                setSurfaceOverrides(result.surfaceOverrides);
+                if (result.anonymizedTextOverride != null) {
+                  setAnonymizedTextOverride(result.anonymizedTextOverride);
+                }
+                setStatus(
+                  t("personGraphRenamedValue", {
+                    previous: currentValue,
+                    value: nextValue,
+                  }),
+                );
+              }}
+              onExported={(mode) =>
+                setStatus(
+                  t(
+                    mode === "byPerson"
+                      ? "anonymizedPersonGraphExportByPersonDone"
+                      : "anonymizedPersonGraphExportDone",
+                  ),
+                )
+              }
+            />
+          ) : null}
         </div>
       </section>
 
@@ -1318,6 +1660,11 @@ export default function GlinerWorkflowSection() {
           menuCategories={menuCategories}
           categoryLabels={categoryLabels}
           persons={persons}
+          relatedPlaceholders={
+            entityMenu.entity?.text
+              ? getRelatedPlaceholdersForSurface(entityMenu.entity.text)
+              : []
+          }
           onScopeChange={setEntityMenuScope}
           onAdd={handleAddEntity}
           onAddCustom={handleAddCustomCategory}

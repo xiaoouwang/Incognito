@@ -1,28 +1,19 @@
-import { placeholderPrefixFromCategory } from "./entityUtils.js";
-import { GLINER_LABELS } from "./glinerConstants.js";
-import { isEntityActive, normalizeEntities } from "./entityUtils.js";
-
-const GLINER_LABEL_HIGHLIGHT_CLASSES = {
-  person: "highlight-person",
-  organization: "highlight-organization",
-  location: "highlight-location",
-  address: "highlight-address",
-  email: "highlight-email",
-  url: "highlight-url",
-  "phone number": "highlight-phone",
-  date: "highlight-date",
-  profession: "highlight-profession",
-  "job title or project role": "highlight-job-role",
-  school: "highlight-school",
-  hospital: "highlight-hospital",
-  "family member": "highlight-family",
-  nationality: "highlight-nationality",
-  disease: "highlight-disease",
-  diploma: "highlight-diploma",
-};
+import {
+  isEntityActive,
+  normalizeEntities,
+  placeholderPrefixFromCategory,
+  replaceSelectedCategories,
+} from "./entityUtils.js";
+import { GLINER_LABEL_STYLE_KEYS, GLINER_LABELS } from "./glinerConstants.js";
 
 export function getGlinerLabelHighlightClass(label) {
-  return GLINER_LABEL_HIGHLIGHT_CLASSES[label] ?? "highlight-custom";
+  const styleKey = GLINER_LABEL_STYLE_KEYS[label];
+  return styleKey ? `highlight-${styleKey}` : "highlight-custom";
+}
+
+export function getGlinerLabelChipClass(label) {
+  const styleKey = GLINER_LABEL_STYLE_KEYS[label];
+  return styleKey ? `chip-${styleKey}` : "chip-custom";
 }
 
 export function buildGlinerHighlightSegments(text, entities) {
@@ -73,33 +64,38 @@ export function labelToPlaceholderPrefix(label) {
   return placeholderPrefixFromCategory(label);
 }
 
-export function buildAnonymizedPreview(text, entities) {
+export function buildAnonymizedPreview(text, entities, options = {}) {
   if (!entities.length) {
     return text;
   }
 
-  const sorted = [...entities].sort((left, right) => {
-    if (right.start !== left.start) {
-      return right.start - left.start;
-    }
-    return right.end - left.end;
-  });
+  const grouped = groupEntitiesByLabel(entities).reduce((acc, [label, list]) => {
+    // Unique values only (same as Basic).
+    const seen = new Set();
+    acc[label] = list.filter((entity) => {
+      const key = entity.text.toLocaleLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+    return acc;
+  }, {});
 
-  const counters = {};
-  let anonymized = text;
+  const selectedCategories = Object.fromEntries(
+    Object.keys(grouped).map((label) => [label, true]),
+  );
 
-  for (const entity of sorted) {
-    if (entity.start < 0 || entity.end > text.length || entity.start >= entity.end) {
-      continue;
-    }
-
-    const prefix = labelToPlaceholderPrefix(entity.label);
-    counters[prefix] = (counters[prefix] || 0) + 1;
-    const placeholder = `[${prefix}_${counters[prefix]}]`;
-    anonymized = `${anonymized.slice(0, entity.start)}${placeholder}${anonymized.slice(entity.end)}`;
-  }
-
-  return anonymized;
+  return replaceSelectedCategories(
+    text,
+    entities,
+    grouped,
+    selectedCategories,
+    {},
+    {},
+    options,
+  );
 }
 
 export function groupEntitiesByLabel(entities) {
@@ -137,11 +133,17 @@ export function buildGlinerCategoryLabels(customCategories = {}) {
   return { ...builtin, ...customCategories };
 }
 
-export function replaceGlinerSelectedLabels(text, entities, selectedCategories, excludedEntityKeys) {
+export function replaceGlinerSelectedLabels(
+  text,
+  entities,
+  selectedCategories,
+  excludedEntityKeys,
+  options = {},
+) {
   const activeEntities = entities.filter((entity) =>
     isEntityActive(entity, selectedCategories, excludedEntityKeys),
   );
-  return buildAnonymizedPreview(text, activeEntities);
+  return buildAnonymizedPreview(text, activeEntities, options);
 }
 
 export function finalizeGlinerEntities(text, entities, source = "gliner") {

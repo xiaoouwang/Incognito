@@ -32,26 +32,31 @@ const HighlightedText = forwardRef(function HighlightedText(
     onPinPerson,
     onAddSelection,
     onEntityClick,
+    interactive = true,
     getHighlightClass = getCategoryHighlightClass,
   },
   forwardedRef,
 ) {
   const containerRef = useRef(null);
+  const canEdit = interactive && (typeof onAddSelection === "function" || typeof onEntityClick === "function");
 
   if (!text) {
     return (
-      <div className="empty-state" ref={forwardedRef}>
+      <div className="empty-state" ref={forwardedRef} translate="no">
         Paste text and run detection to highlight entities.
       </div>
     );
   }
 
   const displaySegments =
-    segments.length > 0 ? segments : [{ text, start: 0, end: text.length }];
+    Array.isArray(segments) && segments.length > 0
+      ? segments
+      : [{ text, start: 0, end: text.length }];
   const hasFocus = focusRanges.length > 0;
   const showChips = persons.length > 0 && typeof onPinPerson === "function";
 
   function handleMouseUp(event) {
+    if (!canEdit || typeof onAddSelection !== "function") return;
     if (event.target.closest(".highlight")) return;
 
     const container = containerRef.current;
@@ -68,13 +73,15 @@ const HighlightedText = forwardRef(function HighlightedText(
 
   const textPanel = (
     <div
-      className={`highlighted-text interactive-highlight${hasFocus ? " has-person-focus" : ""}`}
+      className={`highlighted-text${canEdit ? " interactive-highlight" : ""}${hasFocus ? " has-person-focus" : ""}`}
       ref={mergeRefs(containerRef, forwardedRef)}
-      onMouseUp={handleMouseUp}
+      translate="no"
+      onMouseUp={canEdit ? handleMouseUp : undefined}
     >
       {displaySegments.flatMap((segment, index) => {
         if (segment.entity) {
           const focused = rangeOverlaps(segment.start, segment.end, focusRanges);
+          const label = categoryLabels[segment.entity.label] || segment.entity.label;
           return [
             <mark
               className={`highlight ${getHighlightClass(segment.entity.label)} ${
@@ -84,12 +91,22 @@ const HighlightedText = forwardRef(function HighlightedText(
               }${focused ? " person-focus-underline" : ""}`}
               data-start={segment.start}
               data-end={segment.end}
-              title={`${categoryLabels[segment.entity.label] || segment.entity.label}: click to remove`}
+              title={
+                canEdit
+                  ? typeof onAddSelection === "function"
+                    ? `${label}: click to remove`
+                    : `${label}: click to edit`
+                  : label
+              }
               key={`${segment.entity.id || segment.start}-${index}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                onEntityClick(segment.entity, { x: event.clientX, y: event.clientY });
-              }}
+              onClick={
+                canEdit && typeof onEntityClick === "function"
+                  ? (event) => {
+                      event.stopPropagation();
+                      onEntityClick(segment.entity, { x: event.clientX, y: event.clientY }, segment);
+                    }
+                  : undefined
+              }
             >
               {segment.text}
             </mark>,
@@ -121,7 +138,7 @@ const HighlightedText = forwardRef(function HighlightedText(
   }
 
   return (
-    <div className="highlighted-text-shell">
+    <div className="highlighted-text-shell" translate="no">
       <PersonFocusChips
         persons={persons}
         pinnedPlaceholder={pinnedPlaceholder}

@@ -8,7 +8,7 @@ export const GLINER_MODEL_URL = `https://huggingface.co/${GLINER_MODEL_ID}/resol
 /** Many French spans score between 0.2 and 0.5 with this model. */
 export const GLINER_DEFAULT_THRESHOLD = 0.2;
 
-export const GLINER_RULE_LABELS = ["email", "url", "phone number"];
+export const GLINER_RULE_LABELS = ["email", "url", "phone number", "identity document number"];
 
 export const GLINER_LABELS = [
   "person",
@@ -18,7 +18,9 @@ export const GLINER_LABELS = [
   "email",
   "url",
   "phone number",
+  "identity document number",
   "date",
+  "age",
   "profession",
   "job title or project role",
   "school",
@@ -29,34 +31,47 @@ export const GLINER_LABELS = [
   "diploma",
 ];
 
-export const GLINER_SAMPLE_TEXT = `Bonjour, je m'appelle Jean Dupont. Je suis professeur d'informatique à
-l'Université Côte d'Azur depuis septembre 2018, et responsable scientifique du
-projet CampusNum sur la transformation numérique des campus. J'ai obtenu un
-doctorat en informatique à l'Université Paris-Saclay et l'agrégation de
-mathématiques.
+/** CSS suffix after highlight-/chip- (Advanced + Basic shared). */
+export const GLINER_LABEL_STYLE_KEYS = {
+  person: "person",
+  organization: "organization",
+  location: "location",
+  address: "address",
+  email: "email",
+  url: "url",
+  "phone number": "phone",
+  "identity document number": "identity",
+  date: "date",
+  age: "age",
+  profession: "profession",
+  "job title or project role": "job-role",
+  school: "school",
+  hospital: "hospital",
+  "family member": "family",
+  nationality: "nationality",
+  disease: "disease",
+  diploma: "diploma",
+};
 
-J'habite au 15 avenue Jean Médecin, 06000 Nice, en France.
-
-Vous pouvez me joindre par téléphone au 06 12 34 56 78 ou par courriel à
-jean.dupont@univ-cotedazur.fr.
-
-Ma femme, Marie Dupont, est médecin au CHU de Nice et titulaire d'un diplôme
-de médecine générale de la faculté de médecine de Nice. Elle suit notamment des
-patients atteints de diabète de type 2 et d'hypertension artérielle.
-
-Notre fils Paul est actuellement élève au lycée Masséna, où il prépare le
-baccalauréat scientifique. Il a été diagnostiqué avec une asthme légère l'année
-dernière.
-
-Avant de venir à Nice, j'ai travaillé au CNRS à Paris, puis à l'INRIA
-Sophia Antipolis.
-
-Je suis de nationalité française mais ma mère est italienne. Elle vit avec une
-maladie d'Alzheimer depuis trois ans.
-
-Mon frère travaille chez Orange en tant que chef de projet réseau 5G, et ma sœur
-est chercheuse à l'INSERM, titulaire d'un doctorat en biologie, où elle est
-investigatrice principale sur l'étude OncoSud et étudie le cancer du sein.
-
-Nous avons participé à une conférence sur la sclérose en plaques organisée le
-12 mai 2023 à Marseille.`;
+/** Short English descriptions for GLiNER2 schema [DESCRIPTION] prompts. */
+export const GLINER_LABEL_DESCRIPTIONS = {
+  person: "a person's name",
+  organization: "a company, brand or organisation name",
+  location: "a place, city, country or region",
+  address: "a street address or postal address",
+  email: "an email address",
+  url: "a web URL or link",
+  "phone number": "a telephone or mobile number",
+  "identity document number":
+    "a passport number, social security number, national ID, French NIR, or similar identity document number",
+  date: "a calendar date or day",
+  age: "a person's age in years",
+  profession: "an occupation or profession",
+  "job title or project role": "a job title, role or project responsibility",
+  school: "a school, university or educational institution",
+  hospital: "a hospital, clinic or medical institution",
+  "family member": "a family relation or relative mention",
+  nationality: "a nationality or citizenship",
+  disease: "a disease, condition or medical diagnosis",
+  diploma: "a diploma, degree or academic qualification",
+};

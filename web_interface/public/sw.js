@@ -1,5 +1,5 @@
-const SHELL_CACHE = "incognito-shell-v2";
-const ASSET_CACHE = "incognito-assets-v2";
+const SHELL_CACHE = "incognito-shell-v3";
+const ASSET_CACHE = "incognito-assets-v3";
 
 const SHELL_FILES = ["./logo.png", "./manifest.webmanifest", "./pwa-192.png", "./pwa-512.png"];
 

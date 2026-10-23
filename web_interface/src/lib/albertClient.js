@@ -7,9 +7,39 @@ import {
 } from "./albertConstants.js";
 import {
   candidateMap,
+  entitiesToAlbertCandidates,
   extractAlbertCandidates,
   formatAlbertCandidateList,
 } from "./albertCandidates.js";
+import {
+  ALBERT_ENTITY_DETECTION_SYSTEM_PROMPT,
+  albertDetectionsToEntities,
+  assertAlbertDetectionInput,
+  buildAlbertEntityDetectionUserPrompt,
+  buildCustomCategoriesFromAlbertEntities,
+  buildDefaultAlbertDetectionLabels,
+  parseAlbertEntityDetections,
+} from "./albertEntityDetection.js";
+import {
+  ALBERT_GENERALIZE_SYSTEM_PROMPT,
+  GENERALIZE_BATCH_SIZE,
+  buildAlbertGeneralizeUserPrompt,
+  parseAlbertGeneralizationLadders,
+} from "./albertGeneralize.js";
+import {
+  DEFAULT_REPLACEMENT_STYLE,
+  buildGroupReplacementLookup,
+  normalizeReplacementMethod,
+  replacementForCategoryValue,
+} from "./pseudonymize.js";
+
+export { entitiesToAlbertCandidates } from "./albertCandidates.js";
+export {
+  albertDetectionsToEntities,
+  buildCustomCategoriesFromAlbertEntities,
+  buildDefaultAlbertDetectionLabels,
+  parseAlbertEntityDetections,
+} from "./albertEntityDetection.js";
 
 export function getAlbertBaseUrl() {
   const configured = import.meta.env.VITE_ALBERT_BASE_URL;
@@ -123,6 +153,7 @@ export async function listAlbertChatModels(apiKey) {
 /** Short attr key → mask type + display label */
 export const ATTR_META = {
   dob: { type: "DAT", label: "date_naissance" },
+  age: { type: "OTH", label: "âge" },
   yob: { type: "DAT", label: "année_naissance" },
   pob: { type: "LOC", label: "lieu_naissance" },
   addr: { type: "ADR", label: "adresse_actuelle" },
@@ -155,7 +186,7 @@ export const REL_META = {
  *
  * {"p":[[4,16,27],[24,57],[43,45],[67]],"x":[[0,"dob",5],[0,"tel",14],[0,"em",15],[1,"tel",26]],"r":[[0,"resp",1],[0,"col",2],[0,"fr",3]],"o":[9,19],"l":[8,13],"d":[1]}
  */
-const SYSTEM_PROMPT = `Groupe des ids candidats. Aucune chaine du texte. JSON seul.
+export const ALBERT_GRAPH_SYSTEM_PROMPT = `Groupe des ids candidats. Aucune chaine du texte. JSON seul.
 
 Schema EXACT (x = lignes plates [personne,cle,id], PAS de listes imbriquees):
 {"p":[[4,16,27],[24,57],[43,45],[67]],"x":[[0,"dob",5],[0,"tel",14],[0,"em",15],[1,"tel",26]],"r":[[0,"resp",1],[0,"col",2],[0,"fr",3]],"o":[9],"l":[8],"d":[1]}
@@ -165,6 +196,25 @@ Schema EXACT (x = lignes plates [personne,cle,id], PAS de listes imbriquees):
 - r=UNIQUEMENT [i,"resp"|"col"|"fr"|"of"|"urg"|"bureau"|"col_de",j]
 - o/l/d=ids orgs/lieux/dates
 INTERDIT: texte, offsets, placeholders, x imbrique, relations dans x. Max ~40 lignes x.`;
+
+/** Same user message sent by `runAlbertGenerativeAnonymization` (for live preview). */
+export function buildAlbertGraphUserPrompt({
+  sourceText,
+  extraInstructions = "",
+  candidates = [],
+}) {
+  const candidateList = formatAlbertCandidateList(candidates);
+  return [
+    'Reponds avec un OBJET JSON {"p":[[ids...],...],"x":[[i,"tel",id],...],"r":[[i,"resp",j],...],"o":[],"l":[],"d":[]}. Uniquement des ids entiers de Candidats. Aucune chaine du texte.',
+    String(extraInstructions || "").trim()
+      ? `Consignes:\n${String(extraInstructions).trim()}`
+      : null,
+    `Candidats (id|texte):\n${candidateList}`,
+    `Texte:\n${String(sourceText || "")}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 function messageContentToString(content) {
   if (typeof content === "string") {
@@ -333,13 +383,38 @@ function resolveCandidate(byId, id) {
   return byId.get(id) || null;
 }
 
+/** Prefer candidate.text when it appears in source; else slice by offsets. */
+function candidateSurfaceText(candidate, sourceText) {
+  if (!candidate) {
+    return "";
+  }
+  const direct = String(candidate.text || "").trim();
+  if (direct && sourceText.includes(direct)) {
+    return direct;
+  }
+  const start = candidate.start;
+  const end = candidate.end;
+  if (
+    typeof start === "number" &&
+    typeof end === "number" &&
+    end > start &&
+    start >= 0 &&
+    end <= sourceText.length
+  ) {
+    const sliced = sourceText.slice(start, end);
+    return sliced.trim() || "";
+  }
+  return "";
+}
+
 /**
  * Expand compact ID-based graph using client-side candidates.
- * Also accepts legacy string / span formats when present.
+ * `x` / `r` person indices always refer to positions in `p` (sparse slots kept until attrs applied).
  */
 export function expandAlbertGraph(parsed, sourceText, candidates = []) {
   const byId = candidateMap(candidates);
-  const persons = [];
+  /** @type {Array<object|null>} */
+  const personsByPIndex = [];
   const valueToPlaceholder = new Map();
   const counters = {};
   const groups = [];
@@ -352,7 +427,11 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
 
   function registerValue(type, value) {
     const text = String(value ?? "").trim();
-    if (!text || !sourceText.includes(text)) {
+    if (!text) {
+      return null;
+    }
+    // Allow values that match candidate offsets even if includes() fails on whitespace drift.
+    if (!sourceText.includes(text)) {
       return null;
     }
     if (valueToPlaceholder.has(text)) {
@@ -388,9 +467,9 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
   function textsFromIds(ids) {
     const texts = [];
     for (const id of ids) {
-      const candidate = resolveCandidate(byId, id);
-      if (candidate?.text) {
-        texts.push(candidate.text);
+      const text = candidateSurfaceText(resolveCandidate(byId, id), sourceText);
+      if (text) {
+        texts.push(text);
       }
     }
     return uniquePreserveOrder(texts);
@@ -399,6 +478,11 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
   function pickDisplayName(surfaces) {
     if (!surfaces.length) {
       return "";
+    }
+    // Prefer Albert's first id surface (model order), then fall back to heuristics.
+    const primary = surfaces[0];
+    if (primary && /^(?:M(?:me|\.)\s+)?[A-ZÀ-Ü]/.test(primary) && primary.length <= 60) {
+      return primary;
     }
     const scored = surfaces.map((value) => {
       const lower = value.toLowerCase();
@@ -429,10 +513,23 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
     return unique;
   }
 
+  function emptyPersonSlot() {
+    return {
+      name: "",
+      placeholder: "",
+      aliases: [],
+      corefs: [],
+      attrs: [],
+      rels: [],
+      _empty: true,
+      _rawAttrs: {},
+      _rawRels: [],
+    };
+  }
+
   const personEntries = Array.isArray(parsed?.p) ? parsed.p : [];
 
   for (const entry of personEntries) {
-    // New format: [id, id, ...] OR legacy tuple with strings
     let surfaceTexts = [];
     let attrs = {};
     let rels = [];
@@ -441,7 +538,6 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
       surfaceTexts = textsFromIds(entry);
     } else if (Array.isArray(entry)) {
       if (typeof entry[0] === "number" || Array.isArray(entry[0])) {
-        // [ids[], attrs?, rels?] or flat ids then objects
         if (Array.isArray(entry[0])) {
           surfaceTexts = textsFromIds(asIdList(entry[0]));
           attrs =
@@ -459,12 +555,11 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
           surfaceTexts = textsFromIds(ids);
         }
       } else if (typeof entry[0] === "string") {
-        // Legacy string tuple
-        surfaceTexts = uniqueLongestFirst([
+        surfaceTexts = uniquePreserveOrder([
           String(entry[0] || "").trim(),
           ...(Array.isArray(entry[1]) ? entry[1].map(String) : []),
           ...(Array.isArray(entry[2]) ? entry[2].map(String) : []),
-        ]).filter((value) => sourceText.includes(value));
+        ]).filter((value) => value && sourceText.includes(value));
         attrs =
           entry[3] && typeof entry[3] === "object" && !Array.isArray(entry[3])
             ? entry[3]
@@ -481,11 +576,13 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
     }
 
     if (!surfaceTexts.length) {
+      // Keep a sparse slot so later `x`/`r` indices still match Albert's `p` array.
+      personsByPIndex.push(emptyPersonSlot());
       continue;
     }
 
     const displayName = pickDisplayName(surfaceTexts);
-    const maskAliases = uniqueLongestFirst(surfaceTexts);
+    const maskAliases = uniquePreserveOrder(surfaceTexts);
 
     let placeholder = valueToPlaceholder.get(displayName) || valueToPlaceholder.get(maskAliases[0]);
     if (!placeholder) {
@@ -494,7 +591,7 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
         type: "PER",
         category: "per",
         placeholder,
-        aliases: maskAliases,
+        aliases: uniqueLongestFirst(maskAliases),
         original: displayName,
       });
       for (const form of maskAliases) {
@@ -504,7 +601,7 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
       mergeAliases(placeholder, maskAliases);
     }
 
-    persons.push({
+    personsByPIndex.push({
       name: displayName,
       placeholder,
       aliases: maskAliases.filter((value) => value !== displayName),
@@ -516,8 +613,7 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
     });
   }
 
-  // Attributes: prefer compact x rows [personIndex, key, candidateId]
-  // Also accept nested [[personIndex, [key,id], [key,id], ...]]
+  // Attributes: compact x rows [personIndexInP, key, candidateId]
   const xRows = Array.isArray(parsed?.x) ? parsed.x : [];
   const flatXRows = [];
   for (const row of xRows) {
@@ -546,23 +642,29 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
     for (const row of flatXRows) {
       const personIndex = Number(row[0]);
       const key = String(row[1] || "").trim();
-      const candidateId = Number(row[2]);
-      const person = persons[personIndex];
-      if (!person || !key || !(key in ATTR_META)) {
-        // Skip relation keys mistakenly placed in x
-        if (key in REL_META && persons[candidateId]) {
-          person?.rels.push({
+      const third = Number(row[2]);
+      const person = personsByPIndex[personIndex];
+      if (!person || person._empty || !key) {
+        continue;
+      }
+      if (key in REL_META) {
+        // Relation mistakenly put in `x`: third value is target person index in `p`.
+        const target = personsByPIndex[third];
+        if (target && !target._empty) {
+          person.rels.push({
             key,
             label: REL_META[key],
-            target: persons[candidateId].name,
-            placeholder: persons[candidateId].placeholder,
+            target: target.name,
+            placeholder: target.placeholder,
           });
         }
         continue;
       }
+      if (!(key in ATTR_META)) {
+        continue;
+      }
       const meta = ATTR_META[key];
-      const candidate = resolveCandidate(byId, candidateId);
-      const value = candidate?.text || "";
+      const value = candidateSurfaceText(resolveCandidate(byId, third), sourceText);
       if (!value) {
         continue;
       }
@@ -577,14 +679,16 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
       });
     }
   } else {
-    // Legacy object attrs on person
-    for (const person of persons) {
+    for (const person of personsByPIndex) {
+      if (!person || person._empty) {
+        continue;
+      }
       const attrs = person._rawAttrs || {};
       for (const [key, raw] of Object.entries(attrs)) {
         const meta = ATTR_META[key] || { type: "OTH", label: key };
         let value = "";
         if (typeof raw === "number") {
-          value = resolveCandidate(byId, raw)?.text || "";
+          value = candidateSurfaceText(resolveCandidate(byId, raw), sourceText);
         } else {
           value = String(raw ?? "").trim();
         }
@@ -604,7 +708,7 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
     }
   }
 
-  // Relations: compact r rows [personIndex, key, targetPersonIndex]
+  // Relations: compact r rows [personIndexInP, key, targetPersonIndexInP]
   const rRows = Array.isArray(parsed?.r) ? parsed.r : [];
   if (rRows.length) {
     for (const row of rRows) {
@@ -614,9 +718,9 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
       const personIndex = Number(row[0]);
       const key = String(row[1] || "").trim();
       const targetIndex = Number(row[2]);
-      const person = persons[personIndex];
-      const target = persons[targetIndex];
-      if (!person || !key || !target) {
+      const person = personsByPIndex[personIndex];
+      const target = personsByPIndex[targetIndex];
+      if (!person || person._empty || !key || !target || target._empty) {
         continue;
       }
       person.rels.push({
@@ -627,7 +731,10 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
       });
     }
   } else {
-    for (const person of persons) {
+    for (const person of personsByPIndex) {
+      if (!person || person._empty) {
+        continue;
+      }
       for (const rel of person._rawRels || []) {
         if (!Array.isArray(rel) || rel.length < 2) {
           continue;
@@ -636,9 +743,9 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
         const targetRaw = rel[1];
         let targetName = "";
         let targetPlaceholder = null;
-        if (typeof targetRaw === "number" && persons[targetRaw]) {
-          targetName = persons[targetRaw].name;
-          targetPlaceholder = persons[targetRaw].placeholder;
+        if (typeof targetRaw === "number" && personsByPIndex[targetRaw] && !personsByPIndex[targetRaw]._empty) {
+          targetName = personsByPIndex[targetRaw].name;
+          targetPlaceholder = personsByPIndex[targetRaw].placeholder;
         } else {
           targetName = String(targetRaw ?? "").trim();
           targetPlaceholder = valueToPlaceholder.get(targetName) || null;
@@ -657,23 +764,25 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
   }
 
   for (const id of asIdList(parsed?.o)) {
-    const text = resolveCandidate(byId, id)?.text;
+    const text = candidateSurfaceText(resolveCandidate(byId, id), sourceText);
     if (text) {
       registerValue("ORG", text);
     }
   }
   for (const id of asIdList(parsed?.l)) {
-    const text = resolveCandidate(byId, id)?.text;
+    const text = candidateSurfaceText(resolveCandidate(byId, id), sourceText);
     if (text) {
       registerValue("LOC", text);
     }
   }
   for (const id of asIdList(parsed?.d)) {
-    const text = resolveCandidate(byId, id)?.text;
+    const text = candidateSurfaceText(resolveCandidate(byId, id), sourceText);
     if (text) {
       registerValue("DAT", text);
     }
   }
+
+  let persons = personsByPIndex.filter((person) => person && !person._empty);
 
   // Legacy flat g format
   if (!persons.length && Array.isArray(parsed?.g)) {
@@ -720,7 +829,27 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
   for (const person of persons) {
     delete person._rawAttrs;
     delete person._rawRels;
+    delete person._empty;
   }
+
+  // Person chips follow first appearance of any surface in the source text.
+  persons.sort((left, right) => {
+    const firstIndex = (person) => {
+      let best = Number.POSITIVE_INFINITY;
+      for (const surface of [person.name, ...(person.aliases || [])]) {
+        const text = String(surface || "");
+        if (!text) {
+          continue;
+        }
+        const index = sourceText.indexOf(text);
+        if (index >= 0 && index < best) {
+          best = index;
+        }
+      }
+      return best;
+    };
+    return firstIndex(left) - firstIndex(right);
+  });
 
   return {
     persons,
@@ -732,15 +861,60 @@ export function expandAlbertGraph(parsed, sourceText, candidates = []) {
   };
 }
 
-export function applyAlbertReplacements(sourceText, groupsWithPlaceholders) {
+export function applyAlbertReplacements(
+  sourceText,
+  groupsWithPlaceholders,
+  {
+    style = DEFAULT_REPLACEMENT_STYLE,
+    categoryMethods = {},
+    salt = sourceText || "",
+    customCategories = {},
+    resolveCategory,
+    generalizationLadders = {},
+    surfaceOverrides = {},
+  } = {},
+) {
   if (!sourceText) {
     return "";
   }
 
+  const lookup = buildGroupReplacementLookup(groupsWithPlaceholders, {
+    style,
+    categoryMethods,
+    salt,
+    customCategories,
+    resolveCategory,
+    generalizationLadders,
+  });
+
   const pairs = [];
   for (const group of groupsWithPlaceholders) {
-    for (const alias of group.aliases) {
-      pairs.push({ alias, placeholder: group.placeholder });
+    const category =
+      typeof resolveCategory === "function"
+        ? resolveCategory(group)
+        : group.category || group.type || "misc";
+    const baseReplacement = lookup.get(group.placeholder) || group.placeholder;
+    for (const alias of group.aliases || []) {
+      const surface = String(alias || "");
+      // Skip empty / single-char surfaces — replacing "e"/"a" would shred the document.
+      if (surface.trim().length < 2) {
+        continue;
+      }
+      const key = `${category}:${surface.toLocaleLowerCase()}`;
+      const override = surfaceOverrides[key];
+      let replacement = baseReplacement;
+      if (override?.kind === "custom") {
+        replacement = String(override.text ?? "");
+      } else if (override?.kind === "method") {
+        replacement = replacementForCategoryValue(category, surface, {
+          method: normalizeReplacementMethod(override.method),
+          index: 0,
+          salt,
+          customCategories,
+          generalizationLadders,
+        });
+      }
+      pairs.push({ alias: surface, replacement });
     }
   }
 
@@ -748,10 +922,7 @@ export function applyAlbertReplacements(sourceText, groupsWithPlaceholders) {
 
   let output = sourceText;
   for (const pair of pairs) {
-    if (!pair.alias) {
-      continue;
-    }
-    output = output.split(pair.alias).join(pair.placeholder);
+    output = output.split(pair.alias).join(pair.replacement);
   }
   return output;
 }
@@ -800,11 +971,89 @@ async function chatCompletionWithMaxTokens({ apiKey, requestBody, withJsonObject
   throw lastError || new Error("Albert chat completion failed.");
 }
 
+/**
+ * Advanced generative step 1: detect entities with Albert (exact substrings + labels).
+ */
+export async function runAlbertEntityDetection({
+  apiKey,
+  model = ALBERT_DEFAULT_MODEL,
+  text,
+  categoryInstructions = "",
+  labels = buildDefaultAlbertDetectionLabels(),
+}) {
+  const sourceText = assertAlbertDetectionInput(text);
+
+  const messages = [
+    { role: "system", content: ALBERT_ENTITY_DETECTION_SYSTEM_PROMPT },
+    {
+      role: "user",
+      content: buildAlbertEntityDetectionUserPrompt({
+        sourceText,
+        labels,
+        categoryInstructions,
+      }),
+    },
+  ];
+
+  const requestBody = {
+    model,
+    messages,
+    temperature: 0,
+    stream: false,
+  };
+
+  let payload;
+  try {
+    payload = await chatCompletionWithMaxTokens({
+      apiKey,
+      requestBody,
+      withJsonObject: true,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/response_format|json_object|unsupported|400|422/i.test(message)) {
+      throw error;
+    }
+    payload = await chatCompletionWithMaxTokens({
+      apiKey,
+      requestBody,
+      withJsonObject: false,
+    });
+  }
+
+  const choice = payload?.choices?.[0];
+  const content = choice?.message?.content;
+  const finishReason = choice?.finish_reason || choice?.finishReason;
+  const parsed = extractJsonObject(content, { finishReason });
+  const detections = parseAlbertEntityDetections(parsed);
+  const entities = albertDetectionsToEntities(sourceText, detections);
+
+  if (!entities.length) {
+    throw new Error(
+      "Model returned no entity substrings that match the source text. Try again or adjust categories.",
+    );
+  }
+
+  const customCategories = buildCustomCategoriesFromAlbertEntities(entities);
+
+  return {
+    sourceText,
+    detections,
+    entities,
+    customCategories,
+    model: payload?.model || model,
+    usage: payload?.usage || null,
+    finishReason: finishReason || null,
+  };
+}
+
 export async function runAlbertGenerativeAnonymization({
   apiKey,
   model = ALBERT_DEFAULT_MODEL,
   text,
   extraInstructions = "",
+  candidates: providedCandidates = null,
+  entities = null,
 }) {
   const sourceText = text?.trim() || "";
   if (!sourceText) {
@@ -817,25 +1066,27 @@ export async function runAlbertGenerativeAnonymization({
     );
   }
 
-  const candidates = extractAlbertCandidates(sourceText);
+  let candidates = Array.isArray(providedCandidates) ? providedCandidates : null;
+  if (!candidates?.length && Array.isArray(entities) && entities.length) {
+    candidates = entitiesToAlbertCandidates(entities);
+  }
+  if (!candidates?.length) {
+    candidates = extractAlbertCandidates(sourceText);
+  }
   if (!candidates.length) {
     throw new Error("No candidate spans found in the text.");
   }
 
-  const candidateList = formatAlbertCandidateList(candidates);
-
-  const userParts = [
-    "Reponds avec un OBJET JSON {\"p\":[[ids...],...],\"x\":[[i,\"tel\",id],...],\"r\":[[i,\"resp\",j],...],\"o\":[],\"l\":[],\"d\":[]}. Uniquement des ids entiers de Candidats. Aucune chaine du texte.",
-    extraInstructions.trim()
-      ? `Consignes:\n${extraInstructions.trim()}`
-      : null,
-    `Candidats (id|texte):\n${candidateList}`,
-    `Texte:\n${sourceText}`,
-  ].filter(Boolean);
-
   const messages = [
-    { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: userParts.join("\n\n") },
+    { role: "system", content: ALBERT_GRAPH_SYSTEM_PROMPT },
+    {
+      role: "user",
+      content: buildAlbertGraphUserPrompt({
+        sourceText,
+        extraInstructions,
+        candidates,
+      }),
+    },
   ];
 
   const requestBody = {
@@ -892,4 +1143,84 @@ export async function runAlbertGenerativeAnonymization({
     usage: payload?.usage || null,
     finishReason: finishReason || null,
   };
+}
+
+/**
+ * Ask Albert for Level 1–3 generalization ladders for open-vocabulary entities.
+ * Currently unused: pseudonymization stays offline (`USE_ALBERT_FOR_GENERALIZATION = false`).
+ * @param {{ apiKey: string, model?: string, items: { category: string, value: string }[] }} params
+ * @returns {Promise<Record<string, { level1: string, level2: string, level3: string }>>}
+ */
+export async function runAlbertGeneralizationLadders({
+  apiKey,
+  model = ALBERT_DEFAULT_MODEL,
+  items = [],
+}) {
+  const unique = [];
+  const seen = new Set();
+  for (const item of items) {
+    const category = String(item?.category || "").trim();
+    const value = String(item?.value || "").trim();
+    if (!category || !value) {
+      continue;
+    }
+    const dedupe = `${category.toLowerCase()}::${value.toLocaleLowerCase()}`;
+    if (seen.has(dedupe)) {
+      continue;
+    }
+    seen.add(dedupe);
+    unique.push({
+      id: `e${unique.length + 1}`,
+      category,
+      value,
+    });
+  }
+
+  if (!unique.length) {
+    return {};
+  }
+
+  /** @type {Record<string, { level1: string, level2: string, level3: string }>} */
+  const merged = {};
+
+  for (let offset = 0; offset < unique.length; offset += GENERALIZE_BATCH_SIZE) {
+    const batch = unique.slice(offset, offset + GENERALIZE_BATCH_SIZE);
+    const messages = [
+      { role: "system", content: ALBERT_GENERALIZE_SYSTEM_PROMPT },
+      { role: "user", content: buildAlbertGeneralizeUserPrompt(batch) },
+    ];
+    const requestBody = {
+      model,
+      messages,
+      temperature: 0,
+      stream: false,
+    };
+
+    let payload;
+    try {
+      payload = await chatCompletionWithMaxTokens({
+        apiKey,
+        requestBody,
+        withJsonObject: true,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/response_format|json_object|unsupported|400|422/i.test(message)) {
+        throw error;
+      }
+      payload = await chatCompletionWithMaxTokens({
+        apiKey,
+        requestBody,
+        withJsonObject: false,
+      });
+    }
+
+    const choice = payload?.choices?.[0];
+    const content = choice?.message?.content;
+    const finishReason = choice?.finish_reason || choice?.finishReason;
+    const parsed = extractJsonObject(content, { finishReason });
+    Object.assign(merged, parseAlbertGeneralizationLadders(parsed, batch));
+  }
+
+  return merged;
 }

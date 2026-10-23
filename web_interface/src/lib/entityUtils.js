@@ -2,7 +2,15 @@ import {
   BUILTIN_CATEGORY_IDS,
   CATEGORY_LABELS,
 } from "./constants.js";
-import { mergeEntities } from "./ruleDetection.js";
+import { GLINER_LABEL_STYLE_KEYS, GLINER_RULE_LABELS } from "./glinerConstants.js";
+import { buildBasicPersonGraph } from "./basicPersonGraph.js";
+import {
+  DEFAULT_REPLACEMENT_STYLE,
+  buildReplacementMap,
+  normalizeReplacementMethod,
+  replacementForCategoryValue,
+} from "./pseudonymize.js";
+import { detectWithGlinerRules, mergeEntities } from "./ruleDetection.js";
 
 export function slugifyCategoryId(name) {
   const slug = name
@@ -88,10 +96,18 @@ export function getCategoryPrefix(categoryId, customCategories = {}) {
 }
 
 export function getCategoryChipClass(categoryId) {
+  const glinerStyle = GLINER_LABEL_STYLE_KEYS[categoryId];
+  if (glinerStyle) {
+    return `chip-${glinerStyle}`;
+  }
   return BUILTIN_CATEGORY_IDS.has(categoryId) ? `chip-${categoryId}` : "chip-custom";
 }
 
 export function getCategoryHighlightClass(categoryId) {
+  const glinerStyle = GLINER_LABEL_STYLE_KEYS[categoryId];
+  if (glinerStyle) {
+    return `highlight-${glinerStyle}`;
+  }
   return BUILTIN_CATEGORY_IDS.has(categoryId) ? `highlight-${categoryId}` : "highlight-custom";
 }
 
@@ -183,27 +199,55 @@ export function normalizeEntities(entities, sourceText) {
     .sort((a, b) => a.start - b.start || a.end - b.end);
 }
 
+function spansOverlap(left, right) {
+  return left.start < right.end && left.end > right.start;
+}
+
+/**
+ * Add manually annotated spans without removing existing detections.
+ * New spans that overlap an already-detected entity are skipped so short
+ * selections (e.g. "Marie") cannot wipe longer spans ("Marie Dupont") or
+ * unrelated entities that share a substring (e.g. email local-parts).
+ */
 export function addEntitySpans(entities, spans, label, sourceText) {
   if (!spans.length) {
     return entities;
   }
 
+  const existing = Array.isArray(entities) ? entities : [];
   const stamp = Date.now();
-  const newEntities = spans.map((span, index) => ({
-    id: `manual-${span.start}-${span.end}-${stamp}-${index}`,
-    start: span.start,
-    end: span.end,
-    text: span.text,
-    label,
-    source: "manual",
-  }));
+  const newEntities = [];
 
-  const filtered = entities.filter(
-    (entity) =>
-      !newEntities.some((span) => entity.end > span.start && entity.start < span.end),
-  );
+  for (let index = 0; index < spans.length; index += 1) {
+    const span = spans[index];
+    if (
+      span == null ||
+      span.start == null ||
+      span.end == null ||
+      span.start >= span.end
+    ) {
+      continue;
+    }
+    const overlapsExisting = existing.some((entity) => spansOverlap(entity, span));
+    const overlapsNew = newEntities.some((entity) => spansOverlap(entity, span));
+    if (overlapsExisting || overlapsNew) {
+      continue;
+    }
+    newEntities.push({
+      id: `manual-${span.start}-${span.end}-${stamp}-${index}`,
+      start: span.start,
+      end: span.end,
+      text: span.text,
+      label,
+      source: "manual",
+    });
+  }
 
-  return normalizeEntities([...filtered, ...newEntities], sourceText);
+  if (!newEntities.length) {
+    return existing;
+  }
+
+  return normalizeEntities([...existing, ...newEntities], sourceText);
 }
 
 function escapeRegExp(value) {
@@ -277,15 +321,19 @@ export function expandEntityValueOccurrences(text, entities) {
   return expanded;
 }
 
-/** Expand model spans to every matching occurrence, merge with rules, normalize. */
-export function finalizeDetectedEntities(text, entities) {
-  if (!entities?.length) {
-    return normalizeEntities([], text);
-  }
-
-  const ruleEntities = entities.filter((entity) => entity.source === "rule");
-  const modelEntities = entities.filter((entity) => entity.source !== "rule");
+/**
+ * Expand model spans to every matching occurrence, merge regex rules (email, phone,
+ * identity documents…), and normalize.
+ * @param {string} text
+ * @param {Array} entities
+ * @param {{ ruleLabels?: string[] }} [options] — defaults to all GLINER_RULE_LABELS
+ */
+export function finalizeDetectedEntities(text, entities, options = {}) {
+  const ruleLabels = Array.isArray(options.ruleLabels) ? options.ruleLabels : GLINER_RULE_LABELS;
+  const incoming = Array.isArray(entities) ? entities : [];
+  const modelEntities = incoming.filter((entity) => entity.source !== "rule");
   const expandedModel = expandEntityValueOccurrences(text, modelEntities);
+  const ruleEntities = ruleLabels.length ? detectWithGlinerRules(text, ruleLabels) : [];
 
   return normalizeEntities(mergeEntities([...expandedModel, ...ruleEntities]), text);
 }
@@ -366,6 +414,247 @@ export function createHighlightSegments(text, entities) {
   return segments;
 }
 
+/**
+ * Force every surface of the same person (name + aliases + corefs) to share one
+ * replacement token / generalization, matching the person graph.
+ */
+export function unifyPersonGraphReplacements(
+  replacementMap,
+  persons,
+  {
+    style = DEFAULT_REPLACEMENT_STYLE,
+    categoryMethods = {},
+    customCategories = {},
+    salt = "",
+    generalizationLadders = {},
+    selectedCategories = null,
+  } = {},
+) {
+  if (!replacementMap || !persons?.length) {
+    return replacementMap;
+  }
+  if (selectedCategories && selectedCategories.person === false) {
+    return replacementMap;
+  }
+
+  const method = normalizeReplacementMethod(categoryMethods.person || style);
+
+  persons.forEach((person, personIndex) => {
+    const surfaces = [person.name, ...(person.aliases || []), ...(person.corefs || [])]
+      .map((value) => String(value || "").trim())
+      .filter((value) => value.length >= 2);
+    if (!surfaces.length) {
+      return;
+    }
+
+    const canonical = String(person.name || surfaces[0]).trim();
+    const replacement = replacementForCategoryValue("person", canonical, {
+      method,
+      index: personIndex,
+      salt,
+      customCategories,
+      generalizationLadders,
+    });
+
+    for (const surface of surfaces) {
+      replacementMap.set(getEntityValueKey("person", surface), replacement);
+    }
+  });
+
+  return replacementMap;
+}
+
+function resolvePersonsForReplacement(text, entities, persons) {
+  if (Array.isArray(persons) && persons.length) {
+    return persons;
+  }
+  if (!text || !entities?.length) {
+    return [];
+  }
+  try {
+    return buildBasicPersonGraph(text, entities, null).persons || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Per-value override after category methods:
+ * `{ kind: "custom", text, category, surface }` or
+ * `{ kind: "method", method, category, surface }`.
+ */
+export function applySurfaceReplacementOverrides(
+  replacementMap,
+  surfaceOverrides = {},
+  {
+    customCategories = {},
+    salt = "",
+    generalizationLadders = {},
+    groupedEntities = {},
+  } = {},
+) {
+  if (!replacementMap || !surfaceOverrides || !Object.keys(surfaceOverrides).length) {
+    return replacementMap;
+  }
+
+  for (const [key, override] of Object.entries(surfaceOverrides)) {
+    if (!override?.category) {
+      continue;
+    }
+    const surface = String(override.surface ?? "").trim() || key.slice(key.indexOf(":") + 1);
+    if (override.kind === "custom") {
+      replacementMap.set(key, String(override.text ?? ""));
+      continue;
+    }
+    if (override.kind === "method") {
+      const method = normalizeReplacementMethod(override.method);
+      const categoryEntities = groupedEntities[override.category] || [];
+      let index = categoryEntities.findIndex(
+        (entity) =>
+          String(entity.text || "").toLocaleLowerCase() === String(surface).toLocaleLowerCase(),
+      );
+      if (index < 0) {
+        index = 0;
+      }
+      replacementMap.set(
+        key,
+        replacementForCategoryValue(override.category, surface, {
+          method,
+          index,
+          salt,
+          customCategories,
+          generalizationLadders,
+        }),
+      );
+    }
+  }
+
+  return replacementMap;
+}
+
+/**
+ * Build anonymized text + highlight segments (positions in the anonymized output).
+ */
+export function buildAnonymizedPreviewModel(
+  text,
+  entities,
+  groupedEntities,
+  selectedCategories,
+  excludedEntityKeys,
+  customCategories,
+  options = {},
+) {
+  const {
+    style = DEFAULT_REPLACEMENT_STYLE,
+    categoryMethods = {},
+    salt = text || "",
+    generalizationLadders = {},
+    persons: personsOption,
+    surfaceOverrides = {},
+  } = options;
+
+  if (!text) {
+    return { anonymizedText: "", segments: [], replacementMap: new Map() };
+  }
+
+  const replacementMap = buildReplacementMap(groupedEntities, selectedCategories, {
+    style,
+    categoryMethods,
+    customCategories,
+    salt,
+    generalizationLadders,
+  });
+
+  unifyPersonGraphReplacements(
+    replacementMap,
+    resolvePersonsForReplacement(text, entities, personsOption),
+    {
+      style,
+      categoryMethods,
+      customCategories,
+      salt,
+      generalizationLadders,
+      selectedCategories,
+    },
+  );
+
+  applySurfaceReplacementOverrides(replacementMap, surfaceOverrides, {
+    customCategories,
+    salt,
+    generalizationLadders,
+    groupedEntities,
+  });
+
+  const applicable = pickNonOverlappingEntities(
+    entities.filter((entity) => isEntityActive(entity, selectedCategories, excludedEntityKeys)),
+  ).sort((a, b) => a.start - b.start || b.end - a.end);
+
+  let output = "";
+  let cursor = 0;
+  const segments = [];
+  const originalLength = text.length;
+
+  for (const entity of applicable) {
+    if (
+      entity.start == null ||
+      entity.end == null ||
+      entity.start < cursor ||
+      entity.start < 0 ||
+      entity.end > originalLength ||
+      entity.start >= entity.end
+    ) {
+      continue;
+    }
+
+    if (entity.start > cursor) {
+      const plain = text.slice(cursor, entity.start);
+      segments.push({
+        text: plain,
+        start: output.length,
+        end: output.length + plain.length,
+      });
+      output += plain;
+    }
+
+    const valueKey = getEntityValueKey(entity.label, entity.text);
+    const replacement = replacementMap.get(valueKey);
+    if (replacement == null) {
+      const plain = text.slice(entity.start, entity.end);
+      segments.push({
+        text: plain,
+        start: output.length,
+        end: output.length + plain.length,
+      });
+      output += plain;
+    } else {
+      const start = output.length;
+      output += replacement;
+      segments.push({
+        text: replacement,
+        start,
+        end: output.length,
+        entity,
+        originalText: entity.text,
+        replacement,
+        valueKey,
+      });
+    }
+    cursor = entity.end;
+  }
+
+  if (cursor < text.length) {
+    const plain = text.slice(cursor);
+    segments.push({
+      text: plain,
+      start: output.length,
+      end: output.length + plain.length,
+    });
+    output += plain;
+  }
+
+  return { anonymizedText: output, segments, replacementMap };
+}
+
 export function replaceSelectedCategories(
   text,
   entities,
@@ -373,33 +662,45 @@ export function replaceSelectedCategories(
   selectedCategories,
   excludedEntityKeys,
   customCategories,
+  options = {},
 ) {
-  const replacementMap = new Map();
+  return buildAnonymizedPreviewModel(
+    text,
+    entities,
+    groupedEntities,
+    selectedCategories,
+    excludedEntityKeys,
+    customCategories,
+    options,
+  ).anonymizedText;
+}
 
-  Object.entries(groupedEntities).forEach(([category, categoryEntities]) => {
-    if (!selectedCategories[category]) return;
-
-    categoryEntities.forEach((entity, index) => {
-      replacementMap.set(
-        getEntityValueKey(category, entity.text),
-        `[${getCategoryPrefix(category, customCategories)}_${index + 1}]`,
-      );
-    });
-  });
-
-  let output = text;
-  const applicable = entities
-    .filter((entity) => isEntityActive(entity, selectedCategories, excludedEntityKeys))
-    .sort((a, b) => b.start - a.start || b.end - a.end);
-
-  for (const entity of applicable) {
-    const placeholder = replacementMap.get(getEntityValueKey(entity.label, entity.text));
-    if (!placeholder) continue;
-    if (entity.start < 0 || entity.end > output.length || entity.start >= entity.end) continue;
-    output = output.slice(0, entity.start) + placeholder + output.slice(entity.end);
+/**
+ * Greedy non-overlapping span pick: longest first, then leftmost.
+ * Nested mentions (Marie inside Marie Dupont) keep only the outer span.
+ */
+export function pickNonOverlappingEntities(entities = []) {
+  const ranked = [...entities].sort(
+    (a, b) => b.end - b.start - (a.end - a.start) || a.start - b.start || a.end - b.end,
+  );
+  const kept = [];
+  for (const entity of ranked) {
+    if (
+      entity == null ||
+      entity.start == null ||
+      entity.end == null ||
+      entity.start >= entity.end
+    ) {
+      continue;
+    }
+    const overlaps = kept.some(
+      (other) => entity.start < other.end && entity.end > other.start,
+    );
+    if (!overlaps) {
+      kept.push(entity);
+    }
   }
-
-  return output;
+  return kept;
 }
 
 export function countEntitySpans(entities, category, value) {

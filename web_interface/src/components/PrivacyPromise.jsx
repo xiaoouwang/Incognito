@@ -18,10 +18,6 @@ export function PrivacyPromise({ className = "version-announcement" }) {
       <span className="version-announcement-badge" aria-hidden="true">
         ✨ v{t("versionNumber")}
       </span>
-      <span className="version-announcement-text">
-        🎯 {t("versionFeatureLead")}{" "}
-        <strong>{t("versionFeatureHighlight")}</strong>
-      </span>
     </p>
   );
 }

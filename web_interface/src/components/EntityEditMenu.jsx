@@ -1,6 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { formatCategoryDisplayName } from "../lib/auditReport.js";
-import { findSurfaceOwnerPlaceholder, isPersonLabel } from "../lib/basicPersonGraph.js";
+import {
+  findSurfaceOwnerPlaceholders,
+  isPersonLabel,
+} from "../lib/basicPersonGraph.js";
 import { useUiLocale } from "../context/UiLocaleContext.jsx";
 import {
   countOccurrences,
@@ -13,6 +16,7 @@ export default function EntityEditMenu({
   menuCategories,
   categoryLabels,
   persons = [],
+  relatedPlaceholders = null,
   onScopeChange,
   onAdd,
   onAddCustom,
@@ -46,16 +50,22 @@ export default function EntityEditMenu({
     });
   }, [menu.mode, menu.entity, persons]);
 
-  const currentOwnerPlaceholder = useMemo(() => {
+  const currentOwnerPlaceholders = useMemo(() => {
     if (menu.mode !== "remove" || !menu.entity) {
-      return null;
+      return [];
     }
-    return findSurfaceOwnerPlaceholder(persons, menu.entity.text);
-  }, [menu.mode, menu.entity, persons]);
+    if (Array.isArray(relatedPlaceholders)) {
+      return relatedPlaceholders;
+    }
+    return findSurfaceOwnerPlaceholders(persons, menu.entity.text);
+  }, [menu.mode, menu.entity, persons, relatedPlaceholders]);
 
-  const currentOwner = useMemo(
-    () => persons.find((person) => person.placeholder === currentOwnerPlaceholder) || null,
-    [persons, currentOwnerPlaceholder],
+  const currentOwners = useMemo(
+    () =>
+      currentOwnerPlaceholders
+        .map((placeholder) => persons.find((person) => person.placeholder === placeholder))
+        .filter(Boolean),
+    [persons, currentOwnerPlaceholders],
   );
 
   useEffect(() => {
@@ -204,37 +214,94 @@ export default function EntityEditMenu({
             <p className="entity-menu-selection">&quot;{menu.entity.text}&quot;</p>
             {relatedCandidates.length && onRelateToPerson ? (
               <>
-                <p className="entity-menu-section-label">{t("entityMenuRelatedTo")}</p>
-                {currentOwner ? (
+                <p className="entity-menu-section-label">
+                  {isPersonLabel(menu.entity.label)
+                    ? t("entityMenuRelatedToPerson")
+                    : t("entityMenuRelatedTo")}
+                </p>
+                {currentOwners.length ? (
                   <p className="entity-menu-hint">
-                    {t("entityMenuCurrentlyRelated", {
-                      person: currentOwner.name,
-                      token: currentOwner.placeholder,
-                    })}
+                    {t("entityMenuCurrentlyRelatedMulti", {
+                      people: currentOwners
+                        .map((person) => `${person.name} (${person.placeholder})`)
+                        .join(", "),
+                    })}{" "}
+                    {t("entityMenuRelateToggleHint")}
                   </p>
                 ) : (
-                  <p className="entity-menu-hint">{t("entityMenuRelatedHint")}</p>
+                  <p className="entity-menu-hint">
+                    {isPersonLabel(menu.entity.label)
+                      ? t("entityMenuPersonRelateHint")
+                      : t("entityMenuRelatedHint")}{" "}
+                    {t("entityMenuRelateMultiHint")}
+                  </p>
                 )}
                 <div className="entity-menu-actions">
                   {relatedCandidates.map((person) => {
-                    const isCurrent = person.placeholder === currentOwnerPlaceholder;
+                    const personEntity = isPersonLabel(menu.entity.label);
+                    const entityLower = String(menu.entity.text || "").toLocaleLowerCase();
+                    const isCurrent = personEntity
+                      ? (person.rels || []).some(
+                          (rel) =>
+                            String(rel.target || "").toLocaleLowerCase() === entityLower,
+                        )
+                      : currentOwnerPlaceholders.includes(person.placeholder);
                     return (
                       <button
-                        key={person.placeholder}
+                        key={`rel-${person.placeholder}`}
                         type="button"
                         className={`entity-menu-category${isCurrent ? " is-current" : ""}`}
-                        disabled={isCurrent}
                         onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => onRelateToPerson(person.placeholder)}
+                        onClick={() =>
+                          onRelateToPerson(
+                            person.placeholder,
+                            personEntity ? { mode: "rel" } : { mode: "attr" },
+                          )
+                        }
+                        title={
+                          isCurrent
+                            ? t("entityMenuUnrelateTitle", { name: person.name })
+                            : undefined
+                        }
                       >
-                        {isPersonLabel(menu.entity.label)
-                          ? t("entityMenuAliasOf", { name: person.name })
+                        {isCurrent
+                          ? t("entityMenuUnrelateTo", { name: person.name })
                           : t("entityMenuRelateTo", { name: person.name })}
                         <code>{person.placeholder}</code>
                       </button>
                     );
                   })}
                 </div>
+                {isPersonLabel(menu.entity.label) ? (
+                  <>
+                    <p className="entity-menu-section-label">{t("entityMenuAliasSection")}</p>
+                    <p className="entity-menu-hint">{t("entityMenuAliasHint")}</p>
+                    <div className="entity-menu-actions">
+                      {relatedCandidates.map((person) => {
+                        const entityLower = String(menu.entity.text || "").toLocaleLowerCase();
+                        const isCurrent = (person.aliases || []).some(
+                          (alias) => String(alias || "").toLocaleLowerCase() === entityLower,
+                        );
+                        return (
+                          <button
+                            key={`alias-${person.placeholder}`}
+                            type="button"
+                            className={`entity-menu-category${isCurrent ? " is-current" : ""}`}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() =>
+                              onRelateToPerson(person.placeholder, { mode: "alias" })
+                            }
+                          >
+                            {isCurrent
+                              ? t("entityMenuUnaliasOf", { name: person.name })
+                              : t("entityMenuAliasOf", { name: person.name })}
+                            <code>{person.placeholder}</code>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : null}
               </>
             ) : null}
             <p className="entity-menu-hint">{t("entityMenuRemoveHint")}</p>

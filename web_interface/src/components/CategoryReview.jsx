@@ -37,7 +37,7 @@ export default function CategoryReview({
             </span>
           </label>
           <div className="entity-chips">
-            {groupedEntities[category].map((entity) => {
+            {groupedEntities[category].map((entity, entityIndex) => {
               const occurrenceCount = countEntitySpans(entities, category, entity.text);
               const active =
                 Boolean(selectedCategories[category]) &&
@@ -47,7 +47,7 @@ export default function CategoryReview({
                 <button
                   type="button"
                   className={`chip ${getCategoryChipClass(category)} ${active ? "chip-active" : "chip-inactive"}`}
-                  key={entity.key}
+                  key={entity.key || `${category}:${entity.text}:${entityIndex}`}
                   onClick={() => onToggleEntity(category, entity.text)}
                   title={active ? t("chipKeep") : t("chipInclude")}
                 >

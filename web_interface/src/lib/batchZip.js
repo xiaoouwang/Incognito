@@ -12,6 +12,9 @@ export async function downloadBatchZip({
   nerBackend,
   outputLabel,
   buildFileOutputs,
+  replacementStyle,
+  categoryMethods,
+  generalizationLadders = {},
 }) {
   const folderName = outputLabel || `outputs-${formatBatchOutputTimestamp()}`;
   const zip = new JSZip();
@@ -35,6 +38,9 @@ export async function downloadBatchZip({
         buildBatchFileOutputs({
           ...params,
           nerBackend,
+          replacementStyle,
+          categoryMethods,
+          generalizationLadders,
         }));
 
     const { anonymizedText, auditReport, labelStudioJson } = buildOutputs({
@@ -45,6 +51,9 @@ export async function downloadBatchZip({
       excludedEntityKeys,
       customCategories,
       modelName,
+      replacementStyle,
+      categoryMethods,
+      generalizationLadders,
     });
 
     const names = buildBatchOutputFileNames(file.name, modified);

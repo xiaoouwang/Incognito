@@ -1,6 +1,9 @@
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const URL_PATTERN = /\bhttps?:\/\/[^\s<>"']+|\bwww\.[^\s<>"']+/gi;
 const PHONE_PATTERN = /(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?){2,4}\d{2,4}\b/g;
+/** Passport-like IDs (e.g. GE24563667) and French NIR / social security numbers. */
+const IDENTITY_DOCUMENT_PATTERN =
+  /\b(?:[A-Z]{1,2}\d{6,9}|[12]\s?\d{2}\s?\d{2}\s?\d{2}\s?\d{3}\s?\d{3}\s?\d{2})\b/gi;
 const DATE_PATTERN =
   /\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2}|\d{1,2}\s+(?:janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre|january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{2,4})\b/gi;
 
@@ -9,12 +12,14 @@ const RULE_PATTERNS = [
   ["url", URL_PATTERN],
   ["date", DATE_PATTERN],
   ["phone", PHONE_PATTERN],
+  ["identity document number", IDENTITY_DOCUMENT_PATTERN],
 ];
 
 export const GLINER_RULE_PATTERNS = [
   ["email", EMAIL_PATTERN],
   ["url", URL_PATTERN],
   ["phone number", PHONE_PATTERN],
+  ["identity document number", IDENTITY_DOCUMENT_PATTERN],
 ];
 
 function trimMatch(value) {

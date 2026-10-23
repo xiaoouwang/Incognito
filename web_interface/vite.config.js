@@ -10,11 +10,24 @@ const albertProxy = {
   },
 };
 
+const gliner2PiiProxy = {
+  "/gliner2-pii-api": {
+    target: "http://127.0.0.1:8765",
+    changeOrigin: true,
+    rewrite: (path) => path.replace(/^\/gliner2-pii-api/, ""),
+  },
+};
+
+const proxies = {
+  ...albertProxy,
+  ...gliner2PiiProxy,
+};
+
 export default defineConfig({
   base: "./",
   plugins: [react()],
   optimizeDeps: {
-    exclude: ["@huggingface/transformers"],
+    exclude: ["@huggingface/transformers", "onnxruntime-web"],
     include: ["gliner", "udpipe-wasm"],
   },
   worker: {
@@ -23,10 +36,10 @@ export default defineConfig({
   assetsInclude: ["**/*.udpipe", "**/*.wasm"],
   server: {
     host: "127.0.0.1",
-    proxy: albertProxy,
+    proxy: proxies,
   },
   preview: {
     host: "127.0.0.1",
-    proxy: albertProxy,
+    proxy: proxies,
   },
 });

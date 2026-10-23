@@ -16,6 +16,9 @@ export function buildBatchFileOutputs({
   customCategories,
   modelName,
   nerBackend,
+  replacementStyle,
+  categoryMethods,
+  generalizationLadders = {},
 }) {
   const grouped = groupEntities(entities);
   const anonymizedText = replaceSelectedCategories(
@@ -25,6 +28,7 @@ export function buildBatchFileOutputs({
     selectedCategories,
     excludedEntityKeys,
     customCategories,
+    { style: replacementStyle, categoryMethods, salt: fileText, generalizationLadders },
   );
   const activeEntities = entities.filter((entity) =>
     isEntityActive(entity, selectedCategories, excludedEntityKeys),
@@ -41,6 +45,9 @@ export function buildBatchFileOutputs({
     nerBackend,
     batchMode: true,
     customCategories,
+    categoryMethods,
+    replacementStyle,
+    generalizationLadders,
   });
   const labelStudioJson = JSON.stringify(
     createLabelStudioExport({

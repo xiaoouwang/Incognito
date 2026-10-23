@@ -131,6 +131,72 @@ export function extractAlbertCandidates(sourceText) {
   }));
 }
 
+/**
+ * Map reviewed NER entities (e.g. GLiNER2-multi) onto Albert candidate IDs.
+ * Only spans with valid offsets are kept; order follows reading order.
+ */
+const LABEL_TO_KIND = {
+  person: "name",
+  organization: "org",
+  location: "loc",
+  address: "addr",
+  email: "em",
+  url: "url",
+  "phone number": "tel",
+  date: "dob",
+  age: "age",
+  profession: "job",
+  "job title or project role": "job",
+  school: "org",
+  hospital: "org",
+  "family member": "name",
+  nationality: "loc",
+  disease: "misc",
+  diploma: "job",
+};
+
+export function entitiesToAlbertCandidates(entities) {
+  if (!entities?.length) {
+    return [];
+  }
+
+  const spans = entities
+    .filter(
+      (entity) =>
+        Number.isFinite(entity.start) &&
+        Number.isFinite(entity.end) &&
+        entity.end > entity.start &&
+        String(entity.text || "").trim(),
+    )
+    .map((entity) => ({
+      start: entity.start,
+      end: entity.end,
+      text: entity.text,
+      kind: LABEL_TO_KIND[entity.label] || String(entity.label || "misc").slice(0, 12),
+    }));
+
+  spans.sort((a, b) => a.start - b.start || b.end - a.end);
+
+  const unique = [];
+  const seenRange = new Set();
+  for (const span of spans) {
+    const key = `${span.start}:${span.end}`;
+    if (seenRange.has(key)) {
+      continue;
+    }
+    seenRange.add(key);
+    unique.push(span);
+  }
+
+  return unique.map((span, id) => ({
+    id,
+    start: span.start,
+    end: span.end,
+    text: span.text,
+    kind: span.kind,
+  }));
+}
+
 /** Compact list for the prompt — one candidate per line: id|text */
 export function formatAlbertCandidateList(candidates, { maxChars = 8000 } = {}) {
   const lines = [];

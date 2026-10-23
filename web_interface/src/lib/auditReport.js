@@ -1,11 +1,20 @@
 import {
+  applySurfaceReplacementOverrides,
   formatCategoryDisplayName,
   getCategoryLabel,
   getCategoryPrefix,
+  getEntityValueKey,
   isManualEntity,
   countEntitySpans,
   isEntityActive,
+  unifyPersonGraphReplacements,
 } from "./entityUtils.js";
+import { buildBasicPersonGraph } from "./basicPersonGraph.js";
+import {
+  DEFAULT_REPLACEMENT_STYLE,
+  buildReplacementMap,
+  normalizeReplacementMethod,
+} from "./pseudonymize.js";
 
 function formatProvenanceLabel(source) {
   if (!source || source === "manual") {
@@ -112,6 +121,21 @@ function formatSpanPositionLines(spans) {
     .join("\n");
 }
 
+function describeSurfaceOverride(override) {
+  if (!override) {
+    return null;
+  }
+  const comment = String(override.comment || "").trim();
+  const commentSuffix = comment ? `; note: ${comment}` : "";
+  if (override.kind === "custom") {
+    return `custom text "${String(override.text ?? "")}"${commentSuffix}`;
+  }
+  if (override.kind === "method") {
+    return `per-value method ${normalizeReplacementMethod(override.method)}${commentSuffix}`;
+  }
+  return null;
+}
+
 function formatValueDecisionLine({
   category,
   customCategories,
@@ -120,6 +144,7 @@ function formatValueDecisionLine({
   occurrences,
   provenance,
   status,
+  overrideNote = null,
 }) {
   const label = getCategoryLabel(category, customCategories);
   const provenanceDetail = formatSpanProvenanceDetail(provenance);
@@ -130,10 +155,11 @@ function formatValueDecisionLine({
         ? "human manual review"
         : "automatic detection";
   const positionLines = formatSpanPositionLines(provenance.spans);
+  const overrideSuffix = overrideNote ? `; override: ${overrideNote}` : "";
 
   let header;
   if (status === "replaced") {
-    header = `- ${label}: "${value}" -> ${replacement} (${occurrences} span${occurrences === 1 ? "" : "s"}, ${provenanceDetail}; origin: ${origin})`;
+    header = `- ${label}: "${value}" -> ${replacement} (${occurrences} span${occurrences === 1 ? "" : "s"}, ${provenanceDetail}; origin: ${origin}${overrideSuffix})`;
   } else {
     header = `- ${label}: "${value}" kept unchanged (${occurrences} span${occurrences === 1 ? "" : "s"}, ${provenanceDetail}; origin: ${origin}; toggled off during review)`;
   }
@@ -153,6 +179,28 @@ function formatSpanIndexLines(entities, selectedCategories, excludedEntityKeys, 
     });
 }
 
+function escapeTableCell(value) {
+  return String(value ?? "")
+    .replace(/\|/g, "\\|")
+    .replace(/\r?\n/g, " ")
+    .trim();
+}
+
+function formatCorrespondenceTable(rows) {
+  if (!rows.length) {
+    return "- None";
+  }
+
+  const header = [
+    "| # | Category / Catégorie | Original | Replacement / Remplacement | Status | Comment / Note |",
+    "| --- | --- | --- | --- | --- | --- |",
+  ];
+  const body = rows.map((row, index) => {
+    return `| ${index + 1} | ${escapeTableCell(row.categoryLabel)} | ${escapeTableCell(row.original)} | ${escapeTableCell(row.replacement)} | ${escapeTableCell(row.status)} | ${escapeTableCell(row.comment || "")} |`;
+  });
+  return [...header, ...body].join("\n");
+}
+
 export function createAuditReport({
   text,
   entities,
@@ -165,11 +213,43 @@ export function createAuditReport({
   nerBackend = null,
   batchMode = false,
   customCategories = {},
+  categoryMethods = {},
+  replacementStyle = DEFAULT_REPLACEMENT_STYLE,
+  generalizationLadders = {},
+  persons = null,
+  surfaceOverrides = {},
 }) {
   const categories = Object.keys(groupedEntities);
   const selected = categories.filter((category) => selectedCategories[category]);
   const kept = categories.filter((category) => !selectedCategories[category]);
   const provenance = summarizeDocumentProvenance(entities);
+  const replacementMap = buildReplacementMap(groupedEntities, selectedCategories, {
+    style: replacementStyle,
+    categoryMethods,
+    customCategories,
+    salt: text || "",
+    generalizationLadders,
+  });
+  const resolvedPersons =
+    Array.isArray(persons) && persons.length
+      ? persons
+      : text && entities?.length
+        ? buildBasicPersonGraph(text, entities, null).persons || []
+        : [];
+  unifyPersonGraphReplacements(replacementMap, resolvedPersons, {
+    style: replacementStyle,
+    categoryMethods,
+    customCategories,
+    salt: text || "",
+    generalizationLadders,
+    selectedCategories,
+  });
+  applySurfaceReplacementOverrides(replacementMap, surfaceOverrides, {
+    customCategories,
+    salt: text || "",
+    generalizationLadders,
+    groupedEntities,
+  });
 
   const machineSourceLines = Object.entries(provenance.machineBySource)
     .sort(([left], [right]) => left.localeCompare(right))
@@ -208,16 +288,24 @@ export function createAuditReport({
   const automaticReplacements = [];
   const manualReplacements = [];
   const mixedReplacements = [];
+  const customOverrideReplacements = [];
   const excludedValues = [];
+  const correspondenceRows = [];
 
   categories.forEach((category) => {
     groupedEntities[category].forEach((entity, index) => {
+      const mapKey = getEntityValueKey(category, entity.text);
+      const mappedReplacement = replacementMap.get(mapKey);
+      const fallbackPlaceholder = `[${getCategoryPrefix(category, customCategories)}_${index + 1}]`;
       const replacement = selectedCategories[category]
-        ? `[${getCategoryPrefix(category, customCategories)}_${index + 1}]`
+        ? mappedReplacement || fallbackPlaceholder
         : null;
       const spanProvenance = summarizeSpanProvenance(entities, category, entity.text);
       const occurrences = spanProvenance.spans.length;
       const active = isEntityActive(entity, selectedCategories, excludedEntityKeys);
+      const replaced = Boolean(active && replacement);
+      const override = surfaceOverrides[mapKey] || null;
+      const overrideNote = describeSurfaceOverride(override);
       const line = formatValueDecisionLine({
         category,
         customCategories,
@@ -225,14 +313,38 @@ export function createAuditReport({
         replacement,
         occurrences,
         provenance: spanProvenance,
-        status: active && replacement ? "replaced" : "excluded",
+        status: replaced ? "replaced" : "excluded",
+        overrideNote,
       });
 
-      if (!active || !replacement) {
+      let statusLabel = "excluded";
+      if (replaced) {
+        if (override?.kind === "custom") {
+          statusLabel = "custom override";
+        } else if (override?.kind === "method") {
+          statusLabel = `method override (${normalizeReplacementMethod(override.method)})`;
+        } else {
+          statusLabel = "replaced";
+        }
+      }
+
+      correspondenceRows.push({
+        categoryLabel: getCategoryLabel(category, customCategories),
+        original: entity.text,
+        replacement: replaced ? replacement : "(unchanged / non remplacé)",
+        status: statusLabel,
+        comment: String(override?.comment || "").trim(),
+      });
+
+      if (!replaced) {
         if (selectedCategories[category]) {
           excludedValues.push(line);
         }
         return;
+      }
+
+      if (override?.kind === "custom" || override?.kind === "method") {
+        customOverrideReplacements.push(line);
       }
 
       if (spanProvenance.manualSpans.length && spanProvenance.machineSpans.length) {
@@ -243,6 +355,13 @@ export function createAuditReport({
         automaticReplacements.push(line);
       }
     });
+  });
+
+  // Stable reading order for the mapping table: category, then original value.
+  correspondenceRows.sort((left, right) => {
+    const byCategory = left.categoryLabel.localeCompare(right.categoryLabel);
+    if (byCategory) return byCategory;
+    return String(left.original).localeCompare(String(right.original));
   });
 
   const formatSection = (lines, fallback) => lines.join("\n") || fallback;
@@ -289,6 +408,11 @@ ${customCategoryLines.length ? `- Custom categories defined during review:\n${cu
 ## Category Decisions
 ${replacementSummary || "- No entities detected"}
 
+## Correspondence Table / Table de correspondance
+One-to-one mapping used to build the anonymized text (same unique value → same replacement within this document).
+
+${formatCorrespondenceTable(correspondenceRows)}
+
 ## Automatic Detections — Values Replaced
 ${formatSection(automaticReplacements, "- None")}
 
@@ -299,6 +423,10 @@ ${formatSection(manualReplacements, "- None")}
 Values below contain both automatic detections and manual review spans for the same category/value.
 ${formatSection(mixedReplacements, "- None")}
 
+## Per-value Overrides (Custom Text or Method)
+Values edited in the anonymized preview (custom typed replacement, or a method different from the category default). These are authoritative for the correspondence table.
+${formatSection(customOverrideReplacements, "- None")}
+
 ## Values Excluded from Anonymization
 These values were detected or added during review but toggled off for replacement.
 ${formatSection(excludedValues, "- None")}
@@ -308,7 +436,7 @@ All annotated spans in source order with exact character positions.
 ${formatSection(spanIndexLines, "- None")}
 
 ## Replacement Method
-Selected entity categories were replaced with stable category placeholders, for example [PER_1], [LOC_1], [DAT_1], and [EMA_1]. Replacements are applied consistently for each unique value within the current text. Each line above records span counts, character offsets, and whether spans came from automatic detection or human manual review.
+Replacements follow the per-category method chosen in the anonymized preview (Placeholder / Level 1–3 generalization / Mask), unless a per-value override was set (custom typed text or a different method for that value). Levels 1–3 use local hierarchical rules only (structural for age/date/contact; heuristics for other categories). The correspondence table above is the authoritative mapping, including custom overrides.
 
 ## Categories Replaced
 ${selected.map((category) => `- ${getCategoryLabel(category, customCategories)}`).join("\n") || "- None"}
