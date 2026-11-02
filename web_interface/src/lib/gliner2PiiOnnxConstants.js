@@ -13,7 +13,9 @@ export const GLINER2_PII_ONNX_CACHE_NAME = "incognito-gliner2-pii-onnx-v1";
 export const GLINER2_PII_ONNX_DEFAULT_THRESHOLD = 0.3;
 export const GLINER2_PII_ONNX_MAX_WIDTH = 8;
 
-/** Basic-mode engine ids. */
-export const BASIC_NER_ENGINE_MULTI = "gliner2-multi";
+/** Basic/Advanced NER engine ids (browser ONNX). */
 export const BASIC_NER_ENGINE_PII_ONNX = "gliner2-pii-onnx";
-export const BASIC_NER_ENGINE_DEFAULT = BASIC_NER_ENGINE_MULTI;
+export const BASIC_NER_ENGINE_CAMEMBERT = "camembert-dates";
+export const BASIC_NER_ENGINE_MULTI = "gliner2-multi";
+/** Prefer the lighter PII model by default. */
+export const BASIC_NER_ENGINE_DEFAULT = BASIC_NER_ENGINE_PII_ONNX;

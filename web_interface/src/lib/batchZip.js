@@ -6,6 +6,24 @@ import {
   formatBatchOutputTimestamp,
 } from "./entityUtils.js";
 
+function writeOutputFiles(root, names, outputs) {
+  if (outputs.originalText != null) {
+    root.file(names.original, outputs.originalText);
+  }
+  root.file(names.anonymized, outputs.anonymizedText);
+  root.file(names.report, outputs.auditReport);
+  root.file(names.labelStudio, outputs.labelStudioJson);
+  if (outputs.correspondenceCsv) {
+    root.file(names.correspondence, outputs.correspondenceCsv);
+  }
+  if (outputs.personGraphCsv) {
+    root.file(names.personGraph, outputs.personGraphCsv);
+  }
+  if (outputs.personGraphByPersonCsv) {
+    root.file(names.personGraphByPerson, outputs.personGraphByPersonCsv);
+  }
+}
+
 export async function downloadBatchZip({
   files,
   fileStates,
@@ -15,6 +33,8 @@ export async function downloadBatchZip({
   replacementStyle,
   categoryMethods,
   generalizationLadders = {},
+  includePersonGraph = true,
+  surfaceOverrides = {},
 }) {
   const folderName = outputLabel || `outputs-${formatBatchOutputTimestamp()}`;
   const zip = new JSZip();
@@ -31,6 +51,10 @@ export async function downloadBatchZip({
     const customCategories = savedState?.customCategories ?? {};
     const modelName = savedState?.modelName ?? null;
     const modified = savedState?.outputsModified ?? false;
+    const relations = savedState?.relations || [];
+    const excludedPlaceholders = savedState?.excludedPlaceholders || {};
+    const excludedSurfaces = savedState?.excludedSurfaces || {};
+    const fileSurfaceOverrides = savedState?.surfaceOverrides || surfaceOverrides;
 
     const buildOutputs =
       buildFileOutputs ||
@@ -41,9 +65,10 @@ export async function downloadBatchZip({
           replacementStyle,
           categoryMethods,
           generalizationLadders,
+          includePersonGraph,
         }));
 
-    const { anonymizedText, auditReport, labelStudioJson } = buildOutputs({
+    const outputs = buildOutputs({
       sourceFileName: file.name,
       fileText,
       entities: fileEntities,
@@ -54,12 +79,15 @@ export async function downloadBatchZip({
       replacementStyle,
       categoryMethods,
       generalizationLadders,
+      relations,
+      excludedPlaceholders,
+      excludedSurfaces,
+      surfaceOverrides: fileSurfaceOverrides,
+      includePersonGraph,
     });
 
     const names = buildBatchOutputFileNames(file.name, modified);
-    root.file(names.anonymized, anonymizedText);
-    root.file(names.report, auditReport);
-    root.file(names.labelStudio, labelStudioJson);
+    writeOutputFiles(root, names, outputs);
   }
 
   const blob = await zip.generateAsync({ type: "blob" });
@@ -69,6 +97,47 @@ export async function downloadBatchZip({
   link.download = `${folderName}.zip`;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Single-document export package (non-batch): anonymized text, audit report,
+ * correspondence CSV, original text, and person-graph CSVs when available.
+ */
+export async function downloadSingleExportZip({
+  baseName,
+  originalText,
+  anonymizedText,
+  auditReport,
+  correspondenceCsv,
+  personGraphCsv = "",
+  personGraphByPersonCsv = "",
+  labelStudioJson = null,
+}) {
+  const stamp = formatBatchOutputTimestamp();
+  const folderName = `${baseName || "incognito-export"}-${stamp}`;
+  const zip = new JSZip();
+  const root = zip.folder(folderName);
+  const names = buildBatchOutputFileNames(`${baseName || "document"}.txt`, false);
+
+  writeOutputFiles(root, names, {
+    originalText: originalText ?? "",
+    anonymizedText: anonymizedText ?? "",
+    auditReport: auditReport ?? "",
+    labelStudioJson: labelStudioJson || "{}",
+    correspondenceCsv,
+    personGraphCsv,
+    personGraphByPersonCsv,
+  });
+  root.file("label-studio-ner-config.xml", LABEL_STUDIO_NER_CONFIG);
+
+  const blob = await zip.generateAsync({ type: "blob" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${folderName}.zip`;
+  link.click();
+  URL.revokeObjectURL(url);
+  return folderName;
 }
 
 export function downloadLabelStudioBundle({ jsonContent, defaultBaseName }) {

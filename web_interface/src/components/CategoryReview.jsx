@@ -48,23 +48,26 @@ export default function CategoryReview({
             <div className="entity-chips">
               {groupedEntities[category].map((entity, entityIndex) => {
                 const occurrenceCount = countEntitySpans(entities, category, entity.text);
-                const active =
+                // True when this value will be anonymized in the preview.
+                const anonymized =
                   categoryActive &&
                   !excludedEntityKeys[getEntityValueKey(category, entity.text)];
 
                 return (
                   <button
                     type="button"
-                    className={`chip ${getCategoryChipClass(category)} ${active ? "chip-active" : "chip-inactive"}`}
+                    className={`chip ${getCategoryChipClass(category)} ${
+                      anonymized ? "chip-inactive" : "chip-active"
+                    }`}
                     key={entity.key || `${category}:${entity.text}:${entityIndex}`}
                     onClick={() => onToggleEntity(category, entity.text)}
                     title={
-                      active
+                      anonymized
                         ? t("personGraphVisibilityAnonymizedTitle")
                         : t("personGraphVisibilityShownTitle")
                     }
                   >
-                    <VisibilityIcon shown={!active} size={13} />
+                    <VisibilityIcon shown={!anonymized} size={13} />
                     <span className="chip-label">{entity.text}</span>
                     <span className="chip-count">{occurrenceCount}</span>
                   </button>

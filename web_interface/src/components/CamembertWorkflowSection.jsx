@@ -11,7 +11,12 @@ import { useUiLocale } from "../context/UiLocaleContext.jsx";
 import { useSyncedScroll } from "../hooks/useSyncedScroll.js";
 import { createLabelStudioExport } from "../labelStudioExport.js";
 import { createAuditReport } from "../lib/auditReport.js";
-import { downloadBatchZip, downloadLabelStudioBundle } from "../lib/batchZip.js";
+import { downloadBatchZip, downloadLabelStudioBundle, downloadSingleExportZip } from "../lib/batchZip.js";
+import { buildCorrespondenceCsv } from "../lib/correspondenceExport.js";
+import {
+  buildPersonGraphByPersonCsv,
+  buildPersonGraphCsv,
+} from "../lib/personGraphCsv.js";
 import {
   BATCH_EMPTY_MESSAGE,
   batchSourceLabel,
@@ -31,6 +36,7 @@ import {
   GLINER2_MULTI_MODEL_ID,
 } from "../lib/gliner2MultiConstants.js";
 import {
+  BASIC_NER_ENGINE_CAMEMBERT,
   BASIC_NER_ENGINE_DEFAULT,
   BASIC_NER_ENGINE_MULTI,
   BASIC_NER_ENGINE_PII_ONNX,
@@ -38,7 +44,9 @@ import {
   GLINER2_PII_ONNX_HF_URL,
   GLINER2_PII_ONNX_MODEL_ID,
 } from "../lib/gliner2PiiOnnxConstants.js";
+import { NER_MODEL_IDS } from "../lib/constants.js";
 import { GLINER_LABELS, GLINER_RULE_LABELS } from "../lib/glinerConstants.js";
+import { useNerWorker } from "../hooks/useNerWorker.js";
 import { useGeneralizationLadders } from "../hooks/useGeneralizationLadders.js";
 import { usePersonGraphPanel } from "../hooks/usePersonGraphPanel.js";
 import {
@@ -124,15 +132,21 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
   const [activeLabels, setActiveLabels] = useState(() => new Set(GLINER_LABELS));
   const [customDetectionLabels, setCustomDetectionLabels] = useState([]);
   const [newLabelDraft, setNewLabelDraft] = useState("");
-  /** Browser ONNX NER for Basic and Advanced (GLiNER2-multi or GLiNER2-PII). */
+  /** Browser ONNX NER for Basic and Advanced (PII, CamemBERT, or GLiNER2-multi). */
   const [nerEngine, setNerEngine] = useState(BASIC_NER_ENGINE_DEFAULT);
   const activeNerEngine = nerEngine;
-  const [threshold, setThreshold] = useState(GLINER2_MULTI_DEFAULT_THRESHOLD);
+  const usesGlinerLabels =
+    activeNerEngine === BASIC_NER_ENGINE_MULTI || activeNerEngine === BASIC_NER_ENGINE_PII_ONNX;
+  const [threshold, setThreshold] = useState(GLINER2_PII_ONNX_DEFAULT_THRESHOLD);
+  const { detectEntities: detectWithCamembert, progressItems: camembertProgressItems } =
+    useNerWorker();
   const [isEditingSource, setIsEditingSource] = useState(false);
   const [categoryMethods, setCategoryMethods] = useState({});
   const [surfaceOverrides, setSurfaceOverrides] = useState({});
   const [anonymizedTextOverride, setAnonymizedTextOverride] = useState(null);
   const [showAnonymizedPersonGraph, setShowAnonymizedPersonGraph] = useState(true);
+  const [isRegeneratingPersonGraph, setIsRegeneratingPersonGraph] = useState(false);
+  const [isExportingPackage, setIsExportingPackage] = useState(false);
 
   const {
     persons,
@@ -201,9 +215,24 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
         id: GLINER2_PII_ONNX_MODEL_ID,
         hfUrl: GLINER2_PII_ONNX_HF_URL,
         shortNameKey: "gliner2PiiOnnxShortName",
-        downloadHint: "Running GLiNER2-PII ONNX in the browser (first run downloads ~426 MB quantized into cache)…",
+        downloadHint:
+          "Running GLiNER2-PII ONNX in the browser (first run downloads ~426 MB quantized into cache)…",
         downloadLabel: "GLiNER2-PII",
         detectLabel: "GLiNER2-PII",
+        speedKey: "basicNerModelSpeedFast",
+      };
+    }
+    if (activeNerEngine === BASIC_NER_ENGINE_CAMEMBERT) {
+      const modelId = NER_MODEL_IDS["camembert-dates"];
+      return {
+        id: modelId,
+        hfUrl: `https://huggingface.co/${modelId}`,
+        shortNameKey: "camembertShortName",
+        downloadHint:
+          "Running CamemBERT NER in the browser (first run downloads ONNX weights into cache)…",
+        downloadLabel: "CamemBERT",
+        detectLabel: "CamemBERT",
+        speedKey: "basicNerModelSpeedFast",
       };
     }
     return {
@@ -214,16 +243,17 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
         "Running GLiNER2-multi in the browser (first run downloads ~614 MB fp16 ONNX into cache)…",
       downloadLabel: "GLiNER2-multi",
       detectLabel: "GLiNER2-multi",
+      speedKey: "basicNerModelSpeedMedium",
     };
   }, [activeNerEngine]);
 
   function handleNerEngineChange(nextEngine) {
     setNerEngine(nextEngine);
-    setThreshold(
-      nextEngine === BASIC_NER_ENGINE_PII_ONNX
-        ? GLINER2_PII_ONNX_DEFAULT_THRESHOLD
-        : GLINER2_MULTI_DEFAULT_THRESHOLD,
-    );
+    if (nextEngine === BASIC_NER_ENGINE_PII_ONNX) {
+      setThreshold(GLINER2_PII_ONNX_DEFAULT_THRESHOLD);
+    } else if (nextEngine === BASIC_NER_ENGINE_MULTI) {
+      setThreshold(GLINER2_MULTI_DEFAULT_THRESHOLD);
+    }
   }
 
   async function runSelectedNerDetection({ text: sourceText, onProgress }) {
@@ -236,6 +266,9 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
         onProgress,
       });
     }
+    if (activeNerEngine === BASIC_NER_ENGINE_CAMEMBERT) {
+      return detectWithCamembert(sourceText, BASIC_NER_ENGINE_CAMEMBERT);
+    }
     const { runGliner2MultiDetection } = await import("../lib/gliner2MultiService.js");
     return runGliner2MultiDetection({
       text: sourceText,
@@ -244,6 +277,20 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
       onProgress,
     });
   }
+
+  useEffect(() => {
+    if (!isDetecting || activeNerEngine !== BASIC_NER_ENGINE_CAMEMBERT) {
+      return;
+    }
+    const active = camembertProgressItems.find(
+      (item) => typeof item.progress === "number" && item.progress < 100,
+    );
+    if (!active) {
+      return;
+    }
+    const pct = Math.round(Number(active.progress) || 0);
+    setStatus(`Downloading CamemBERT (${active.file || active.name || "model"}) ${pct}%…`);
+  }, [isDetecting, activeNerEngine, camembertProgressItems]);
 
   // Split preview syncs its own panes; dual sync on previewScrollRef crashes Chromium.
   useSyncedScroll(sourceScrollRef, previewScrollRef, false);
@@ -502,6 +549,9 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
       customCategories,
       outputsModified: currentFileOutputsModified,
       relations: fileStatesRef.current[currentFile.id]?.relations || [],
+      excludedPlaceholders,
+      excludedSurfaces,
+      surfaceOverrides,
     };
   }
 
@@ -553,7 +603,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
       return null;
     }
 
-    if (!selectedDetectionLabels.length) {
+    if (usesGlinerLabels && !selectedDetectionLabels.length) {
       setError(t("glinerStatusNoLabels"));
       setStatus(t("glinerStatusNoLabels"));
       return null;
@@ -594,15 +644,18 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
       let relations = [];
       let graphNote = "";
       if (showPersonGraph) {
-        setStatus("Linking person graph with GLiNER ReLex…");
+        setStatus(t("personGraphRegenerateStatus"));
         const { extractGlinerRelexRelations } = await import("../lib/glinerRelexService.js");
-        graphNote = "ReLex graph";
+        graphNote = "person graph";
         try {
           relations = await extractGlinerRelexRelations(textToAnalyze, normalized, (progress) => {
             if (progress?.phase === "download") {
               const pct =
                 typeof progress.percent === "number" ? ` ${Math.round(progress.percent)}%` : "";
-              setStatus(`Downloading GLiNER ReLex (${progress.file || "model"})${pct}…`);
+              setStatus(
+                t("personGraphRelexLoading") +
+                  (progress.file ? ` (${progress.file}${pct})` : pct ? ` ${pct}` : ""),
+              );
             }
           });
           applyRelexPersonGraph(textToAnalyze, normalized, relations, { resetExclusions: true });
@@ -1055,6 +1108,9 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
         modelName,
         customCategories,
         outputsModified: true,
+        excludedPlaceholders,
+        excludedSurfaces,
+        surfaceOverrides,
       };
     }
 
@@ -1072,7 +1128,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     }
 
     setIsDownloadingZip(true);
-    setStatus("Building ZIP archive…");
+    setStatus(t("buildingZip"));
 
     try {
       await downloadBatchZip({
@@ -1082,13 +1138,57 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
         outputLabel: batchOutputLabel,
         categoryMethods,
         generalizationLadders,
+        includePersonGraph: showPersonGraph,
+        surfaceOverrides,
       });
-      setStatus(`Downloaded ${batchOutputLabel}.zip with anonymized outputs and reports.`);
+      setStatus(t("exportBatchDone"));
     } catch (caughtError) {
       setError(caughtError.message);
       setStatus("ZIP download failed.");
     } finally {
       setIsDownloadingZip(false);
+    }
+  }
+
+  async function exportEverythingPackage() {
+    if (!entities.length || isExportingPackage || batchMode) {
+      return;
+    }
+    setIsExportingPackage(true);
+    setStatus(t("buildingZip"));
+    try {
+      const graphOptions = { excludedPlaceholders, excludedSurfaces };
+      await downloadSingleExportZip({
+        baseName: "incognito-export",
+        originalText: text,
+        anonymizedText,
+        auditReport,
+        correspondenceCsv: buildCorrespondenceCsv({
+          text,
+          entities,
+          groupedEntities,
+          selectedCategories,
+          excludedEntityKeys,
+          customCategories,
+          categoryMethods,
+          generalizationLadders,
+          persons,
+          surfaceOverrides,
+        }),
+        personGraphCsv: showPersonGraph && persons.length
+          ? buildPersonGraphCsv(persons, graphOptions)
+          : "",
+        personGraphByPersonCsv: showPersonGraph && persons.length
+          ? buildPersonGraphByPersonCsv(persons, graphOptions)
+          : "",
+        labelStudioJson,
+      });
+      setStatus(t("exportEverythingDone"));
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : String(caughtError));
+      setStatus("Export failed.");
+    } finally {
+      setIsExportingPackage(false);
     }
   }
 
@@ -1344,6 +1444,55 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     setStatus(`Removed entity "${entityMenu.entity.text}".`);
   }
 
+  async function handleRegeneratePersonGraph() {
+    if (!showPersonGraph || isRegeneratingPersonGraph || !entities.length) {
+      return;
+    }
+    setIsRegeneratingPersonGraph(true);
+    // Leave demo fixture mode so regenerate re-links from the current entities.
+    setIsDemoMode(false);
+    setStatus(t("personGraphRegenerateStatus"));
+    try {
+      const { extractGlinerRelexRelations } = await import("../lib/glinerRelexService.js");
+      const relations = await extractGlinerRelexRelations(text, entities, (progress) => {
+        if (progress?.phase === "download") {
+          const pct =
+            typeof progress.percent === "number" ? ` ${Math.round(progress.percent)}%` : "";
+          setStatus(
+            `${t("personGraphRegenerateStatus")} (${progress.file || "model"}${pct})`,
+          );
+          return;
+        }
+        if (progress?.phase === "infer") {
+          const step =
+            progress.current && progress.total
+              ? ` ${progress.current}/${progress.total}`
+              : "";
+          setStatus(`${t("personGraphRegenerateStatus")}${step}`);
+        }
+      });
+      applyRelexPersonGraph(text, entities, relations, {
+        resetExclusions: false,
+        fillProximity: true,
+        noteKey: "personGraphRelexReady",
+      });
+      setStatus(t("personGraphRegenerateDone"));
+    } catch (caughtError) {
+      applyRelexPersonGraph(text, entities, [], {
+        resetExclusions: false,
+        fillProximity: true,
+        noteKey: "personGraphRelexFallback",
+      });
+      setStatus(
+        `${t("personGraphRegenerateDone")} (${
+          caughtError instanceof Error ? caughtError.message : String(caughtError)
+        })`,
+      );
+    } finally {
+      setIsRegeneratingPersonGraph(false);
+    }
+  }
+
   const sectionId =
     variant === "basic" ? "basic-ner-section-title" : "camembert-section-title";
 
@@ -1392,7 +1541,16 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
         >
           {t("exportLabelStudio")}
         </button>
-        {batchMode ? (
+        {!batchMode ? (
+          <button
+            className="secondary"
+            onClick={() => void exportEverythingPackage()}
+            disabled={!entities.length || isExportingPackage || isDetecting}
+            title={t("exportEverythingHint")}
+          >
+            {isExportingPackage ? t("buildingZip") : t("exportEverything")}
+          </button>
+        ) : (
           <button
             className="secondary"
             onClick={downloadAllBatchOutputs}
@@ -1400,7 +1558,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
           >
             {isDownloadingZip ? t("buildingZip") : t("exportAnonymizedData")}
           </button>
-        ) : null}
+        )}
         {batchMode ? (
           <>
             <button
@@ -1422,19 +1580,21 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
         <button className="secondary" onClick={clearSession} disabled={isBatchLoading}>
           {batchMode ? t("closeBatch") : t("clear")}
         </button>
-        <label className="backend-select gliner-threshold-field">
-          <span>{t("glinerThreshold")}</span>
-          <input
-            type="range"
-            min="0.2"
-            max="0.7"
-            step="0.05"
-            value={threshold}
-            disabled={isDetecting}
-            onChange={(event) => setThreshold(Number(event.target.value))}
-          />
-          <span className="gliner-threshold-value">{threshold.toFixed(2)}</span>
-        </label>
+        {usesGlinerLabels ? (
+          <label className="backend-select gliner-threshold-field">
+            <span>{t("glinerThreshold")}</span>
+            <input
+              type="range"
+              min="0.2"
+              max="0.7"
+              step="0.05"
+              value={threshold}
+              disabled={isDetecting}
+              onChange={(event) => setThreshold(Number(event.target.value))}
+            />
+            <span className="gliner-threshold-value">{threshold.toFixed(2)}</span>
+          </label>
+        ) : null}
         <span className="status">{status}</span>
       </section>
 
@@ -1597,28 +1757,6 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
             <input
               type="radio"
               name={`ner-engine-${variant}`}
-              value={BASIC_NER_ENGINE_MULTI}
-              checked={nerEngine === BASIC_NER_ENGINE_MULTI}
-              disabled={isDetecting}
-              onChange={() => handleNerEngineChange(BASIC_NER_ENGINE_MULTI)}
-            />
-            <span>
-              {t("basicNerModelMultiOption")}{" "}
-              <a
-                className="model-hub-link"
-                href={GLINER2_MULTI_HF_URL}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(event) => event.stopPropagation()}
-              >
-                {t("gliner2MultiShortName")}
-              </a>
-            </span>
-          </label>
-          <label className="basic-ner-engine-option">
-            <input
-              type="radio"
-              name={`ner-engine-${variant}`}
               value={BASIC_NER_ENGINE_PII_ONNX}
               checked={nerEngine === BASIC_NER_ENGINE_PII_ONNX}
               disabled={isDetecting}
@@ -1635,11 +1773,59 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
               >
                 {t("gliner2PiiOnnxShortName")}
               </a>
+              <span className="basic-ner-engine-speed">{t("basicNerModelSpeedFast")}</span>
+            </span>
+          </label>
+          <label className="basic-ner-engine-option">
+            <input
+              type="radio"
+              name={`ner-engine-${variant}`}
+              value={BASIC_NER_ENGINE_CAMEMBERT}
+              checked={nerEngine === BASIC_NER_ENGINE_CAMEMBERT}
+              disabled={isDetecting}
+              onChange={() => handleNerEngineChange(BASIC_NER_ENGINE_CAMEMBERT)}
+            />
+            <span>
+              {t("basicNerModelCamembertOption")}{" "}
+              <a
+                className="model-hub-link"
+                href={`https://huggingface.co/${NER_MODEL_IDS["camembert-dates"]}`}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {t("camembertShortName")}
+              </a>
+              <span className="basic-ner-engine-speed">{t("basicNerModelSpeedFast")}</span>
+            </span>
+          </label>
+          <label className="basic-ner-engine-option">
+            <input
+              type="radio"
+              name={`ner-engine-${variant}`}
+              value={BASIC_NER_ENGINE_MULTI}
+              checked={nerEngine === BASIC_NER_ENGINE_MULTI}
+              disabled={isDetecting}
+              onChange={() => handleNerEngineChange(BASIC_NER_ENGINE_MULTI)}
+            />
+            <span>
+              {t("basicNerModelMultiOption")}{" "}
+              <a
+                className="model-hub-link"
+                href={GLINER2_MULTI_HF_URL}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {t("gliner2MultiShortName")}
+              </a>
+              <span className="basic-ner-engine-speed">{t("basicNerModelSpeedMedium")}</span>
             </span>
           </label>
         </div>
       </div>
 
+      {usesGlinerLabels ? (
       <div className="panel gliner-labels-panel">
         <div className="panel-header">
           <h3>{t("glinerLabelsTitle")}</h3>
@@ -1703,6 +1889,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
           {t("basicLabelsFootnoteAfter")}
         </p>
       </div>
+      ) : null}
 
       {error ? (
         <section className="error-card">
@@ -1864,6 +2051,17 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
             <div className="panel-header">
               <h2>{t("generativeGraphTitle")}</h2>
               <div className="panel-header-actions">
+                <button
+                  type="button"
+                  className="secondary person-graph-export"
+                  onClick={() => void handleRegeneratePersonGraph()}
+                  disabled={!entities.length || isRegeneratingPersonGraph || isDetecting}
+                  title={t("personGraphRegenerateHint")}
+                >
+                  {isRegeneratingPersonGraph
+                    ? t("personGraphRegenerateStatus")
+                    : t("personGraphRegenerate")}
+                </button>
                 <PersonGraphViewButton
                   persons={persons}
                   excludedPlaceholders={excludedPlaceholders}
@@ -2110,6 +2308,9 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
               excludedPlaceholders={excludedPlaceholders}
               excludedSurfaces={excludedSurfaces}
               onHide={() => setShowAnonymizedPersonGraph(false)}
+              onRegenerate={() => void handleRegeneratePersonGraph()}
+              isRegenerating={isRegeneratingPersonGraph}
+              canRegenerate={Boolean(entities.length) && !isDetecting}
               onRenameEdgeValue={(placeholder, kind, currentValue, nextValue) => {
                 const person = anonymizedPersons.find(
                   (item) => item.placeholder === placeholder,

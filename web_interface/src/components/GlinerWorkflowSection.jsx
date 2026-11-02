@@ -16,8 +16,13 @@ import { usePersonGraphPanel } from "../hooks/usePersonGraphPanel.js";
 import { useSyncedScroll } from "../hooks/useSyncedScroll.js";
 import { createLabelStudioExport } from "../labelStudioExport.js";
 import { createAuditReport } from "../lib/auditReport.js";
-import { downloadBatchZip, downloadLabelStudioBundle } from "../lib/batchZip.js";
+import { downloadBatchZip, downloadLabelStudioBundle, downloadSingleExportZip } from "../lib/batchZip.js";
 import { buildGlinerBatchFileOutputs } from "../lib/glinerBatchOutputs.js";
+import { buildCorrespondenceCsv } from "../lib/correspondenceExport.js";
+import {
+  buildPersonGraphByPersonCsv,
+  buildPersonGraphCsv,
+} from "../lib/personGraphCsv.js";
 import {
   BATCH_EMPTY_MESSAGE,
   batchSourceLabel,
@@ -94,6 +99,7 @@ export default function GlinerWorkflowSection() {
   const [surfaceOverrides, setSurfaceOverrides] = useState({});
   const [anonymizedTextOverride, setAnonymizedTextOverride] = useState(null);
   const [showAnonymizedPersonGraph, setShowAnonymizedPersonGraph] = useState(true);
+  const [isRegeneratingPersonGraph, setIsRegeneratingPersonGraph] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState(initialDemo.selectedCategories);
   const [excludedEntityKeys, setExcludedEntityKeys] = useState(initialDemo.excludedEntityKeys);
   const [reportOpen, setReportOpen] = useState(false);
@@ -101,6 +107,7 @@ export default function GlinerWorkflowSection() {
   const [isBatchLoading, setIsBatchLoading] = useState(false);
   const [batchJobProgress, setBatchJobProgress] = useState(null);
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+  const [isExportingPackage, setIsExportingPackage] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
   const [batchFolderLabel, setBatchFolderLabel] = useState(null);
   const [batchOutputLabel, setBatchOutputLabel] = useState(null);
@@ -377,6 +384,9 @@ export default function GlinerWorkflowSection() {
       customCategories,
       outputsModified: currentFileOutputsModified,
       relations: fileStatesRef.current[currentFile.id]?.relations || [],
+      excludedPlaceholders,
+      excludedSurfaces,
+      surfaceOverrides,
     };
   }
 
@@ -782,11 +792,14 @@ export default function GlinerWorkflowSection() {
         modelName,
         customCategories,
         outputsModified: true,
+        excludedPlaceholders,
+        excludedSurfaces,
+        surfaceOverrides,
       };
     }
 
     setIsDownloadingZip(true);
-    setStatus("Building ZIP archive…");
+    setStatus(t("buildingZip"));
 
     try {
       await downloadBatchZip({
@@ -794,16 +807,63 @@ export default function GlinerWorkflowSection() {
         fileStates: fileStatesRef.current,
         outputLabel: batchOutputLabel,
         buildFileOutputs: (params) =>
-          buildGlinerBatchFileOutputs({ ...params, categoryMethods, generalizationLadders }),
+          buildGlinerBatchFileOutputs({
+            ...params,
+            categoryMethods,
+            generalizationLadders,
+            includePersonGraph: true,
+          }),
         categoryMethods,
         generalizationLadders,
+        includePersonGraph: true,
+        surfaceOverrides,
       });
-      setStatus(`Downloaded ${batchOutputLabel}.zip with anonymized outputs and reports.`);
+      setStatus(t("exportBatchDone"));
     } catch (caughtError) {
       setError(caughtError.message);
       setStatus("ZIP download failed.");
     } finally {
       setIsDownloadingZip(false);
+    }
+  }
+
+  async function exportEverythingPackage() {
+    if (!entities.length || isExportingPackage || batchMode) {
+      return;
+    }
+    setIsExportingPackage(true);
+    setStatus(t("buildingZip"));
+    try {
+      const graphOptions = { excludedPlaceholders, excludedSurfaces };
+      await downloadSingleExportZip({
+        baseName: "incognito-export",
+        originalText: text,
+        anonymizedText,
+        auditReport,
+        correspondenceCsv: buildCorrespondenceCsv({
+          text,
+          entities,
+          groupedEntities,
+          selectedCategories,
+          excludedEntityKeys,
+          customCategories,
+          categoryMethods,
+          generalizationLadders,
+          persons,
+          surfaceOverrides,
+        }),
+        personGraphCsv: persons.length ? buildPersonGraphCsv(persons, graphOptions) : "",
+        personGraphByPersonCsv: persons.length
+          ? buildPersonGraphByPersonCsv(persons, graphOptions)
+          : "",
+        labelStudioJson,
+      });
+      setStatus(t("exportEverythingDone"));
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : String(caughtError));
+      setStatus("Export failed.");
+    } finally {
+      setIsExportingPackage(false);
     }
   }
 
@@ -1044,6 +1104,55 @@ export default function GlinerWorkflowSection() {
     setStatus(`Removed entity "${entityMenu.entity.text}".`);
   }
 
+  async function handleRegeneratePersonGraph() {
+    if (isRegeneratingPersonGraph || !entities.length) {
+      return;
+    }
+    setIsRegeneratingPersonGraph(true);
+    // Leave demo fixture mode so regenerate re-links from the current entities.
+    setIsDemoMode(false);
+    setStatus(t("personGraphRegenerateStatus"));
+    try {
+      const { extractGlinerRelexRelations } = await import("../lib/glinerRelexService.js");
+      const relations = await extractGlinerRelexRelations(text, entities, (progress) => {
+        if (progress?.phase === "download") {
+          const pct =
+            typeof progress.percent === "number" ? ` ${Math.round(progress.percent)}%` : "";
+          setStatus(
+            `${t("personGraphRegenerateStatus")} (${progress.file || "model"}${pct})`,
+          );
+          return;
+        }
+        if (progress?.phase === "infer") {
+          const step =
+            progress.current && progress.total
+              ? ` ${progress.current}/${progress.total}`
+              : "";
+          setStatus(`${t("personGraphRegenerateStatus")}${step}`);
+        }
+      });
+      applyRelexPersonGraph(text, entities, relations, {
+        resetExclusions: false,
+        fillProximity: true,
+        noteKey: "personGraphRelexReady",
+      });
+      setStatus(t("personGraphRegenerateDone"));
+    } catch (caughtError) {
+      applyRelexPersonGraph(text, entities, [], {
+        resetExclusions: false,
+        fillProximity: true,
+        noteKey: "personGraphRelexFallback",
+      });
+      setStatus(
+        `${t("personGraphRegenerateDone")} (${
+          caughtError instanceof Error ? caughtError.message : String(caughtError)
+        })`,
+      );
+    } finally {
+      setIsRegeneratingPersonGraph(false);
+    }
+  }
+
   return (
     <section className="workflow-section gliner-section" aria-labelledby="gliner-section-title">
       <WorkflowSectionHeader
@@ -1081,7 +1190,16 @@ export default function GlinerWorkflowSection() {
         >
           {t("exportLabelStudio")}
         </button>
-        {batchMode ? (
+        {!batchMode ? (
+          <button
+            className="secondary"
+            onClick={() => void exportEverythingPackage()}
+            disabled={!entities.length || isExportingPackage || isDetecting}
+            title={t("exportEverythingHint")}
+          >
+            {isExportingPackage ? t("buildingZip") : t("exportEverything")}
+          </button>
+        ) : (
           <button
             className="secondary"
             onClick={downloadAllBatchOutputs}
@@ -1089,7 +1207,7 @@ export default function GlinerWorkflowSection() {
           >
             {isDownloadingZip ? t("buildingZip") : t("exportAnonymizedData")}
           </button>
-        ) : null}
+        )}
         {batchMode ? (
           <>
             <button
@@ -1391,6 +1509,17 @@ export default function GlinerWorkflowSection() {
           <div className="panel-header">
             <h2>{t("generativeGraphTitle")}</h2>
             <div className="panel-header-actions">
+              <button
+                type="button"
+                className="secondary person-graph-export"
+                onClick={() => void handleRegeneratePersonGraph()}
+                disabled={!entities.length || isRegeneratingPersonGraph || isDetecting}
+                title={t("personGraphRegenerateHint")}
+              >
+                {isRegeneratingPersonGraph
+                  ? t("personGraphRegenerateStatus")
+                  : t("personGraphRegenerate")}
+              </button>
               <PersonGraphViewButton
                 persons={persons}
                 excludedPlaceholders={excludedPlaceholders}
@@ -1618,6 +1747,9 @@ export default function GlinerWorkflowSection() {
               excludedPlaceholders={excludedPlaceholders}
               excludedSurfaces={excludedSurfaces}
               onHide={() => setShowAnonymizedPersonGraph(false)}
+              onRegenerate={() => void handleRegeneratePersonGraph()}
+              isRegenerating={isRegeneratingPersonGraph}
+              canRegenerate={Boolean(entities.length) && !isDetecting}
               onRenameEdgeValue={(placeholder, kind, currentValue, nextValue) => {
                 const person = anonymizedPersons.find(
                   (item) => item.placeholder === placeholder,

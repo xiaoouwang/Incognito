@@ -1445,6 +1445,19 @@ h2 {
   margin-top: 0.2rem;
 }
 
+.basic-ner-engine-speed {
+  color: #697386;
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-left: 0.35rem;
+  white-space: nowrap;
+}
+
+.basic-ner-engine-speed::before {
+  content: "· ";
+  font-weight: 500;
+}
+
 .gliner-labels-panel {
   padding: 0;
 }
@@ -1820,6 +1833,7 @@ textarea {
   text-align: center;
 }
 
+/* Anonymized values: muted + strikethrough. Kept-visible (chip-active) stay highlighted. */
 .chip-inactive {
   color: #697386;
   opacity: 0.82;
@@ -1828,12 +1842,6 @@ textarea {
 
 .chip-inactive .chip-count {
   background: rgba(105, 115, 134, 0.15);
-}
-
-.category-card:has(.category-visibility.is-shown) .chip {
-  color: #697386;
-  opacity: 0.82;
-  text-decoration: line-through;
 }
 
 .category-hint {

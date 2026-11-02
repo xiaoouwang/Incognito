@@ -32,6 +32,12 @@ const en = {
   exportLabelStudio: "Export to Label Studio",
   buildingZip: "Building ZIP...",
   exportAnonymizedData: "Export anonymized data",
+  exportEverything: "Export everything",
+  exportEverythingHint:
+    "Download a ZIP with original text, anonymized text, correspondence table, audit report, and person-graph CSVs when available",
+  exportEverythingDone: "Downloaded export package.",
+  exportBatchDone:
+    "Downloaded ZIP with original text, anonymized outputs, correspondence tables, audit reports, and person-graph CSVs.",
   previousFile: "Previous file",
   nextFile: "Next file",
   closeBatch: "Close batch",
@@ -73,10 +79,14 @@ const en = {
   backendLinePrefix: "Backend:",
   gliner2MultiShortName: "GLiNER2-multi",
   gliner2PiiOnnxShortName: "GLiNER2-PII",
+  camembertShortName: "CamemBERT",
   basicNerModelTitle: "Detection model",
   basicNerModelHint: "Runs fully in the browser (first run downloads the ONNX weights into cache)",
-  basicNerModelMultiOption: "GLiNER2-multi (~614 MB fp16)",
   basicNerModelPiiOption: "GLiNER2-PII ONNX (~426 MB quantized)",
+  basicNerModelCamembertOption: "CamemBERT NER + dates (~100–200 MB q8)",
+  basicNerModelMultiOption: "GLiNER2-multi (~614 MB fp16)",
+  basicNerModelSpeedFast: "fast",
+  basicNerModelSpeedMedium: "medium",
   panel3Hint:
     "{count} spans · select text to add (all word matches by default) · click highlight to remove",
   panel4Title: "Anonymized preview",
@@ -146,6 +156,11 @@ const en = {
     "Anonymized person graph exported as CSV (one row per person).",
   anonymizedPersonGraphHide: "Hide",
   anonymizedPersonGraphShow: "Show person graph",
+  personGraphRegenerate: "Regenerate person graph",
+  personGraphRegenerateHint:
+    "Rebuild person links from the current entities — useful after you add or remove spans",
+  personGraphRegenerateStatus: "Updating person graph…",
+  personGraphRegenerateDone: "Person graph regenerated.",
   personGraphView: "Show person graph",
   personGraphViewHint: "Open an interactive force-graph network view over this page",
   personGraphViewControlsHint: "Drag nodes · scroll to zoom · Esc to close",
@@ -243,11 +258,11 @@ const en = {
   personGraphDepReady: "Person graph via French dependency parse (UDPipe)",
   personGraphProximityFallback: "Person graph via proximity (dependency parse unavailable)",
   personGraphRelexLoading:
-    "Building person graph with GLiNER ReLex (downloading ONNX models if needed)…",
-  personGraphRelexReady: "Person graph via GLiNER ReLex ({count} relation(s) applied)",
+    "Updating person graph (downloading models if needed)…",
+  personGraphRelexReady: "Person graph updated ({count} relation(s) applied)",
   personGraphRelexDemoReady:
-    "Person graph from captured ReLex sample ({count} relation(s) — same as model output, no download)",
-  personGraphRelexFallback: "Person graph via proximity (GLiNER ReLex unavailable)",
+    "Person graph from demo sample ({count} relation(s) — same as a live run, no download)",
+  personGraphRelexFallback: "Person graph via proximity (relation model unavailable)",
   personGraphLicenseHint:
     "Dependency parser: UDPipe French-GSD (~23 MB, cached). Model license: CC BY-NC-SA (non-commercial).",
   personGraphRelexLicenseHint:
@@ -514,6 +529,12 @@ const fr = {
   exportLabelStudio: "Exporter vers Label Studio",
   buildingZip: "Création du ZIP…",
   exportAnonymizedData: "Exporter les données anonymisées",
+  exportEverything: "Tout exporter",
+  exportEverythingHint:
+    "Télécharger un ZIP avec le texte original, le texte anonymisé, la table de correspondance, le rapport d’audit et les CSV du graphe de personnes le cas échéant",
+  exportEverythingDone: "Pack d’export téléchargé.",
+  exportBatchDone:
+    "ZIP téléchargé avec texte original, sorties anonymisées, tables de correspondance, rapports d’audit et CSV du graphe de personnes.",
   previousFile: "Fichier précédent",
   nextFile: "Fichier suivant",
   closeBatch: "Fermer le lot",
@@ -554,11 +575,15 @@ const fr = {
   backendLinePrefix: "Moteur :",
   gliner2MultiShortName: "GLiNER2-multi",
   gliner2PiiOnnxShortName: "GLiNER2-PII",
+  camembertShortName: "CamemBERT",
   basicNerModelTitle: "Modèle de détection",
   basicNerModelHint:
     "Tourne entièrement dans le navigateur (premier lancement : téléchargement des poids ONNX en cache)",
-  basicNerModelMultiOption: "GLiNER2-multi (~614 Mo fp16)",
   basicNerModelPiiOption: "GLiNER2-PII ONNX (~426 Mo quantifié)",
+  basicNerModelCamembertOption: "CamemBERT NER + dates (~100–200 Mo q8)",
+  basicNerModelMultiOption: "GLiNER2-multi (~614 Mo fp16)",
+  basicNerModelSpeedFast: "rapide",
+  basicNerModelSpeedMedium: "moyenne",
   backendLine: "Moteur : {backend}",
   panel3Hint:
     "{count} segments · sélectionnez du texte pour ajouter (toutes les occurrences par défaut) · cliquez sur un surlignage pour supprimer",
@@ -630,6 +655,11 @@ const fr = {
     "Graphe anonymisé exporté en CSV (une ligne par personne).",
   anonymizedPersonGraphHide: "Masquer",
   anonymizedPersonGraphShow: "Afficher le graphe",
+  personGraphRegenerate: "Régénérer le graphe",
+  personGraphRegenerateHint:
+    "Reconstruire les liens à partir des entités actuelles — utile après avoir ajouté ou retiré des segments",
+  personGraphRegenerateStatus: "Mise à jour du graphe de personnes…",
+  personGraphRegenerateDone: "Graphe de personnes régénéré.",
   personGraphView: "Afficher le graphe",
   personGraphViewHint: "Ouvrir une vue réseau interactive (force-graph) sur cette page",
   personGraphViewControlsHint: "Glisser les nœuds · molette pour zoomer · Échap pour fermer",
@@ -735,11 +765,11 @@ const fr = {
   personGraphDepReady: "Graphe via analyse en dépendances française (UDPipe)",
   personGraphProximityFallback: "Graphe par proximité (analyse en dépendances indisponible)",
   personGraphRelexLoading:
-    "Construction du graphe avec GLiNER ReLex (téléchargement des modèles ONNX si besoin)…",
-  personGraphRelexReady: "Graphe via GLiNER ReLex ({count} relation(s) appliquée(s))",
+    "Mise à jour du graphe (téléchargement des modèles si besoin)…",
+  personGraphRelexReady: "Graphe mis à jour ({count} relation(s) appliquée(s))",
   personGraphRelexDemoReady:
-    "Graphe issu du sample ReLex capturé ({count} relation(s) — même sortie que le modèle, sans téléchargement)",
-  personGraphRelexFallback: "Graphe par proximité (GLiNER ReLex indisponible)",
+    "Graphe issu du sample de démo ({count} relation(s) — même sortie qu’un run réel, sans téléchargement)",
+  personGraphRelexFallback: "Graphe par proximité (modèle de relations indisponible)",
   personGraphLicenseHint:
     "Parseur : UDPipe French-GSD (~23 Mo, mis en cache). Licence du modèle : CC BY-NC-SA (usage non commercial).",
   personGraphRelexLicenseHint:

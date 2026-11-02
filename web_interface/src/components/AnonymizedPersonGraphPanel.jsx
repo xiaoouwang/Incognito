@@ -14,6 +14,9 @@ export default function AnonymizedPersonGraphPanel({
   onExported,
   onHide,
   onRenameEdgeValue,
+  onRegenerate,
+  isRegenerating = false,
+  canRegenerate = true,
 }) {
   const { t } = useUiLocale();
 
@@ -22,6 +25,17 @@ export default function AnonymizedPersonGraphPanel({
       <div className="panel-header">
         <h2>{t("anonymizedPersonGraphTitle")}</h2>
         <div className="panel-header-actions">
+          {typeof onRegenerate === "function" ? (
+            <button
+              type="button"
+              className="secondary person-graph-export"
+              onClick={onRegenerate}
+              disabled={!canRegenerate || isRegenerating}
+              title={t("personGraphRegenerateHint")}
+            >
+              {isRegenerating ? t("personGraphRegenerateStatus") : t("personGraphRegenerate")}
+            </button>
+          ) : null}
           {typeof onHide === "function" ? (
             <button
               type="button"

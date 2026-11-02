@@ -10,6 +10,7 @@ import {
   unifyPersonGraphReplacements,
 } from "./entityUtils.js";
 import { buildBasicPersonGraph } from "./basicPersonGraph.js";
+import { buildCorrespondenceRows } from "./correspondenceExport.js";
 import {
   DEFAULT_REPLACEMENT_STYLE,
   buildReplacementMap,
@@ -192,11 +193,11 @@ function formatCorrespondenceTable(rows) {
   }
 
   const header = [
-    "| # | Category / Catégorie | Original | Replacement / Remplacement | Status | Comment / Note |",
-    "| --- | --- | --- | --- | --- | --- |",
+    "| # | Start | End | Category / Catégorie | Original | Replacement / Remplacement | Status | Comment / Note |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
   ];
   const body = rows.map((row, index) => {
-    return `| ${index + 1} | ${escapeTableCell(row.categoryLabel)} | ${escapeTableCell(row.original)} | ${escapeTableCell(row.replacement)} | ${escapeTableCell(row.status)} | ${escapeTableCell(row.comment || "")} |`;
+    return `| ${index + 1} | ${escapeTableCell(row.start)} | ${escapeTableCell(row.end)} | ${escapeTableCell(row.categoryLabel)} | ${escapeTableCell(row.original)} | ${escapeTableCell(row.replacement)} | ${escapeTableCell(row.status)} | ${escapeTableCell(row.comment || "")} |`;
   });
   return [...header, ...body].join("\n");
 }
@@ -290,7 +291,15 @@ export function createAuditReport({
   const mixedReplacements = [];
   const customOverrideReplacements = [];
   const excludedValues = [];
-  const correspondenceRows = [];
+  const correspondenceRows = buildCorrespondenceRows({
+    entities,
+    groupedEntities,
+    selectedCategories,
+    excludedEntityKeys,
+    customCategories,
+    replacementMap,
+    surfaceOverrides,
+  });
 
   categories.forEach((category) => {
     groupedEntities[category].forEach((entity, index) => {
@@ -317,25 +326,6 @@ export function createAuditReport({
         overrideNote,
       });
 
-      let statusLabel = "excluded";
-      if (replaced) {
-        if (override?.kind === "custom") {
-          statusLabel = "custom override";
-        } else if (override?.kind === "method") {
-          statusLabel = `method override (${normalizeReplacementMethod(override.method)})`;
-        } else {
-          statusLabel = "replaced";
-        }
-      }
-
-      correspondenceRows.push({
-        categoryLabel: getCategoryLabel(category, customCategories),
-        original: entity.text,
-        replacement: replaced ? replacement : "(unchanged / non remplacé)",
-        status: statusLabel,
-        comment: String(override?.comment || "").trim(),
-      });
-
       if (!replaced) {
         if (selectedCategories[category]) {
           excludedValues.push(line);
@@ -355,13 +345,6 @@ export function createAuditReport({
         automaticReplacements.push(line);
       }
     });
-  });
-
-  // Stable reading order for the mapping table: category, then original value.
-  correspondenceRows.sort((left, right) => {
-    const byCategory = left.categoryLabel.localeCompare(right.categoryLabel);
-    if (byCategory) return byCategory;
-    return String(left.original).localeCompare(String(right.original));
   });
 
   const formatSection = (lines, fallback) => lines.join("\n") || fallback;
@@ -409,7 +392,7 @@ ${customCategoryLines.length ? `- Custom categories defined during review:\n${cu
 ${replacementSummary || "- No entities detected"}
 
 ## Correspondence Table / Table de correspondance
-One-to-one mapping used to build the anonymized text (same unique value → same replacement within this document).
+One row per annotated span. \`Start\`/\`End\` are 0-based character offsets in the source text (\`start\` inclusive, \`end\` exclusive). Same unique value → same replacement within this document.
 
 ${formatCorrespondenceTable(correspondenceRows)}
 

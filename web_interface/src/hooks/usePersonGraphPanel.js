@@ -189,11 +189,10 @@ export function usePersonGraphPanel({
       // When ReLex is available, wait for it instead of flashing a proximity-only graph.
       if (extractRelations) {
         setPersonGraphNote(t("personGraphRelexLoading"));
-        void enrichWithDependencyGraph(sourceText, nextEntities);
-        return;
+        return enrichWithDependencyGraph(sourceText, nextEntities);
       }
       rebuildPersonGraph(sourceText, nextEntities, null, { resetExclusions: false });
-      void enrichWithDependencyGraph(sourceText, nextEntities);
+      return enrichWithDependencyGraph(sourceText, nextEntities);
     },
     [extractRelations, rebuildPersonGraph, enrichWithDependencyGraph, t],
   );

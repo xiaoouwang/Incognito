@@ -802,8 +802,12 @@ export function buildBatchOutputFileNames(sourceFileName, modified = false) {
   const base = buildBatchOutputBaseName(sourceFileName);
   const suffix = modified ? "_modified" : "";
   return {
+    original: `${base}-original${suffix}.txt`,
     anonymized: `${base}-anonymized${suffix}.txt`,
     report: `${base}-report${suffix}.md`,
+    correspondence: `${base}-correspondence${suffix}.csv`,
+    personGraph: `${base}-person-graph${suffix}.csv`,
+    personGraphByPerson: `${base}-person-graph-by-person${suffix}.csv`,
     labelStudio: `${base}-label-studio${suffix}.json`,
   };
 }
