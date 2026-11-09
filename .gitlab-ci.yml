@@ -1,5 +1,5 @@
 # GitLab Pages — build Incognito Web and publish under
-# https://mshs-sud-est.gitlab.huma-num.fr/incognito/
+# https://mshs-sud-est.gitpages.huma-num.fr/incognito/
 #
 # Mirrors .github/workflows/deploy-web.yml: only rebuild when the web app
 # (or this file) changes. Manual runs: CI/CD → Pipelines → Run pipeline.

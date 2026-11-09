@@ -2,7 +2,7 @@
 
 **Version 1.0.1** — standalone, **client-side** web interface for [Incognito](../README.md). One of two ways to anonymize qualitative text (alongside the desktop app). Detection runs in the browser — no Electron, no Python server required for the core UI (optional Albert API in generative API mode; optional local GLiNER2-PII sidecar under `gliner2_pii_server/`).
 
-**Live app:** [https://xiaoouwang.github.io/Incognito/](https://xiaoouwang.github.io/Incognito/) · Huma-Num: [https://mshs-sud-est.gitlab.huma-num.fr/incognito/](https://mshs-sud-est.gitlab.huma-num.fr/incognito/)
+**Live app:** [https://xiaoouwang.github.io/Incognito/](https://xiaoouwang.github.io/Incognito/) · Huma-Num: [https://mshs-sud-est.gitpages.huma-num.fr/incognito/](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)
 
 > **Everything runs locally — your data never leaves your computer.**
 > Your text is analyzed in the browser, not on a remote server. The only internet use is a one-time download of detection models; your documents are never uploaded. *(API-based generative mode is the exception: text is sent to Albert with your API key.)*
@@ -99,7 +99,7 @@ The `dist/` folder can be served by any static file host.
 [`.gitlab-ci.yml`](../.gitlab-ci.yml) builds the same app for [mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito).
 
 1. Push `main` to `https://gitlab.huma-num.fr/mshs-sud-est/incognito.git`.
-2. After the first green `pages` job, the site is at **https://mshs-sud-est.gitlab.huma-num.fr/incognito/**
+2. After the first green `pages` job, the site is at **https://mshs-sud-est.gitpages.huma-num.fr/incognito/**
 3. Redeploy without code changes: **Build → Pipelines → Run pipeline**.
 
 ## Stack

@@ -15,7 +15,7 @@ const ALBERT_ORIGIN = "https://albert.api.etalab.gouv.fr";
 const ALLOWED_ORIGINS = new Set([
   "https://xiaoouwang.github.io",
   // Huma-Num GitLab Pages (project mshs-sud-est/incognito)
-  "https://mshs-sud-est.gitlab.huma-num.fr",
+  "https://mshs-sud-est.gitpages.huma-num.fr",
   "http://127.0.0.1:5173",
   "http://localhost:5173",
   "http://127.0.0.1:4173",
