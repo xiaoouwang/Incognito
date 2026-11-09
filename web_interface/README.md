@@ -2,7 +2,7 @@
 
 **Version 1.0.1** — standalone, **client-side** web interface for [Incognito](../README.md). One of two ways to anonymize qualitative text (alongside the desktop app). Detection runs in the browser — no Electron, no Python server required for the core UI (optional Albert API in generative API mode; optional local GLiNER2-PII sidecar under `gliner2_pii_server/`).
 
-**Live app:** [https://xiaoouwang.github.io/Incognito/](https://xiaoouwang.github.io/Incognito/)
+**Live app:** [https://xiaoouwang.github.io/Incognito/](https://xiaoouwang.github.io/Incognito/) · Huma-Num: [https://mshs-sud-est.gitlab.huma-num.fr/incognito/](https://mshs-sud-est.gitlab.huma-num.fr/incognito/)
 
 > **Everything runs locally — your data never leaves your computer.**
 > Your text is analyzed in the browser, not on a remote server. The only internet use is a one-time download of detection models; your documents are never uploaded. *(API-based generative mode is the exception: text is sent to Albert with your API key.)*
@@ -81,17 +81,26 @@ npm run preview
 
 The `dist/` folder can be served by any static file host.
 
-## Deploy to GitHub Pages
+## Deploy
 
-This repo includes [`.github/workflows/deploy-web.yml`](../.github/workflows/deploy-web.yml), which builds `web_interface/` and publishes `dist/` when you push to `main` **and** the commit touches `web_interface/` (or the workflow file itself).
+`vite.config.js` uses `base: "./"` so asset paths work under both `/Incognito/` (GitHub) and `/incognito/` (Huma-Num GitLab) subpaths. The Albert CORS Worker allowlists both Pages origins.
+
+### GitHub Pages
+
+[`.github/workflows/deploy-web.yml`](../.github/workflows/deploy-web.yml) builds `web_interface/` and publishes `dist/` when you push to `main` **and** the commit touches `web_interface/` (or the workflow file itself).
 
 1. **Commit and push** the `web_interface/` folder (and the workflow file) to GitHub.
 2. In the repo on GitHub: **Settings → Pages → Build and deployment → Source** → choose **GitHub Actions**.
 3. After the first successful workflow run, the site is live at **https://xiaoouwang.github.io/Incognito/**
-
 4. To redeploy without changing code: **Actions → Deploy web interface → Run workflow**.
 
-`vite.config.js` uses `base: "./"` so asset paths work under the `/Incognito/` subpath.
+### Huma-Num GitLab Pages
+
+[`.gitlab-ci.yml`](../.gitlab-ci.yml) builds the same app for [mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito).
+
+1. Push `main` to `https://gitlab.huma-num.fr/mshs-sud-est/incognito.git`.
+2. After the first green `pages` job, the site is at **https://mshs-sud-est.gitlab.huma-num.fr/incognito/**
+3. Redeploy without code changes: **Build → Pipelines → Run pipeline**.
 
 ## Stack
 

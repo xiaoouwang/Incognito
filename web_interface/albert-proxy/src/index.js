@@ -14,6 +14,8 @@ const ALBERT_ORIGIN = "https://albert.api.etalab.gouv.fr";
 /** Origins allowed to call this proxy from a browser. */
 const ALLOWED_ORIGINS = new Set([
   "https://xiaoouwang.github.io",
+  // Huma-Num GitLab Pages (project mshs-sud-est/incognito)
+  "https://mshs-sud-est.gitlab.huma-num.fr",
   "http://127.0.0.1:5173",
   "http://localhost:5173",
   "http://127.0.0.1:4173",
@@ -133,7 +135,7 @@ export default {
       }
       return jsonError(
         403,
-        "Origin not allowed. This proxy only serves the Incognito GitHub Pages app.",
+        "Origin not allowed. This proxy only serves the Incognito Pages apps (GitHub / Huma-Num GitLab) and local Vite.",
         null,
       );
     }

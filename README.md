@@ -106,7 +106,7 @@ Même logique de revue et d'export — bureau ou navigateur, selon les besoins d
 
 **Interface :** démos préchargées ; mise en page catégories · texte surligné · graphe · aperçu anonymisé (plein largeur en bas) ; défilement synchronisé ; interface **FR/EN**.
 
-👉 **[Essayer en ligne](https://xiaoouwang.github.io/Incognito/)** · [Code source](web_interface/) · [Déploiement](web_interface/README.md#deploy-to-github-pages)
+👉 **[Essayer en ligne](https://xiaoouwang.github.io/Incognito/)** · miroir Huma-Num : [GitLab Pages](https://mshs-sud-est.gitlab.huma-num.fr/incognito/) · [Code source](web_interface/) · [Déploiement](web_interface/README.md#deploy)
 
 
 |                              | Version web                                                            | Application de bureau (ci-dessous)                    |
@@ -119,7 +119,7 @@ Même logique de revue et d'export — bureau ou navigateur, selon les besoins d
 | 💾 **Installation**           | URL (navigateur) — aucun installateur requis                            | Installateurs macOS / Windows / Linux                 |
 
 
-Déployé sur **GitHub Pages** à chaque push sur `main` qui modifie `web_interface/` (workflow [`.github/workflows/deploy-web.yml`](.github/workflows/deploy-web.yml) — les changements hors de ce dossier ne redéploient pas le site).
+Déployé sur **GitHub Pages** à chaque push sur `main` qui modifie `web_interface/` (workflow [`.github/workflows/deploy-web.yml`](.github/workflows/deploy-web.yml) — les changements hors de ce dossier ne redéploient pas le site). Miroir **Huma-Num GitLab Pages** via [`.gitlab-ci.yml`](.gitlab-ci.yml) → [mshs-sud-est.gitlab.huma-num.fr/incognito/](https://mshs-sud-est.gitlab.huma-num.fr/incognito/).
 
 ---
 

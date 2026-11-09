@@ -4,7 +4,7 @@ GitHub Pages is static: the Vite `/albert-api` proxy only exists in `npm run dev
 
 This Worker is a **fixed-upstream** reverse proxy:
 
-- Browser → `https://<this-worker>/v1/...` (CORS allowed for the Pages origin)
+- Browser → `https://<this-worker>/v1/...` (CORS allowed for GitHub Pages and Huma-Num GitLab Pages origins)
 - Worker → `https://albert.api.etalab.gouv.fr/v1/...`
 - Forwards the user’s `Authorization: Bearer …` header; **no API key is stored on Cloudflare**
 

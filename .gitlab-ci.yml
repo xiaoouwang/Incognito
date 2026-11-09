@@ -1,0 +1,39 @@
+# GitLab Pages — build Incognito Web and publish under
+# https://mshs-sud-est.gitlab.huma-num.fr/incognito/
+#
+# Mirrors .github/workflows/deploy-web.yml: only rebuild when the web app
+# (or this file) changes. Manual runs: CI/CD → Pipelines → Run pipeline.
+
+stages:
+  - deploy
+
+variables:
+  NODE_VERSION: "20"
+
+pages:
+  stage: deploy
+  image: node:${NODE_VERSION}-bookworm
+  cache:
+    key:
+      files:
+        - web_interface/package-lock.json
+    paths:
+      - web_interface/node_modules/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - web_interface/**/*
+        - .gitlab-ci.yml
+  script:
+    - cd web_interface
+    - npm ci
+    # Optional CI/CD variable VITE_ALBERT_BASE_URL overrides the default
+    # Albert CORS proxy URL baked into the build.
+    - npm run build
+    - cd ..
+    - rm -rf public
+    - mv web_interface/dist public
+  artifacts:
+    paths:
+      - public
