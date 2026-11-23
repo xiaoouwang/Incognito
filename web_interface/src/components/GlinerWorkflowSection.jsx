@@ -934,6 +934,25 @@ export default function GlinerWorkflowSection() {
     setError("");
   }
 
+  function beginEditSourceText() {
+    setEntityMenu(null);
+    setPinnedPersonPlaceholder(null);
+    setIsEditingSource(true);
+    if (isDemoMode) {
+      setText("");
+      setEntities([]);
+      clearPersonGraph();
+      setSelectedCategories({});
+      setExcludedEntityKeys({});
+      setCategoryMethods({});
+      setSurfaceOverrides({});
+      setAnonymizedTextOverride(null);
+      setModelName(null);
+      setIsDemoMode(false);
+      setStatus(t("editSourceText"));
+    }
+  }
+
   function toggleAutoRunNer(enabled) {
     setAutoRunNer(enabled);
 
@@ -1437,7 +1456,7 @@ export default function GlinerWorkflowSection() {
                 <button
                   type="button"
                   className="link-button"
-                  onClick={() => setIsEditingSource(true)}
+                  onClick={beginEditSourceText}
                 >
                   {t("editSourceText")}
                 </button>
@@ -1454,55 +1473,57 @@ export default function GlinerWorkflowSection() {
                 : t("characters", { count: text.length })}
             </span>
           </div>
-          {showSourceHighlight ? (
-            <HighlightedText
-              ref={sourceScrollRef}
-              text={text}
-              segments={highlightedSegments}
-              categoryLabels={categoryLabels}
-              selectedCategories={selectedCategories}
-              excludedEntityKeys={excludedEntityKeys}
-              focusRanges={personFocusRanges}
-              persons={persons}
-              pinnedPlaceholder={pinnedPersonPlaceholder}
-              onPinPerson={setPinnedPersonPlaceholder}
-              getHighlightClass={getGlinerLabelHighlightClass}
-              onAddSelection={(selection) => {
-                const nextMenu = {
-                  mode: "add",
-                  scope: "all",
-                  ...selection,
-                };
-                entityMenuRef.current = nextMenu;
-                setEntityMenu(nextMenu);
-              }}
-              onEntityClick={(entity, position) => {
-                const nextMenu = {
-                  mode: "remove",
-                  entity,
-                  ...position,
-                };
-                entityMenuRef.current = nextMenu;
-                setEntityMenu(nextMenu);
-              }}
-            />
-          ) : (
-            <textarea
-              value={text}
-              onChange={(event) => {
-                setText(event.target.value);
-                setEntities([]);
-                clearPersonGraph();
-                setSelectedCategories({});
-                setExcludedEntityKeys({});
-                setModelName(null);
-                setIsDemoMode(false);
-                setIsEditingSource(true);
-                setEntityMenu(null);
-              }}
-              placeholder={t("textPlaceholder")}
-            />
-          )}
+          <div className="workspace-source-body" translate="no">
+            {showSourceHighlight ? (
+              <HighlightedText
+                ref={sourceScrollRef}
+                text={text}
+                segments={highlightedSegments}
+                categoryLabels={categoryLabels}
+                selectedCategories={selectedCategories}
+                excludedEntityKeys={excludedEntityKeys}
+                focusRanges={personFocusRanges}
+                persons={persons}
+                pinnedPlaceholder={pinnedPersonPlaceholder}
+                onPinPerson={setPinnedPersonPlaceholder}
+                getHighlightClass={getGlinerLabelHighlightClass}
+                onAddSelection={(selection) => {
+                  const nextMenu = {
+                    mode: "add",
+                    scope: "all",
+                    ...selection,
+                  };
+                  entityMenuRef.current = nextMenu;
+                  setEntityMenu(nextMenu);
+                }}
+                onEntityClick={(entity, position) => {
+                  const nextMenu = {
+                    mode: "remove",
+                    entity,
+                    ...position,
+                  };
+                  entityMenuRef.current = nextMenu;
+                  setEntityMenu(nextMenu);
+                }}
+              />
+            ) : (
+              <textarea
+                value={text}
+                onChange={(event) => {
+                  setText(event.target.value);
+                  setEntities([]);
+                  clearPersonGraph();
+                  setSelectedCategories({});
+                  setExcludedEntityKeys({});
+                  setModelName(null);
+                  setIsDemoMode(false);
+                  setIsEditingSource(true);
+                  setEntityMenu(null);
+                }}
+                placeholder={t("textPlaceholder")}
+              />
+            )}
+          </div>
         </div>
 
         <div className="panel workspace-graph">

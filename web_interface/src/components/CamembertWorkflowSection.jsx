@@ -762,6 +762,21 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     setPinnedPersonPlaceholder(null);
     setSourceBodyKey((current) => current + 1);
     setIsEditingSource(true);
+    // Demo text is sample content — clear it so "Paste your own text" is a
+    // blank paste surface. Keep real session text for editing in place.
+    if (isDemoMode) {
+      setText("");
+      setEntities([]);
+      clearPersonGraph();
+      setSelectedCategories({});
+      setExcludedEntityKeys({});
+      setCategoryMethods({});
+      setSurfaceOverrides({});
+      setAnonymizedTextOverride(null);
+      setModelName(null);
+      setIsDemoMode(false);
+      setStatus(t("editSourceText"));
+    }
   }
 
   /** Run NER (+ ReLex when Advanced) on the given files, in chunks of batchProcessCount. */

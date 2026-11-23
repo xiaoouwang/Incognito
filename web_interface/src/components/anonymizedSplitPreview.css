@@ -4,6 +4,7 @@
   flex-direction: column;
   gap: 0.75rem;
   min-height: 0;
+  overflow: hidden;
   padding: 0.65rem 0.55rem 0.75rem;
 }
 
@@ -316,8 +317,9 @@
 }
 
 .editable-anonymized-text {
-  flex: 1 1 auto;
-  min-height: 100%;
+  /* Size to content so .split-preview-pane-body scrolls, not this node. */
+  flex: 0 0 auto;
+  min-height: 0;
   outline: none;
   white-space: pre-wrap;
 }
@@ -493,7 +495,8 @@
   flex: none;
   height: auto !important;
   max-height: none !important;
-  min-height: 0;
+  /* Beat global .highlighted-text / .text-preview min-height: 420px */
+  min-height: 0 !important;
   overflow: visible !important;
   padding: 0;
 }
@@ -504,6 +507,7 @@
   font-size: 0.95rem;
   line-height: 1.7;
   margin: 0;
+  min-height: 0 !important;
   white-space: pre-wrap;
 }
 

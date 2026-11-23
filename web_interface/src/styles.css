@@ -881,26 +881,47 @@ h2 {
   overflow-y: auto;
 }
 
+/*
+  DomReconcileErrorBoundary wraps panel bodies in a plain div. Without flex
+  shrink + min-height:0 it grows to content height, then .panel { overflow:hidden }
+  clips it — no scrollbar on the real scroll containers inside.
+*/
+.panel > .dom-reconcile-boundary {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
 .workspace-source .dom-reconcile-boundary,
 .workspace-source-body {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
+  position: relative;
 }
 
-/* <textarea> ignores flex fill unless the flex basis is forced (unlike the highlight shell). */
+/*
+  Absolute fill — do not use flex + height:0 on <textarea>. That pattern
+  breaks soft-wrap and mid-glyph clips the first line in WebKit/Safari.
+*/
 .workspace-source textarea {
-  flex: 1 1 0;
-  align-self: stretch;
+  position: absolute;
+  inset: 0;
   box-sizing: border-box;
   font-size: 1.02rem;
-  height: 0;
+  height: 100%;
   line-height: 1.8;
   max-height: none;
   min-height: 0 !important;
+  overflow-wrap: break-word;
   overflow-y: auto;
   resize: none;
+  white-space: pre-wrap;
+  width: 100%;
 }
 
 .workspace-source .highlighted-text-shell {
