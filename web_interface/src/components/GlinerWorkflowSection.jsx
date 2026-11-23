@@ -1521,6 +1521,12 @@ export default function GlinerWorkflowSection() {
                   setEntityMenu(null);
                 }}
                 placeholder={t("textPlaceholder")}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={true}
+                data-1p-ignore="true"
+                data-lpignore="true"
               />
             )}
           </div>

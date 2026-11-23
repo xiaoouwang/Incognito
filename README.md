@@ -8,9 +8,11 @@ Outil pour les sciences humaines et sociales — entretiens, notes de terrain, r
 
 Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Humanités Numériques · [MSHS Sud-Est](https://mshs.univ-cotedazur.fr/) · [Université Côte d'Azur](https://univ-cotedazur.fr/)
 
-**Version actuelle : 1.0.1** (interface web) · **0.3.0** (application de bureau — installateurs sur [Releases](https://github.com/xiaoouwang/Incognito/releases))
+**Version actuelle : 1.0.1** (interface web) · **0.3.0** (application de bureau — installateurs sur [GitHub Releases](https://github.com/xiaoouwang/Incognito/releases), miroir)
 
-**🌐 [Incognito Web](https://xiaoouwang.github.io/Incognito/)** — **quatre parcours** : anonymisation **de base** (GLiNER2 NER seul), **avancée** (GLiNER2 + ReLex / graphe), **générative locale** et **générative API** (Albert) ; **graphe de personnes** (vue force-graph, relations, soft-exclude, export CSV) ; détection locale, relecture interactive. *Tout s'exécute localement — vos données ne quittent pas votre ordinateur* (sauf appel Albert en mode API, avec votre clé). Voir la section [Version web](#-version-web).
+**Dépôt canonique** — [GitLab Huma-Num](https://gitlab.huma-num.fr/mshs-sud-est/incognito) · miroir public : [GitHub](https://github.com/xiaoouwang/Incognito)
+
+**🌐 [Incognito Web](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)** — **quatre parcours** : anonymisation **de base** (GLiNER2 NER seul), **avancée** (GLiNER2 + ReLex / graphe), **générative locale** et **générative API** (Albert) ; **graphe de personnes** (vue force-graph, relations, soft-exclude, export CSV) ; détection locale, relecture interactive ; **Export everything** (ZIP lot enrichi). *Tout s'exécute localement — vos données ne quittent pas votre ordinateur* (sauf appel Albert en mode API, avec votre clé). Voir la section [Version web](#-version-web). Miroir : [GitHub Pages](https://xiaoouwang.github.io/Incognito/).
 
 ![Demo](demo.gif)
 
@@ -22,7 +24,7 @@ Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Hu
 |                              |                                                                        |
 | ---------------------------- | ---------------------------------------------------------------------- |
 | 🏠 **100 % local**            | Bureau : aucun appel à une API externe. Web : *tout s'exécute localement dans le navigateur* — seuls les poids du modèle sont téléchargés, jamais vos textes. |
-| 🌍 **Multiplateforme**        | Installateurs bureau macOS / Windows / Linux, ou **[Incognito Web](https://xiaoouwang.github.io/Incognito/)** dans le navigateur. |
+| 🌍 **Multiplateforme**        | Installateurs bureau macOS / Windows / Linux, ou **[Incognito Web](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)** dans le navigateur. |
 | 🇫🇷 **Pensé pour le français** | Modèles spaCy et CamemBERT adaptés aux textes qualitatifs en français. |
 | 👁️ **Contrôle humain**        | Vous validez, corrigez et désactivez entité par entité avant l'export. |
 | 📋 **Traçabilité**            | Rapport d'audit et exports prêts pour l'archivage ou Label Studio.     |
@@ -75,14 +77,14 @@ Interface **Electron** + **React** (Vite), moteur NER **Python** embarqué (PyIn
 
 ### Interface web
 
-Interface **React** (Vite) + **Transformers.js** (ONNX dans un Web Worker), déployée sur **GitHub Pages**. Voir [`web_interface/`](web_interface/).
+Interface **React** (Vite) + **Transformers.js** (ONNX dans un Web Worker), déployée en priorité sur **Huma-Num GitLab Pages**. Voir [`web_interface/`](web_interface/).
 
 
 | Couche   | Outils                                              |
 | -------- | --------------------------------------------------- |
-| 🌐 Web   | React, Vite, Transformers.js, ONNX Runtime WASM, GLiNER (ONNX), UDPipe WASM, Albert (mode génératif) |
-| 🧠 NER   | CamemBERT, BERT anglais, GLiNER multi-v2.1, modèles ONNX personnalisés ; graphe personnes (French-GSD) |
-| 📦 Release | `npm run build` → GitHub Actions (`deploy-web.yml`) |
+| 🌐 Web   | React, Vite, Transformers.js, ONNX Runtime WASM, GLiNER (ONNX), Albert (mode génératif) |
+| 🧠 NER   | GLiNER2-multi / GLiNER2-PII ONNX, ReLex (avancé), CamemBERT (option) |
+| 📦 Release | `npm run build` → **GitLab CI** (`.gitlab-ci.yml`) ; miroir GitHub Actions (`deploy-web.yml`) |
 
 
 Même logique de revue et d'export — bureau ou navigateur, selon les besoins de l'équipe.
@@ -91,7 +93,7 @@ Même logique de revue et d'export — bureau ou navigateur, selon les besoins d
 
 ## 🌐 Version web
 
-**[Incognito Web](https://xiaoouwang.github.io/Incognito/)** — interface autonome pour anonymiser des corpus qualitatifs **dans le navigateur**. Aucun Electron : le NER s'exécute localement (ONNX / WASM) ; le mode **avancé** ajoute le graphe ReLex ; les modes **génératifs** utilisent Albert (local ou API — texte envoyé à l'API uniquement en mode API).
+**[Incognito Web](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)** — interface autonome pour anonymiser des corpus qualitatifs **dans le navigateur**. Aucun Electron : le NER s'exécute localement (ONNX / WASM) ; le mode **avancé** ajoute le graphe ReLex ; les modes **génératifs** utilisent Albert (local ou API — texte envoyé à l'API uniquement en mode API).
 
 **Quatre parcours** (*Basic* / *Advanced* / *Local generative* / *API-based generative*) :
 
@@ -102,11 +104,13 @@ Même logique de revue et d'export — bureau ou navigateur, selon les besoins d
 | **Génératif local** | Albert / pipeline local | Revue générative sans appel cloud (selon config). |
 | **Génératif API** | Albert (API) | Graphe / relations via LLM, avec revue et soft-exclude. |
 
-**Graphe de personnes (avancé et génératif)** — soft-exclude synchronisé catégories ↔ graphe ; vue réseau **react-force-graph** ; **Export CSV** / **Export CSV by person**.
+**Graphe de personnes (avancé et génératif)** — soft-exclude synchronisé catégories ↔ graphe ; vue réseau **react-force-graph** ; régénération ReLex live ; **Export CSV** / **Export CSV by person**.
 
-**Interface :** démos préchargées ; mise en page catégories · texte surligné · graphe · aperçu anonymisé (plein largeur en bas) ; défilement synchronisé ; interface **FR/EN**.
+**Exports** — texte anonymisé, rapport d'audit (positions start/end), Label Studio, correspondance original ↔ remplacé, **Export everything** (ZIP lot enrichi).
 
-👉 **[Essayer en ligne](https://xiaoouwang.github.io/Incognito/)** · miroir Huma-Num : [GitLab Pages](https://mshs-sud-est.gitpages.huma-num.fr/incognito/) · [Code source](web_interface/) · [Déploiement](web_interface/README.md#deploy)
+**Interface :** démos préchargées ; *Paste your own text* ; mise en page catégories · texte surligné · graphe · aperçu anonymisé (panneaux Original / Anonymized synchronisés) ; interface **FR/EN**.
+
+👉 **[Essayer en ligne (Huma-Num)](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)** · miroir : [GitHub Pages](https://xiaoouwang.github.io/Incognito/) · [Code source](web_interface/) · [Déploiement](web_interface/README.md#deploy)
 
 
 |                              | Version web                                                            | Application de bureau (ci-dessous)                    |
@@ -119,7 +123,7 @@ Même logique de revue et d'export — bureau ou navigateur, selon les besoins d
 | 💾 **Installation**           | URL (navigateur) — aucun installateur requis                            | Installateurs macOS / Windows / Linux                 |
 
 
-Déployé sur **GitHub Pages** à chaque push sur `main` qui modifie `web_interface/` (workflow [`.github/workflows/deploy-web.yml`](.github/workflows/deploy-web.yml) — les changements hors de ce dossier ne redéploient pas le site). Miroir **Huma-Num GitLab Pages** via [`.gitlab-ci.yml`](.gitlab-ci.yml) → [mshs-sud-est.gitpages.huma-num.fr/incognito/](https://mshs-sud-est.gitpages.huma-num.fr/incognito/).
+Déployé en priorité sur **Huma-Num GitLab Pages** à chaque push sur `main` qui modifie `web_interface/` ([`.gitlab-ci.yml`](.gitlab-ci.yml) → [mshs-sud-est.gitpages.huma-num.fr/incognito/](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)). Miroir **GitHub Pages** via [`.github/workflows/deploy-web.yml`](.github/workflows/deploy-web.yml) → [xiaoouwang.github.io/Incognito/](https://xiaoouwang.github.io/Incognito/).
 
 ---
 
@@ -145,9 +149,13 @@ Premier lancement CamemBERT : connexion internet une fois (~400 Mo, télécharge
 **Prérequis** — Node.js 20+, Python **3.12**
 
 ```bash
-git clone https://github.com/xiaoouwang/Incognito.git
+# Dépôt canonique (Huma-Num)
+git clone https://gitlab.huma-num.fr/mshs-sud-est/incognito.git
 cd Incognito
 npm install
+
+# Miroir GitHub (optionnel) :
+# git clone https://github.com/xiaoouwang/Incognito.git
 
 python3.12 -m venv .venv
 .venv/bin/pip install -r requirements.txt
@@ -178,7 +186,7 @@ npm install
 npm run dev
 ```
 
-Voir [`web_interface/README.md`](web_interface/README.md) pour le mode lot, la PWA et le déploiement GitHub Pages.
+Voir [`web_interface/README.md`](web_interface/README.md) pour le mode lot, la PWA et le déploiement (GitLab Pages prioritaire, miroir GitHub Pages).
 
 ### Branches Git (développement par plateforme)
 
@@ -209,7 +217,7 @@ Toute modification doit être faite sur la branche correspondant à la plateform
 
 Si vous utilisez **Incognito** dans un article, un rapport, un protocole ou un jeu de données, merci de citer :
 
-> Wang, X. (2026). *Incognito: A privacy-first, cross-platform tool for reviewing and anonymizing qualitative texts in the social sciences* (Version 0.3.0) [Logiciel]. Maison des Sciences de l'Homme Sud-Est / Université Côte d'Azur. [https://github.com/xiaoouwang/Incognito](https://github.com/xiaoouwang/Incognito)
+> Wang, X. (2026). *Incognito: A privacy-first, cross-platform tool for reviewing and anonymizing qualitative texts in the social sciences* (Version 0.3.0) [Logiciel]. Maison des Sciences de l'Homme Sud-Est / Université Côte d'Azur. [https://gitlab.huma-num.fr/mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito)
 
 **Clé LaTeX** — `wang2026incognito`
 
@@ -225,17 +233,18 @@ Si vous utilisez **Incognito** dans un article, un rapport, un protocole ou un j
   title   = {{Incognito}: A privacy-first, cross-platform tool for reviewing and anonymizing qualitative texts in the social sciences},
   year    = {2026},
   version = {0.3.0},
-  url     = {https://github.com/xiaoouwang/Incognito},
+  url     = {https://gitlab.huma-num.fr/mshs-sud-est/incognito},
   note    = {Desktop (Electron + spaCy/CamemBERT) and browser (Transformers.js) interfaces.
-             Maison des Sciences de l'Homme Sud-Est, Universit{\'e} C{\^o}te d'Azur}
+             Maison des Sciences de l'Homme Sud-Est, Universit{\'e} C{\^o}te d'Azur.
+             Mirror: https://github.com/xiaoouwang/Incognito}
 }
 ```
 
 **APA (7e éd.)**
 
-> Wang, X. (2026). *Incognito: A privacy-first, cross-platform tool for reviewing and anonymizing qualitative texts in the social sciences* (Version 0.3.0) [Computer software]. Maison des Sciences de l'Homme Sud-Est, Université Côte d'Azur. [https://github.com/xiaoouwang/Incognito](https://github.com/xiaoouwang/Incognito)
+> Wang, X. (2026). *Incognito: A privacy-first, cross-platform tool for reviewing and anonymizing qualitative texts in the social sciences* (Version 0.3.0) [Computer software]. Maison des Sciences de l'Homme Sud-Est, Université Côte d'Azur. [https://gitlab.huma-num.fr/mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito)
 
-Un fichier `[CITATION.cff](CITATION.cff)` est aussi disponible pour l'onglet **Cite this repository** sur GitHub.
+Un fichier [`CITATION.cff`](CITATION.cff) est aussi disponible (dépôt GitLab / miroir GitHub).
 
 ---
 
@@ -277,6 +286,14 @@ Copyright remains with the original author. The AGPLv3 license grants users the 
 
 Historique des évolutions fonctionnelles, avec date et fonctions concernées dans le code.
 
+### 2026-11-23 — UX revue, exports enrichis et déploiement Huma-Num
+
+- **Paste your own text** — surface de collage vide en sortie de démo ; layout textarea (grille CSS) pour Chrome / Firefox / Safari.
+- **Défilement** — panneaux Original / Anonymized et wrappers `DomReconcileErrorBoundary` dans la chaîne flex (plus de contenu coupé sans scrollbar).
+- **Exports** — *Export everything* (ZIP lot) ; positions start/end dans le rapport / correspondance ; exports graphe et Label Studio enrichis.
+- **Avancé** — régénération du graphe de personnes via ReLex live (plus de fixture démo) ; polarité des puces œil (anonymisé = barré).
+- **Déploiement** — Pages **Huma-Num** ([`.gitlab-ci.yml`](.gitlab-ci.yml)) comme cible principale ; miroir GitHub Pages ; proxy Albert CORS allowlist les deux origines ; `.npmrc` saute le téléchargement CUDA de `onnxruntime-node` en CI.
+
 ### 2026-10-23 — v1.0.1 — GLiNER2, ReLex, force-graph et modes génératifs Local / API
 
 - **Version 1.0.1 (web)** — parcours clarifiés : **Basic** = NER seul (choix GLiNER2-multi ou GLiNER2-PII ONNX) ; **Advanced** = GLiNER2 + **ReLex** (graphe) ; génératif scindé en **Local** et **API-based**.
@@ -286,10 +303,10 @@ Historique des évolutions fonctionnelles, avec date et fonctions concernées da
 - **UX** — plus de scroll forcé au changement d’onglet génératif ; boundary d’erreur au démarrage ; cache Vite / SW assaini.
 - Composants / libs — `PersonGraphForceModal`, `gliner2Multi*`, `gliner2PiiOnnx*`, `glinerRelex*`, `pseudonymize.js`, `generalize.js`.
 
-### 2026-10-02 — Proxy CORS Albert (GitHub Pages)
+### 2026-10-02 — Proxy CORS Albert (Pages)
 
 - **Problème** — sur Pages, le mode génératif appelait Albert en cross-origin ; l’API n’envoie pas de headers CORS utilisables, et le proxy Vite n’existe qu’en local.
-- **Correctif** — Worker Cloudflare `incognito-albert-proxy` (`web_interface/albert-proxy/`) qui relaie `/v1/…` vers `albert.api.etalab.gouv.fr` avec CORS pour `xiaoouwang.github.io` ; la clé reste dans le navigateur.
+- **Correctif** — Worker Cloudflare `incognito-albert-proxy` (`web_interface/albert-proxy/`) qui relaie `/v1/…` vers `albert.api.etalab.gouv.fr` avec CORS pour les origines Pages (**Huma-Num** + miroir GitHub) ; la clé reste dans le navigateur.
 - URL proxy : `https://incognito-albert-proxy.singerxo.workers.dev/v1` (`ALBERT_CORS_PROXY_BASE_URL`).
 
 ### 2026-10-02 — v1.0.0 — Graphe de personnes, relations et anonymisation générative
@@ -299,7 +316,7 @@ Historique des évolutions fonctionnelles, avec date et fonctions concernées da
 - **Anonymisation générative** — revue Albert (graphe / relations), soft-exclude, pastilles de focus, export CSV.
 - **Mise en page** — catégories · texte surligné · graphe · aperçu anonymisé (plein largeur en bas).
 - Composants / libs — `PersonGraphCard`, `PersonFocusChips`, `usePersonGraphPanel`, `basicPersonGraph.js`, `depWorker.js`, `personGraphCsv.js`, `GenerativeWorkflowSection`, `GenerativeRelationView`.
-- Déploiement : [GitHub Pages](https://xiaoouwang.github.io/Incognito/) · voir [`web_interface/README.md`](web_interface/README.md).
+- Déploiement : [GitLab Pages](https://mshs-sud-est.gitpages.huma-num.fr/incognito/) · miroir [GitHub Pages](https://xiaoouwang.github.io/Incognito/) · voir [`web_interface/README.md`](web_interface/README.md).
 - Journal détaillé design / code / motifs (jour 1 → 1.0.0) : [`docs/WEB_INTERFACE_EVOLUTION.md`](docs/WEB_INTERFACE_EVOLUTION.md).
 
 ### 2026-06-25 — v0.4.0 — Anonymisation avancée (GLiNER) et interface web
@@ -309,19 +326,19 @@ Historique des évolutions fonctionnelles, avec date et fonctions concernées da
 - **Placeholders courts** — préfixes à trois lettres (`[PER_1]`, `[LOC_1]`, `[NAT_1]`…).
 - **UX** — mise en page élargie, panneaux texte plus grands, défilement synchronisé surlignage / aperçu anonymisé, barre de progression GLiNER par segment.
 - **Composants** — `CamembertWorkflowSection`, `GlinerWorkflowSection`, `glinerRuntime.js`, `glinerSampleDemo.js`, démos Jean Dupont (GLiNER) et Claire/Julien (CamemBERT).
-- Déploiement : [GitHub Pages](https://xiaoouwang.github.io/Incognito/) · voir [`web_interface/README.md`](web_interface/README.md).
+- Déploiement : [GitLab Pages](https://mshs-sud-est.gitpages.huma-num.fr/incognito/) · miroir [GitHub Pages](https://xiaoouwang.github.io/Incognito/) · voir [`web_interface/README.md`](web_interface/README.md).
 
 ### 2026-06-25 — v0.3.0 — Anonymisation de base stabilisée (web)
 
 - **Version 0.3.0** — parcours d'**anonymisation de base** stabilisé : détection d'entités → relecture → remplacement par placeholders numérotés (`[PER_1]`, `[PER_2]`, `[LOC_1]`…).
 - **Interface web** prête pour un usage courant : démo préchargée, interface **FR/EN**, fenêtre *Détails ici* (confidentialité), mode lot, barres de progression.
 - **Détection** — expansion de toutes les occurrences d'une même entité dans le texte (`finalizeDetectedEntities`, `expandEntityValueOccurrences`).
-- Déploiement : [GitHub Pages](https://xiaoouwang.github.io/Incognito/) · voir [`web_interface/README.md`](web_interface/README.md).
+- Déploiement : [GitLab Pages](https://mshs-sud-est.gitpages.huma-num.fr/incognito/) · miroir [GitHub Pages](https://xiaoouwang.github.io/Incognito/) · voir [`web_interface/README.md`](web_interface/README.md).
 
 ### 2026-06-25 — Interface web (Incognito = bureau + navigateur)
 
 - **Incognito** n'est plus limité au bureau : ajout de l'interface **[web_interface/](web_interface/)** — React + Vite + Transformers.js, revue interactive, rapport d'audit, export Label Studio, mode lot (ZIP).
-- Déploiement automatique sur **[GitHub Pages](https://xiaoouwang.github.io/Incognito/)** via `.github/workflows/deploy-web.yml`.
+- Déploiement automatique (aujourd'hui : **GitLab Pages** Huma-Num prioritaire ; miroir GitHub Pages via `.github/workflows/deploy-web.yml`).
 - Liens croisés bureau ↔ web dans les deux interfaces.
 - **PWA** — manifeste et service worker (`manifest.webmanifest`, `sw.js`) pour mise en cache.
 - **Confidentialité** — message visible : *Everything runs locally — your data never leaves your computer.*

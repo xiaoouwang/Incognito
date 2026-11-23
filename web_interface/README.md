@@ -2,7 +2,9 @@
 
 **Version 1.0.1** — standalone, **client-side** web interface for [Incognito](../README.md). One of two ways to anonymize qualitative text (alongside the desktop app). Detection runs in the browser — no Electron, no Python server required for the core UI (optional Albert API in generative API mode; optional local GLiNER2-PII sidecar under `gliner2_pii_server/`).
 
-**Live app:** [https://xiaoouwang.github.io/Incognito/](https://xiaoouwang.github.io/Incognito/) · Huma-Num: [https://mshs-sud-est.gitpages.huma-num.fr/incognito/](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)
+**Live app (canonical):** [https://mshs-sud-est.gitpages.huma-num.fr/incognito/](https://mshs-sud-est.gitpages.huma-num.fr/incognito/) · mirror: [https://xiaoouwang.github.io/Incognito/](https://xiaoouwang.github.io/Incognito/)
+
+**Source:** [GitLab Huma-Num](https://gitlab.huma-num.fr/mshs-sud-est/incognito) · mirror: [GitHub](https://github.com/xiaoouwang/Incognito)
 
 > **Everything runs locally — your data never leaves your computer.**
 > Your text is analyzed in the browser, not on a remote server. The only internet use is a one-time download of detection models; your documents are never uploaded. *(API-based generative mode is the exception: text is sent to Albert with your API key.)*
@@ -83,24 +85,24 @@ The `dist/` folder can be served by any static file host.
 
 ## Deploy
 
-`vite.config.js` uses `base: "./"` so asset paths work under both `/Incognito/` (GitHub) and `/incognito/` (Huma-Num GitLab) subpaths. The Albert CORS Worker allowlists both Pages origins.
+`vite.config.js` uses `base: "./"` so asset paths work under both `/incognito/` (Huma-Num GitLab) and `/Incognito/` (GitHub mirror) subpaths. The Albert CORS Worker allowlists both Pages origins.
 
-### GitHub Pages
+### Huma-Num GitLab Pages (canonical)
+
+[`.gitlab-ci.yml`](../.gitlab-ci.yml) builds the app for [mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito).
+
+1. Push `main` to `https://gitlab.huma-num.fr/mshs-sud-est/incognito.git` (changes under `web_interface/` or `.gitlab-ci.yml`).
+2. After the first green `pages` job, the site is at **https://mshs-sud-est.gitpages.huma-num.fr/incognito/**
+3. Redeploy without code changes: **Build → Pipelines → Run pipeline**.
+
+### GitHub Pages (mirror)
 
 [`.github/workflows/deploy-web.yml`](../.github/workflows/deploy-web.yml) builds `web_interface/` and publishes `dist/` when you push to `main` **and** the commit touches `web_interface/` (or the workflow file itself).
 
-1. **Commit and push** the `web_interface/` folder (and the workflow file) to GitHub.
-2. In the repo on GitHub: **Settings → Pages → Build and deployment → Source** → choose **GitHub Actions**.
-3. After the first successful workflow run, the site is live at **https://xiaoouwang.github.io/Incognito/**
-4. To redeploy without changing code: **Actions → Deploy web interface → Run workflow**.
-
-### Huma-Num GitLab Pages
-
-[`.gitlab-ci.yml`](../.gitlab-ci.yml) builds the same app for [mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito).
-
-1. Push `main` to `https://gitlab.huma-num.fr/mshs-sud-est/incognito.git`.
-2. After the first green `pages` job, the site is at **https://mshs-sud-est.gitpages.huma-num.fr/incognito/**
-3. Redeploy without code changes: **Build → Pipelines → Run pipeline**.
+1. Push the same `main` to the GitHub mirror.
+2. In the GitHub repo: **Settings → Pages → Build and deployment → Source** → **GitHub Actions**.
+3. Site mirror: **https://xiaoouwang.github.io/Incognito/**
+4. Redeploy without code changes: **Actions → Deploy web interface → Run workflow**.
 
 ## Stack
 

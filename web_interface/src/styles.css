@@ -867,20 +867,6 @@ h2 {
   overflow-y: auto;
 }
 
-.workspace-source .highlighted-text,
-.workspace-source .highlighted-text-shell,
-.workspace-source .empty-state {
-  flex: 1 1 auto;
-  align-self: stretch;
-  box-sizing: border-box;
-  font-size: 1.02rem;
-  height: auto;
-  line-height: 1.8;
-  max-height: none;
-  min-height: 0 !important;
-  overflow-y: auto;
-}
-
 /*
   DomReconcileErrorBoundary wraps panel bodies in a plain div. Without flex
   shrink + min-height:0 it grows to content height, then .panel { overflow:hidden }
@@ -895,32 +881,47 @@ h2 {
   position: relative;
 }
 
+/*
+  Grid 1fr fill — Chrome mishandles absolute inset + height/width:100% on
+  <textarea> (phantom scrollbar / bottom clip). Flex + height:0 breaks wrap
+  in WebKit. A single-row grid works in Chrome, Firefox, and Safari.
+*/
 .workspace-source .dom-reconcile-boundary,
 .workspace-source-body {
-  display: flex;
+  display: grid;
   flex: 1 1 auto;
-  flex-direction: column;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
-  position: relative;
+  min-width: 0;
+  overflow: hidden;
 }
 
-/*
-  Absolute fill — do not use flex + height:0 on <textarea>. That pattern
-  breaks soft-wrap and mid-glyph clips the first line in WebKit/Safari.
-*/
 .workspace-source textarea {
-  position: absolute;
-  inset: 0;
   box-sizing: border-box;
   font-size: 1.02rem;
   height: 100%;
   line-height: 1.8;
   max-height: none;
   min-height: 0 !important;
-  overflow-wrap: break-word;
+  min-width: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   resize: none;
-  white-space: pre-wrap;
+  width: 100%;
+}
+
+.workspace-source .highlighted-text,
+.workspace-source .highlighted-text-shell,
+.workspace-source .empty-state {
+  box-sizing: border-box;
+  font-size: 1.02rem;
+  height: 100%;
+  line-height: 1.8;
+  max-height: none;
+  min-height: 0 !important;
+  min-width: 0;
+  overflow-y: auto;
   width: 100%;
 }
 

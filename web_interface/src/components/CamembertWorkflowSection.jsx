@@ -2055,6 +2055,12 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
                     setEntityMenu(null);
                   }}
                   placeholder={t("textPlaceholder")}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={true}
+                  data-1p-ignore="true"
+                  data-lpignore="true"
                 />
               )}
             </div>

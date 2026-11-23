@@ -7,8 +7,9 @@ authors:
     given-names: Xiaoou
     affiliation: "Maison des Sciences de l'Homme Sud-Est, Université Côte d'Azur"
     email: xiaoou.wang@univ-cotedazur.fr
-repository-code: "https://github.com/xiaoouwang/Incognito"
-url: "https://github.com/xiaoouwang/Incognito"
+repository-code: "https://gitlab.huma-num.fr/mshs-sud-est/incognito"
+url: "https://mshs-sud-est.gitpages.huma-num.fr/incognito/"
+# Public mirror: https://github.com/xiaoouwang/Incognito
 abstract: >-
   A privacy-first, cross-platform tool for reviewing and anonymizing qualitative
   texts in the social sciences. Available as a desktop application (Electron,
