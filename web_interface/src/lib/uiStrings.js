@@ -482,18 +482,18 @@ const en = {
       {
         heading: "Open source — you can check for yourself",
         paragraphs: [
-          "Incognito is free and open source. The full programme — web and desktop versions — is published on GitHub under an AGPL licence, which means anyone can read, study, and share the code.",
+          "Incognito is free and open source. The web application is published under an AGPL licence (canonical repository on Huma-Num GitLab, public mirror on GitHub), which means anyone can read, study, and share the code.",
         ],
         bullets: [
           "Your research lab, university IT service, or a trusted colleague can inspect the source and confirm that your material is not sent elsewhere.",
           "There are no hidden components designed to extract your corpus; what you see described here is what the published code does.",
           "If you are preparing a data-management plan or ethics file, you can point reviewers to the repository as evidence of how processing stays local.",
         ],
-        linkLabel: "Browse the code on GitHub — xiaoouwang/Incognito",
+        linkLabel: "Browse the code on GitLab Huma-Num — mshs-sud-est/incognito",
       },
     ],
     footnote:
-      "A desktop version is also available; it follows the same principles — local processing, no upload of your corpus.",
+      "Incognito is maintained as a browser-only web app — local processing in your browser, no upload of your corpus (except Albert API mode when you choose it).",
   },
 };
 
@@ -993,18 +993,18 @@ const fr = {
       {
         heading: "Open source — vous pouvez vérifier",
         paragraphs: [
-          "Incognito est libre et open source. Le programme complet — versions web et bureau — est publié sur GitHub sous licence AGPL : chacun·e peut lire, étudier et partager le code.",
+          "Incognito est libre et open source. L'application web est publiée sous licence AGPL (dépôt canonique sur GitLab Huma-Num, miroir public sur GitHub) : chacun·e peut lire, étudier et partager le code.",
         ],
         bullets: [
           "Votre laboratoire, le service informatique de l'université ou un·e collègue de confiance peut examiner le code et confirmer que vos matériaux ne sont pas envoyés ailleurs.",
           "Il n'y a pas de composant caché conçu pour extraire votre corpus ; ce qui est décrit ici correspond au code publié.",
           "Pour un plan de gestion des données ou un dossier éthique, vous pouvez orienter les évaluateur·rice·s vers le dépôt comme preuve du traitement local.",
         ],
-        linkLabel: "Voir le code sur GitHub — xiaoouwang/Incognito",
+        linkLabel: "Voir le code sur GitLab Huma-Num — mshs-sud-est/incognito",
       },
     ],
     footnote:
-      "Une version de bureau est aussi disponible ; elle suit les mêmes principes — traitement local, aucun envoi de votre corpus.",
+      "Incognito est maintenu uniquement comme application web dans le navigateur — traitement local, aucun envoi de votre corpus (sauf mode API Albert si vous le choisissez).",
   },
 };
 

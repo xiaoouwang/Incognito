@@ -1,18 +1,18 @@
-
-
 # ✨ Incognito
 
-**Anonymisez vos corpus qualitatifs en local — sans envoyer vos données dans le cloud.**
+**Anonymisez vos corpus qualitatifs dans le navigateur — sans envoyer vos données dans le cloud.**
 
-Outil pour les sciences humaines et sociales — entretiens, notes de terrain, réponses ouvertes. **Deux interfaces** partagent le même workflow de revue : une **application de bureau** multiplateforme (macOS, Windows, Linux) et une **interface web** dans le navigateur. Détectez les entités sensibles, contrôlez ce qui est remplacé, exportez un texte anonymisé et une trace de vos décisions.
+Outil pour les sciences humaines et sociales — entretiens, notes de terrain, réponses ouvertes. **Interface web** uniquement : détectez les entités sensibles, contrôlez ce qui est remplacé, exportez un texte anonymisé et une trace de vos décisions.
 
 Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Humanités Numériques · [MSHS Sud-Est](https://mshs.univ-cotedazur.fr/) · [Université Côte d'Azur](https://univ-cotedazur.fr/)
 
-**Version actuelle : 1.0.1** (interface web) · **0.3.0** (application de bureau — installateurs sur [GitHub Releases](https://github.com/xiaoouwang/Incognito/releases), miroir)
+**Version actuelle : 1.0.1** (web)
 
 **Dépôt canonique** — [GitLab Huma-Num](https://gitlab.huma-num.fr/mshs-sud-est/incognito) · miroir public : [GitHub](https://github.com/xiaoouwang/Incognito)
 
-**🌐 [Incognito Web](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)** — **quatre parcours** : anonymisation **de base** (GLiNER2 NER seul), **avancée** (GLiNER2 + ReLex / graphe), **générative locale** et **générative API** (Albert) ; **graphe de personnes** (vue force-graph, relations, soft-exclude, export CSV) ; détection locale, relecture interactive ; **Export everything** (ZIP lot enrichi). *Tout s'exécute localement — vos données ne quittent pas votre ordinateur* (sauf appel Albert en mode API, avec votre clé). Voir la section [Version web](#-version-web). Miroir : [GitHub Pages](https://xiaoouwang.github.io/Incognito/).
+**🌐 [Incognito Web](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)** — **quatre parcours** : anonymisation **de base** (GLiNER2 NER seul), **avancée** (GLiNER2 + ReLex / graphe), **générative locale** et **générative API** (Albert) ; **graphe de personnes** ; détection locale, relecture interactive ; **Export everything**. *Tout s'exécute localement — vos données ne quittent pas votre ordinateur* (sauf appel Albert en mode API, avec votre clé). Miroir : [GitHub Pages](https://xiaoouwang.github.io/Incognito/).
+
+> **Choix de maintenance (2026-11)** — Les applications de bureau (Electron + spaCy / CamemBERT) sont moins soutenables à long terme (chaînes de build multi-OS, emballage PyInstaller, releases binaires). Le projet se concentre désormais **uniquement sur l'interface web** dans le navigateur : un seul déploiement, mise à jour continue, et le même niveau de confidentialité locale pour les parcours NER.
 
 ![Demo](demo.gif)
 
@@ -20,15 +20,13 @@ Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Hu
 
 ## 🔒 Pourquoi cet outil ?
 
-
 |                              |                                                                        |
 | ---------------------------- | ---------------------------------------------------------------------- |
-| 🏠 **100 % local**            | Bureau : aucun appel à une API externe. Web : *tout s'exécute localement dans le navigateur* — seuls les poids du modèle sont téléchargés, jamais vos textes. |
-| 🌍 **Multiplateforme**        | Installateurs bureau macOS / Windows / Linux, ou **[Incognito Web](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)** dans le navigateur. |
-| 🇫🇷 **Pensé pour le français** | Modèles spaCy et CamemBERT adaptés aux textes qualitatifs en français. |
+| 🏠 **100 % local (navigateur)** | Analyse dans le navigateur — seuls les poids du modèle sont téléchargés, jamais vos textes (sauf Albert en mode API). |
+| 🌍 **Sans installateur**      | Ouvrez **[Incognito Web](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)** — aucun `.dmg` / `.exe` / `.AppImage`. |
+| 🇫🇷 **Pensé pour le français** | GLiNER2, ReLex et parcours qualitatifs adaptés aux entretiens et notes de terrain. |
 | 👁️ **Contrôle humain**        | Vous validez, corrigez et désactivez entité par entité avant l'export. |
-| 📋 **Traçabilité**            | Rapport d'audit et exports prêts pour l'archivage ou Label Studio.     |
-
+| 📋 **Traçabilité**            | Rapport d'audit, correspondance original ↔ remplacé, Label Studio, ZIP lot. |
 
 > ⚠️ Assistant d'anonymisation, pas une garantie d'anonymat total. Relisez toujours le résultat avant diffusion.
 
@@ -36,215 +34,105 @@ Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Hu
 
 ## 🚀 En bref
 
-1. **Importez** un texte, un dossier, ou des fichiers sélectionnés (`.txt`, `.docx` sur le web)
-2. **Lancez l'anonymisation** — bouton *Run Anonymization* sur le web ; détection d'entités (NER) en un clic sur le bureau
+1. **Importez** un texte, un dossier, ou des fichiers (`.txt`, `.docx`)
+2. **Lancez l'anonymisation** — *Run Anonymization*
 3. **Affinez** catégories et occurrences (personnes, lieux, organisations, dates, e-mails…)
-4. **Exportez** texte anonymisé, rapport et JSON Label Studio — dossier `outputs-YYYYMMDD-HHMMSS` (bureau) ou ZIP (web)
+4. **Exportez** texte anonymisé, rapport, Label Studio, ou **Export everything** (ZIP)
 
-Placeholders stables du type `[PER_1]`, `[PER_2]`, `[LOC_1]`, `[ORG_1]`, `[EMA_1]` — trois lettres de catégorie + numéro ; la **première valeur distincte** d'une catégorie devient `_1`, la suivante `_2`, etc.
+Placeholders stables du type `[PER_1]`, `[LOC_1]`, `[ORG_1]`, `[EMA_1]` — trois lettres de catégorie + numéro.
 
-> **v1.0.1 (web)** — GLiNER2 (multi / PII ONNX), ReLex en mode avancé, modes génératifs Local / API, vue graphe **react-force-graph**, pseudonymisation / généralisation. **v1.0.0** — première version majeure (graphe + génératif Albert). **v0.4.0** — GLiNER. **v0.3.0** — CamemBERT. Pas une garantie d'anonymat total ; relisez toujours avant diffusion.
+Disponibles dans l'interface web :
 
-Disponibles dans les **deux interfaces** (bureau et web), avec des moteurs NER adaptés à chaque plateforme :
-
-- 🔍 **NER configurable** — bureau : spaCy (petit / grand) et CamemBERT ; web : **de base** (GLiNER2-multi ou GLiNER2-PII ONNX), **avancée** (GLiNER2 + ReLex), **générative locale** et **générative API** (Albert)
-- 🕸️ **Graphe de personnes (web)** — aliases / attributs / relations (ReLex en avancé) ; vue réseau **react-force-graph** ; soft-exclude synchronisé ; export CSV (long ou une ligne par personne)
-- 📧 **Règles regex (web, mode avancé)** — e-mails, URL et numéros de téléphone détectés par expressions régulières (prioritaires sur GLiNER)
-- 🖍️ **Revue interactive** — surlignage, ajout/suppression de spans, bascule par entité, catégories personnalisées
-- 📁 **Mode lot** — bureau : dossier `.txt` sur disque ; web : **dossier entier** ou **fichiers choisis** (`.txt`, `.docx`), navigation Précédent/Suivant, saut par n° ou nom, barres de progression
-- 📄 **Exports automatiques** — `*-anonymized.txt`, `*-report.md`, `*-label-studio.json` (variante `*_modified` après changement de fichier)
+- 🔍 **NER configurable** — **de base** (GLiNER2-multi ou GLiNER2-PII ONNX), **avancée** (GLiNER2 + ReLex), **générative locale** et **générative API** (Albert)
+- 🕸️ **Graphe de personnes** — aliases / attributs / relations ; vue **react-force-graph** ; soft-exclude ; export CSV
+- 📧 **Règles regex** — e-mails, URL, téléphones (prioritaires en mode avancé)
+- 🖍️ **Revue interactive** — surlignage, ajout/suppression de spans, bascule par entité
+- 📁 **Mode lot** — dossier ou fichiers choisis, vagues de traitement, ZIP
 - 🏷️ **Label Studio** — pré-annotations + configuration XML
-- 📊 **Rapport d'audit** — provenance (NER automatique vs revue humaine), positions de caractères, index complet des spans
+- 📊 **Rapport d'audit** — provenance, positions de caractères (start/end)
 
 ---
 
-## ⚙️ Stack & pipeline
+## ⚙️ Stack
 
-Incognito repose sur **deux déploiements** partageant la logique de revue (React) :
-
-### Application de bureau
-
-Interface **Electron** + **React** (Vite), moteur NER **Python** embarqué (PyInstaller), modèles **spaCy** et **CamemBERT** / Transformers. Chaîne de build **electron-builder** → installateurs `.dmg`, `.exe`, `.AppImage` / `.deb`, avec CI **GitHub Actions** pour les trois systèmes.
-
-
-| Couche    | Outils                                          |
-| --------- | ----------------------------------------------- |
-| 🖥️ Bureau  | Electron, React                                 |
-| 🧠 NER     | Python 3.12, spaCy, CamemBERT (Hugging Face)    |
-| 📦 Release | PyInstaller, electron-builder                   |
-| 🔄 CI      | GitHub Actions (`macos` / `windows` / `ubuntu`) |
-
-
-### Interface web
-
-Interface **React** (Vite) + **Transformers.js** (ONNX dans un Web Worker), déployée en priorité sur **Huma-Num GitLab Pages**. Voir [`web_interface/`](web_interface/).
-
-
-| Couche   | Outils                                              |
-| -------- | --------------------------------------------------- |
-| 🌐 Web   | React, Vite, Transformers.js, ONNX Runtime WASM, GLiNER (ONNX), Albert (mode génératif) |
-| 🧠 NER   | GLiNER2-multi / GLiNER2-PII ONNX, ReLex (avancé), CamemBERT (option) |
-| 📦 Release | `npm run build` → **GitLab CI** (`.gitlab-ci.yml`) ; miroir GitHub Actions (`deploy-web.yml`) |
-
-
-Même logique de revue et d'export — bureau ou navigateur, selon les besoins de l'équipe.
+| Couche   | Outils |
+| -------- | ------ |
+| 🌐 App   | React, Vite (`web_interface/`) |
+| 🧠 NER   | GLiNER2 ONNX (multi / PII), ReLex (avancé), ONNX Runtime WASM |
+| 🔗 API   | Albert (mode génératif) + Worker Cloudflare CORS (`albert-proxy/`) |
+| 📦 Deploy | **GitLab CI Pages** (Huma-Num) · miroir GitHub Actions Pages |
 
 ---
 
-## 🌐 Version web
+## 🌐 Utilisation
 
-**[Incognito Web](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)** — interface autonome pour anonymiser des corpus qualitatifs **dans le navigateur**. Aucun Electron : le NER s'exécute localement (ONNX / WASM) ; le mode **avancé** ajoute le graphe ReLex ; les modes **génératifs** utilisent Albert (local ou API — texte envoyé à l'API uniquement en mode API).
-
-**Quatre parcours** (*Basic* / *Advanced* / *Local generative* / *API-based generative*) :
+**[Essayer en ligne (Huma-Num)](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)** · miroir [GitHub Pages](https://xiaoouwang.github.io/Incognito/) · détails : [`web_interface/README.md`](web_interface/README.md)
 
 | Mode | Moteur | Usage typique |
 | ---- | ------ | ------------- |
-| **De base** | GLiNER2-multi ou GLiNER2-PII ONNX (NER seul) | Détection multi-étiquettes locale, sans graphe. |
-| **Avancé** | GLiNER2 + ReLex + regex (e-mail, URL, téléphone, pièce d'identité…) | Même détection + **graphe de personnes** (aliases, attributs, relations). |
-| **Génératif local** | Albert / pipeline local | Revue générative sans appel cloud (selon config). |
-| **Génératif API** | Albert (API) | Graphe / relations via LLM, avec revue et soft-exclude. |
-
-**Graphe de personnes (avancé et génératif)** — soft-exclude synchronisé catégories ↔ graphe ; vue réseau **react-force-graph** ; régénération ReLex live ; **Export CSV** / **Export CSV by person**.
-
-**Exports** — texte anonymisé, rapport d'audit (positions start/end), Label Studio, correspondance original ↔ remplacé, **Export everything** (ZIP lot enrichi).
-
-**Interface :** démos préchargées ; *Paste your own text* ; mise en page catégories · texte surligné · graphe · aperçu anonymisé (panneaux Original / Anonymized synchronisés) ; interface **FR/EN**.
-
-👉 **[Essayer en ligne (Huma-Num)](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)** · miroir : [GitHub Pages](https://xiaoouwang.github.io/Incognito/) · [Code source](web_interface/) · [Déploiement](web_interface/README.md#deploy)
-
-
-|                              | Version web                                                            | Application de bureau (ci-dessous)                    |
-| ---------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------- |
-| 🔒 **Confidentialité**        | Analyse dans le navigateur ; seul le modèle est téléchargé une fois (sauf Albert en mode génératif) | 100 % local, hors ligne après installation du modèle  |
-| 🧠 **NER**                    | De base (GLiNER2) / avancé (+ ReLex) / génératif local & API | spaCy (sm/lg) + CamemBERT                             |
-| 📁 **Mode lot**               | Dossier **ou** fichiers choisis (`.txt`, `.docx`) → revue → ZIP         | Dossier `.txt` → écriture dans `outputs-YYYYMMDD-HHMMSS/` |
-| 📊 **Progression**            | Barres visuelles (téléchargement modèle, segments GLiNER, chargement lot) | Statut texte dans l'interface                         |
-| 🏷️ **Label Studio**           | Export JSON + config XML                                               | Idem + import lot                                     |
-| 💾 **Installation**           | URL (navigateur) — aucun installateur requis                            | Installateurs macOS / Windows / Linux                 |
-
-
-Déployé en priorité sur **Huma-Num GitLab Pages** à chaque push sur `main` qui modifie `web_interface/` ([`.gitlab-ci.yml`](.gitlab-ci.yml) → [mshs-sud-est.gitpages.huma-num.fr/incognito/](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)). Miroir **GitHub Pages** via [`.github/workflows/deploy-web.yml`](.github/workflows/deploy-web.yml) → [xiaoouwang.github.io/Incognito/](https://xiaoouwang.github.io/Incognito/).
-
----
-
-## 💾 Téléchargement (application de bureau)
-
-🌍 **Cross-platform** — binaires autonomes pour **macOS**, **Windows** et **Linux** → [GitHub Releases](https://github.com/xiaoouwang/Incognito/releases)
-
-
-| Plateforme              | Fichier typique             |
-| ----------------------- | --------------------------- |
-| 🍎 macOS (Apple Silicon) | `Incognito-0.3.0-arm64.dmg` |
-| 🍎 macOS (Intel)         | `Incognito-0.3.0.dmg`       |
-| 🪟 Windows               | `Incognito Setup 0.3.0.exe` |
-| 🐧 Linux                 | `Incognito-0.3.0.AppImage`  |
-
-
-Premier lancement CamemBERT : connexion internet une fois (~400 Mo, téléchargement du modèle Hugging Face).
+| **De base** | GLiNER2-multi ou GLiNER2-PII ONNX | NER multi-étiquettes local, sans graphe |
+| **Avancé** | GLiNER2 + ReLex + regex | NER + **graphe de personnes** |
+| **Génératif local** | Pipeline local / Albert local | Revue générative sans cloud (selon config) |
+| **Génératif API** | Albert (API) | Graphe / relations via LLM + revue |
 
 ---
 
 ## 🛠️ Développeurs
 
-**Prérequis** — Node.js 20+, Python **3.12**
+**Prérequis** — Node.js 20+
 
 ```bash
 # Dépôt canonique (Huma-Num)
 git clone https://gitlab.huma-num.fr/mshs-sud-est/incognito.git
 cd Incognito
-npm install
 
-# Miroir GitHub (optionnel) :
-# git clone https://github.com/xiaoouwang/Incognito.git
-
-python3.12 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/pip install -r requirements-camembert.txt   # CamemBERT
-.venv/bin/python -m spacy download fr_core_news_sm
-.venv/bin/python -m spacy download fr_core_news_lg
-
+# Depuis la racine (délègue à web_interface/)
 npm run dev
-```
 
-**Créer les installateurs**
-
-```bash
-npm run dist:mac      # macOS — bundle complet (spaCy + CamemBERT)
-npm run dist:win      # Windows
-npm run dist:linux    # Linux
-```
-
-Version allégée (spaCy seul, ~3× plus léger) : `npm run dist:mac:spacy` (idem `:win`, `:linux`).
-
-CI multi-plateforme : workflow **Release binaries** dans `.github/workflows/release.yml`.
-
-### Interface web (développement local)
-
-```bash
+# Ou directement :
 cd web_interface
 npm install
 npm run dev
 ```
 
-Voir [`web_interface/README.md`](web_interface/README.md) pour le mode lot, la PWA et le déploiement (GitLab Pages prioritaire, miroir GitHub Pages).
-
-### Branches Git (développement par plateforme)
-
-À partir de la version **0.3.0**, la branche `main` couvre le développement bureau (macOS) et l'interface web.
-
-
-| Branche   | Usage                                           |
-| --------- | ----------------------------------------------- |
-| `main`    | Modifications et builds spécifiques **macOS**   |
-| `windows` | Modifications et builds spécifiques **Windows** |
-| `linux`   | Modifications et builds spécifiques **Linux**   |
-
-
-**Workflow recommandé**
+Build statique :
 
 ```bash
-# Basculer vers la branche de votre plateforme avant de travailler
-git checkout main        # sur macOS
-git checkout windows    # sur Windows
-git checkout linux      # sur Linux
+npm run build          # → web_interface/dist/
+npm run preview
 ```
 
-Toute modification doit être faite sur la branche correspondant à la plateforme ciblée.
+Scripts utiles : `scripts/benchmark_albert.py` (latence Albert) · sidecar optionnel `web_interface/gliner2_pii_server/`.
+
+### Déploiement
+
+- **Canonique** — push `main` sur GitLab → [`.gitlab-ci.yml`](.gitlab-ci.yml) → [mshs-sud-est.gitpages.huma-num.fr/incognito/](https://mshs-sud-est.gitpages.huma-num.fr/incognito/)
+- **Miroir** — même `main` sur GitHub → [`.github/workflows/deploy-web.yml`](.github/workflows/deploy-web.yml) → [xiaoouwang.github.io/Incognito/](https://xiaoouwang.github.io/Incognito/)
+
+Les changements hors `web_interface/` (et hors les fichiers CI) ne redéploient pas le site.
 
 ---
 
 ## 📚 Citer cet outil
 
-Si vous utilisez **Incognito** dans un article, un rapport, un protocole ou un jeu de données, merci de citer :
-
-> Wang, X. (2026). *Incognito: A privacy-first, cross-platform tool for reviewing and anonymizing qualitative texts in the social sciences* (Version 0.3.0) [Logiciel]. Maison des Sciences de l'Homme Sud-Est / Université Côte d'Azur. [https://gitlab.huma-num.fr/mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito)
-
-**Clé LaTeX** — `wang2026incognito`
-
-```latex
-\cite{wang2026incognito}
-```
+> Wang, X. (2026). *Incognito: A privacy-first tool for reviewing and anonymizing qualitative texts in the social sciences* (Version 1.0.1) [Logiciel]. Maison des Sciences de l'Homme Sud-Est / Université Côte d'Azur. [https://gitlab.huma-num.fr/mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito)
 
 **BibTeX**
 
 ```bibtex
 @software{wang2026incognito,
   author  = {Wang, Xiaoou},
-  title   = {{Incognito}: A privacy-first, cross-platform tool for reviewing and anonymizing qualitative texts in the social sciences},
+  title   = {{Incognito}: A privacy-first tool for reviewing and anonymizing qualitative texts in the social sciences},
   year    = {2026},
-  version = {0.3.0},
+  version = {1.0.1},
   url     = {https://gitlab.huma-num.fr/mshs-sud-est/incognito},
-  note    = {Desktop (Electron + spaCy/CamemBERT) and browser (Transformers.js) interfaces.
+  note    = {Browser interface (React + GLiNER2 / Transformers.js).
              Maison des Sciences de l'Homme Sud-Est, Universit{\'e} C{\^o}te d'Azur.
              Mirror: https://github.com/xiaoouwang/Incognito}
 }
 ```
 
-**APA (7e éd.)**
-
-> Wang, X. (2026). *Incognito: A privacy-first, cross-platform tool for reviewing and anonymizing qualitative texts in the social sciences* (Version 0.3.0) [Computer software]. Maison des Sciences de l'Homme Sud-Est, Université Côte d'Azur. [https://gitlab.huma-num.fr/mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito)
-
-Un fichier [`CITATION.cff`](CITATION.cff) est aussi disponible (dépôt GitLab / miroir GitHub).
+Fichier [`CITATION.cff`](CITATION.cff) également disponible.
 
 ---
 
@@ -260,158 +148,33 @@ Les rapports d'audit peuvent contenir des valeurs sensibles : manipulez-les comm
 
 Copyright (c) 2026 Xiaoou Wang
 
-**Incognito** (v0.3.0) is free and open-source software released under the [GNU Affero General Public License v3.0 (AGPLv3)](LICENSE).
-
-You are free to use, study, modify, and redistribute this software under the terms of the AGPLv3 license.
-
-If you distribute a modified version of Incognito, or make it available to users over a network, you must also make the corresponding source code available under the same license.
-
-The full license text is available in the [LICENSE](LICENSE) file included with this repository.
-
-### Citation
-
-If you use Incognito in academic research, please cite the project and acknowledge its use in publications whenever appropriate.
-
-### Copyright and Authorship
-
-Incognito was designed and developed by Xiaoou Wang.
-
-Copyright remains with the original author. The AGPLv3 license grants users the rights to use, modify, and redistribute the software under the conditions specified by the license.
-
-© 2026 Xiaoou Wang. All rights reserved except as granted under the AGPLv3 license.
+**Incognito** is free and open-source software released under the [GNU Affero General Public License v3.0 (AGPLv3)](LICENSE).
 
 ---
 
 ## 📝 Mises à jour
 
-Historique des évolutions fonctionnelles, avec date et fonctions concernées dans le code.
+### 2026-11-23 — Web only : retrait de l'application de bureau
+
+- **Décision** — arrêter la maintenance Electron / spaCy / CamemBERT bureau (builds multi-OS peu soutenables) et **focaliser le dépôt sur l'app web**.
+- Suppression du code bureau (`electron/`, `src/` Electron, PyInstaller, `release.yml`, textes NER de test bureau, etc.).
+- Racine réduite à un `package.json` mince qui délègue à `web_interface/`.
+- Documentation et citations recentrées sur GitLab Huma-Num + Pages web.
 
 ### 2026-11-23 — UX revue, exports enrichis et déploiement Huma-Num
 
-- **Paste your own text** — surface de collage vide en sortie de démo ; layout textarea (grille CSS) pour Chrome / Firefox / Safari.
-- **Défilement** — panneaux Original / Anonymized et wrappers `DomReconcileErrorBoundary` dans la chaîne flex (plus de contenu coupé sans scrollbar).
-- **Exports** — *Export everything* (ZIP lot) ; positions start/end dans le rapport / correspondance ; exports graphe et Label Studio enrichis.
-- **Avancé** — régénération du graphe de personnes via ReLex live (plus de fixture démo) ; polarité des puces œil (anonymisé = barré).
-- **Déploiement** — Pages **Huma-Num** ([`.gitlab-ci.yml`](.gitlab-ci.yml)) comme cible principale ; miroir GitHub Pages ; proxy Albert CORS allowlist les deux origines ; `.npmrc` saute le téléchargement CUDA de `onnxruntime-node` en CI.
+- **Paste your own text** — surface de collage ; layout textarea (grille CSS) multi-navigateurs.
+- **Défilement** — panneaux Original / Anonymized et wrappers d'erreur dans la chaîne flex.
+- **Exports** — *Export everything* ; positions start/end ; exports graphe enrichis.
+- **Avancé** — régénération ReLex live ; polarité des puces œil.
+- **CI** — Pages Huma-Num + miroir GitHub ; `.npmrc` saute CUDA `onnxruntime-node`.
 
-### 2026-10-23 — v1.0.1 — GLiNER2, ReLex, force-graph et modes génératifs Local / API
+### 2026-10-23 — v1.0.1 — GLiNER2, ReLex, force-graph et modes génératifs
 
-- **Version 1.0.1 (web)** — parcours clarifiés : **Basic** = NER seul (choix GLiNER2-multi ou GLiNER2-PII ONNX) ; **Advanced** = GLiNER2 + **ReLex** (graphe) ; génératif scindé en **Local** et **API-based**.
-- **Vue graphe** — un seul bouton *Show person graph* basé sur **react-force-graph-2d** (vis-network retiré).
-- **Remplacements** — placeholders, pseudonymisation et échelles de généralisation ; numéro de pièce d'identité parmi les labels.
-- **Lot** — traitement par vagues (chunk waves) ; échantillons multilingues sous `web_interface/samples/`.
-- **UX** — plus de scroll forcé au changement d’onglet génératif ; boundary d’erreur au démarrage ; cache Vite / SW assaini.
-- Composants / libs — `PersonGraphForceModal`, `gliner2Multi*`, `gliner2PiiOnnx*`, `glinerRelex*`, `pseudonymize.js`, `generalize.js`.
+- Parcours Basic / Advanced / Local generative / API-based.
+- Vue graphe **react-force-graph-2d** ; placeholders / pseudonymes / généralisation.
+- Lot par vagues ; échantillons multilingues sous `web_interface/samples/`.
 
-### 2026-10-02 — Proxy CORS Albert (Pages)
+### Historique antérieur
 
-- **Problème** — sur Pages, le mode génératif appelait Albert en cross-origin ; l’API n’envoie pas de headers CORS utilisables, et le proxy Vite n’existe qu’en local.
-- **Correctif** — Worker Cloudflare `incognito-albert-proxy` (`web_interface/albert-proxy/`) qui relaie `/v1/…` vers `albert.api.etalab.gouv.fr` avec CORS pour les origines Pages (**Huma-Num** + miroir GitHub) ; la clé reste dans le navigateur.
-- URL proxy : `https://incognito-albert-proxy.singerxo.workers.dev/v1` (`ALBERT_CORS_PROXY_BASE_URL`).
-
-### 2026-10-02 — v1.0.0 — Graphe de personnes, relations et anonymisation générative
-
-- **Version 1.0.0 (web)** — première version majeure (sortie de la série 0.x) : le parcours web intègre un **graphe de personnes** et un mode **génératif**.
-- **Graphe de personnes** (modes de base, avancé et génératif) — construction via **UDPipe** French-GSD (WASM) ou proximité ; soft-exclude synchronisé avec les catégories ; pastilles de focus au-dessus du texte surligné ; édition manuelle **Related to** ; exports **CSV** (une ligne par surface) et **CSV by person** (une ligne par personne).
-- **Anonymisation générative** — revue Albert (graphe / relations), soft-exclude, pastilles de focus, export CSV.
-- **Mise en page** — catégories · texte surligné · graphe · aperçu anonymisé (plein largeur en bas).
-- Composants / libs — `PersonGraphCard`, `PersonFocusChips`, `usePersonGraphPanel`, `basicPersonGraph.js`, `depWorker.js`, `personGraphCsv.js`, `GenerativeWorkflowSection`, `GenerativeRelationView`.
-- Déploiement : [GitLab Pages](https://mshs-sud-est.gitpages.huma-num.fr/incognito/) · miroir [GitHub Pages](https://xiaoouwang.github.io/Incognito/) · voir [`web_interface/README.md`](web_interface/README.md).
-- Journal détaillé design / code / motifs (jour 1 → 1.0.0) : [`docs/WEB_INTERFACE_EVOLUTION.md`](docs/WEB_INTERFACE_EVOLUTION.md).
-
-### 2026-06-25 — v0.4.0 — Anonymisation avancée (GLiNER) et interface web
-
-- **Version 0.4.0 (web)** — bascule **Anonymisation de base** / **Anonymisation avancée** ; GLiNER pour des étiquettes fines (santé, diplômes, nationalité, fonctions…).
-- **Regex prioritaires** en mode avancé — e-mails, URL et numéros de téléphone (mêmes motifs que le bureau), sans passer par GLiNER.
-- **Placeholders courts** — préfixes à trois lettres (`[PER_1]`, `[LOC_1]`, `[NAT_1]`…).
-- **UX** — mise en page élargie, panneaux texte plus grands, défilement synchronisé surlignage / aperçu anonymisé, barre de progression GLiNER par segment.
-- **Composants** — `CamembertWorkflowSection`, `GlinerWorkflowSection`, `glinerRuntime.js`, `glinerSampleDemo.js`, démos Jean Dupont (GLiNER) et Claire/Julien (CamemBERT).
-- Déploiement : [GitLab Pages](https://mshs-sud-est.gitpages.huma-num.fr/incognito/) · miroir [GitHub Pages](https://xiaoouwang.github.io/Incognito/) · voir [`web_interface/README.md`](web_interface/README.md).
-
-### 2026-06-25 — v0.3.0 — Anonymisation de base stabilisée (web)
-
-- **Version 0.3.0** — parcours d'**anonymisation de base** stabilisé : détection d'entités → relecture → remplacement par placeholders numérotés (`[PER_1]`, `[PER_2]`, `[LOC_1]`…).
-- **Interface web** prête pour un usage courant : démo préchargée, interface **FR/EN**, fenêtre *Détails ici* (confidentialité), mode lot, barres de progression.
-- **Détection** — expansion de toutes les occurrences d'une même entité dans le texte (`finalizeDetectedEntities`, `expandEntityValueOccurrences`).
-- Déploiement : [GitLab Pages](https://mshs-sud-est.gitpages.huma-num.fr/incognito/) · miroir [GitHub Pages](https://xiaoouwang.github.io/Incognito/) · voir [`web_interface/README.md`](web_interface/README.md).
-
-### 2026-06-25 — Interface web (Incognito = bureau + navigateur)
-
-- **Incognito** n'est plus limité au bureau : ajout de l'interface **[web_interface/](web_interface/)** — React + Vite + Transformers.js, revue interactive, rapport d'audit, export Label Studio, mode lot (ZIP).
-- Déploiement automatique (aujourd'hui : **GitLab Pages** Huma-Num prioritaire ; miroir GitHub Pages via `.github/workflows/deploy-web.yml`).
-- Liens croisés bureau ↔ web dans les deux interfaces.
-- **PWA** — manifeste et service worker (`manifest.webmanifest`, `sw.js`) pour mise en cache.
-- **Confidentialité** — message visible : *Everything runs locally — your data never leaves your computer.*
-- **Mode lot web** — dossier entier ou fichiers choisis ; formats `.txt` et `.docx` (mammoth) ; barres de progression (modèle, chargement, anonymisation).
-- Composants : `ModelProgress`, `BatchJobProgress`, `batchLoad.js`, `sampleDemo.js`, `PrivacyDetailsWindow`, `uiStrings.js`.
-- **UX web** — bouton *Run Anonymization*, démo préchargée, navigation lot sur une ligne, correction barre de progression (fichier unique).
-
-### 2026-06-24 — Mode lot, navigation et sorties
-
-
-| Fonction / handler                            | Fichier             | Rôle                                                                                               |
-| --------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------- |
-| `processInitialBatchFolder`                   | `src/App.jsx`       | À l'ouverture d'un dossier, lance le NER sur **tous** les fichiers et écrit les sorties initiales. |
-| `buildBatchFileOutputs`                       | `src/App.jsx`       | Construit texte anonymisé, rapport et JSON Label Studio pour un fichier donné.                     |
-| `createCategorySelectionFromEntities`         | `src/App.jsx`       | Active toutes les catégories détectées après un passage NER automatique.                           |
-| `writeBatchOutputsForFile`                    | `src/App.jsx`       | Écrit les trois artefacts d'un fichier vers le dossier de sortie courant.                          |
-| `goToFile`                                    | `src/App.jsx`       | Change de fichier ; finalise le fichier quitté avec le suffixe `_modified`.                        |
-| `handleJumpToFileNumber`                      | `src/App.jsx`       | Navigation directe vers le fichier n° *N* (1-based).                                               |
-| `handleJumpToFileName`                        | `src/App.jsx`       | Navigation par nom de fichier (exact, insensible à la casse, ou correspondance partielle unique).  |
-| `findBatchFileIndex`                          | `src/App.jsx`       | Résout un nom de fichier vers son index dans le lot.                                               |
-| `loadBatchFolder`                             | `src/App.jsx`       | Charge un dossier, crée le dossier de sortie horodaté, lance le traitement initial.                |
-| `persistCurrentFileState` / `applyFileState`  | `src/App.jsx`       | Mémorisent et restaurent l'état de revue par fichier (`outputsModified`, entités, catégories).     |
-| `createUniqueBatchOutputDir`                  | `electron/main.cjs` | Crée `outputs-YYYYMMDD-HHMMSS` pour éviter d'écraser des runs précédents.                          |
-| `formatBatchOutputTimestamp`                  | `electron/main.cjs` | Formate l'horodatage du dossier de sortie.                                                         |
-| `buildBatchOutputPaths`                       | `electron/main.cjs` | Chemins `*-anonymized.txt` ou `*-anonymized_modified.txt` (idem rapport et Label Studio).          |
-| `removeBatchOutputVariant`                    | `electron/main.cjs` | Supprime l'autre variante (standard / `_modified`) lors d'un changement de statut.                 |
-| `batch:loadTextFolder` / `batch:writeOutputs` | `electron/main.cjs` | IPC Electron pour charger un dossier et écrire les sorties lot.                                    |
-
-
-**Comportement :** sorties dans `outputs-YYYYMMDD-HHMMSS/` ; noms standard à l'issue du traitement automatique ; suffixe `_modified` dès que l'utilisateur **quitte** un fichier (Précédent / Suivant, saut par numéro ou nom, fermeture du dossier).
-
-### 2026-06-24 — Rapport d'audit et traçabilité
-
-
-| Fonction                      | Fichier       | Rôle                                                                |
-| ----------------------------- | ------------- | ------------------------------------------------------------------- |
-| `createAuditReport`           | `src/App.jsx` | Rapport Markdown complet (résumé, provenance, index des spans).     |
-| `summarizeDocumentProvenance` | `src/App.jsx` | Compte les spans automatiques vs revue manuelle au niveau document. |
-| `summarizeSpanProvenance`     | `src/App.jsx` | Provenance par valeur (catégorie + texte).                          |
-| `isManualEntity`              | `src/App.jsx` | Détecte les spans ajoutés en revue humaine (`source: manual`).      |
-| `formatProvenanceLabel`       | `src/App.jsx` | Libellés lisibles pour chaque source NER.                           |
-| `formatSpanProvenanceDetail`  | `src/App.jsx` | Détail des comptages par source dans une ligne de décision.         |
-| `formatValueDecisionLine`     | `src/App.jsx` | Ligne par valeur remplacée / exclue, avec origine et positions.     |
-| `formatSpanOffset`            | `src/App.jsx` | Affiche une plage de caractères `start–end`.                        |
-| `formatSpanPositionLines`     | `src/App.jsx` | Liste indentée des positions par span.                              |
-| `formatSpanIndexLines`        | `src/App.jsx` | Section *Complete Span Index* (tous les spans ordonnés).            |
-
-
-**Convention des positions :** indexation **0-based**, `start` inclusif et `end` exclusif (comme `String.slice` en JavaScript).
-
-### 2026-06-24 — Revue manuelle et catégories personnalisées
-
-
-| Fonction                                         | Fichier                    | Rôle                                                                                       |
-| ------------------------------------------------ | -------------------------- | ------------------------------------------------------------------------------------------ |
-| `addEntitySpans`                                 | `src/App.jsx`              | Ajoute des spans manuels avec `source: manual`.                                            |
-| `findAllOccurrenceRanges`                        | `src/App.jsx`              | Trouve toutes les occurrences d'un mot (limites Unicode).                                  |
-| `buildWordBasedSearchPattern`                    | `src/App.jsx`              | Motif de recherche insensible à la casse avec frontières de mot.                           |
-| `createCustomCategoryId`                         | `src/App.jsx`              | Crée un identifiant stable pour une catégorie personnalisée.                               |
-| `mergeCustomCategories`                          | `src/App.jsx`              | Fusionne les catégories custom (partagées en mode lot via `batchCustomCategoriesRef`).     |
-| `countEntitySpans`                               | `src/App.jsx`              | Compte les spans réels (corrige l'affichage des puces d'entités).                          |
-| `EntityEditMenu`                                 | `src/App.jsx`              | Menu d'ajout/suppression ; portée *toutes les occurrences* ou *cette sélection seulement*. |
-| `createLabelStudioExport` / `toLabelStudioLabel` | `src/labelStudioExport.js` | Export Label Studio incluant les catégories personnalisées.                                |
-
-
-### 2026-06-24 — Identité *Incognito* (v0.2.0)
-
-- Renommage de l'application, logo, favicon, barre de titre Electron centrée, icônes de build (`build/icon.png`).
-- Installateurs macOS : `Incognito-0.2.0-arm64.dmg`, `Incognito-0.2.0.dmg`.
-
-### 2026-06-23 — Publication et plateformes
-
-- Workflows GitHub Actions multi-OS (`macos` / `windows` / `ubuntu`).
-- Fichier de citation `[CITATION.cff](CITATION.cff)` et section *Citer cet outil*.
-- Préparation de l'article `[arxiv/main.tex](arxiv/main.tex)`.
-
+Le détail des versions 0.x / 1.0.0 (dont l'ancienne app de bureau) reste dans l'historique Git et dans [`docs/WEB_INTERFACE_EVOLUTION.md`](docs/WEB_INTERFACE_EVOLUTION.md).

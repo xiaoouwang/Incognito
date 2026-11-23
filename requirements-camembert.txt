@@ -1,7 +1,0 @@
-# Optional CamemBERT backend (install after requirements.txt).
-# Requires Python 3.12 — PyTorch does not publish wheels for Python 3.13 yet.
--r requirements.txt
-transformers>=4.40,<5
-torch>=2.0
-protobuf
-sentencepiece

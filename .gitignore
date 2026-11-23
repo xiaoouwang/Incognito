@@ -1,15 +1,22 @@
+# Dependencies & local env
 node_modules/
-dist/
-release/
-python-build/
-python-dist/
-*.spec
-.DS_Store
-__pycache__/
+web_interface/node_modules/
+web_interface/albert-proxy/node_modules/
 .venv/
-.venv-gliner2/
-web_interface/.venv-gliner2/
+.venv-*/
+web_interface/.venv-*/
 web_interface/gliner2_pii_server/.model_cache/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Build / deploy artifacts
+dist/
+web_interface/dist/
+public/
+release/
+
+# Env files (keep examples)
 .env
 .env.*
 !.env.example
@@ -17,3 +24,7 @@ web_interface/.env
 web_interface/.env.*
 !web_interface/.env.example
 
+# Legacy desktop leftovers (do not re-commit)
+python-build/
+python-dist/
+*.spec

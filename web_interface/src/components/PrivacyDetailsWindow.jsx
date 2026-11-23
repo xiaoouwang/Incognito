@@ -55,7 +55,7 @@ export default function PrivacyDetailsWindow({ onClose }) {
               {section.linkLabel ? (
                 <p>
                   <a
-                    href="https://github.com/xiaoouwang/Incognito"
+                    href="https://gitlab.huma-num.fr/mshs-sud-est/incognito"
                     target="_blank"
                     rel="noreferrer"
                   >

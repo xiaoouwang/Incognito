@@ -1,6 +1,6 @@
 # Incognito Web
 
-**Version 1.0.1** — standalone, **client-side** web interface for [Incognito](../README.md). One of two ways to anonymize qualitative text (alongside the desktop app). Detection runs in the browser — no Electron, no Python server required for the core UI (optional Albert API in generative API mode; optional local GLiNER2-PII sidecar under `gliner2_pii_server/`).
+**Version 1.0.1** — standalone, **client-side** web interface for qualitative text anonymization. Detection runs in the browser — no Electron, no Python server required for the core UI (optional Albert API in generative API mode; optional local GLiNER2-PII sidecar under `gliner2_pii_server/`).
 
 **Live app (canonical):** [https://mshs-sud-est.gitpages.huma-num.fr/incognito/](https://mshs-sud-est.gitpages.huma-num.fr/incognito/) · mirror: [https://xiaoouwang.github.io/Incognito/](https://xiaoouwang.github.io/Incognito/)
 
@@ -9,14 +9,16 @@
 > **Everything runs locally — your data never leaves your computer.**
 > Your text is analyzed in the browser, not on a remote server. The only internet use is a one-time download of detection models; your documents are never uploaded. *(API-based generative mode is the exception: text is sent to Albert with your API key.)*
 
+> **Project focus** — Incognito is **web-only**. The former Electron desktop app was dropped: multi-OS desktop packaging is less sustainable to maintain; the browser app covers the same local-privacy workflow with a single deploy path.
+
 ## Anonymization modes
 
 Use the toggle at the top of the workflow:
 
 | Mode | Engine | Best for |
 | ---- | ------ | -------- |
-| **Basic anonymization** (default) | [GLiNER2-multi](https://huggingface.co/onnx-community/gliner2-multi-v1-agent-ONNX) or [GLiNER2-PII ONNX](https://huggingface.co/yethdev/gliner2-pii-onnx) | Local multi-label NER only (people, places, contacts, identity documents…) |
-| **Advanced anonymization** | Same GLiNER2 engines + **ReLex** person graph | NER plus aliases / attributes / relations review |
+| **Basic anonymization** (default) | [GLiNER2-multi](https://huggingface.co/onnx-community/gliner2-multi-v1-agent-ONNX) or [GLiNER2-PII ONNX](https://huggingface.co/yethdev/gliner2-pii-onnx) | Local multi-label NER only |
+| **Advanced anonymization** | Same GLiNER2 engines + **ReLex** person graph | NER plus aliases / attributes / relations |
 | **Local generative anonymization** | Local generative pipeline | Generative review without the Albert cloud path (as configured) |
 | **API-based generative anonymization** | [Albert](https://albert.api.etalab.gouv.fr/) chat API | LLM-built person graph / relations, then the same review tools |
 
@@ -25,9 +27,9 @@ Shared review layer (Advanced + generative):
 1. **Detect** (or run generative)
 2. **Review** categories, soft-exclude values, edit spans
 3. **Person graph** — cards + **Show person graph** (react-force-graph overlay)
-4. **Export** anonymized text, audit / Label Studio (Basic & Advanced), and person-graph **CSV** / **CSV by person**
+4. **Export** anonymized text, audit / Label Studio, person-graph CSV, or **Export everything**
 
-Replacements: **placeholders**, **pseudonyms**, or **generalization ladders** (level 1–3 / mask). Placeholders stay short and stable — e.g. `[PER_1]`, `[LOC_1]`, `[EMA_1]`.
+Replacements: **placeholders**, **pseudonyms**, or **generalization ladders** (level 1–3 / mask).
 
 This is an **anonymization assistant**, not a guarantee of full anonymization. Always read the output before sharing or archiving.
 
@@ -36,16 +38,16 @@ This is an **anonymization assistant**, not a guarantee of full anonymization. A
 ### Basic anonymization (GLiNER2 NER only)
 
 - **Model choice** — GLiNER2-multi (~fp16) or quantized GLiNER2-PII ONNX
-- **Custom entity labels** — built-in chips (person, organization, location, address, email, phone, identity document number, date, age, …) plus free-form labels
+- **Custom entity labels** — built-in chips plus free-form labels
 - **Rule-based detection** — emails, URLs, phones, dates where applicable
-- **Pre-loaded demo** — sample interview ready to explore without downloading a model on first open
-- **Batch** — folder or files (`.txt`, `.docx`), processing **waves** (all at once / 1 / 5 / 10 / 25)
+- **Pre-loaded demo** — sample interview ready to explore
+- **Batch** — folder or files (`.txt`, `.docx`), processing **waves**
 
 ### Advanced anonymization (GLiNER2 + ReLex)
 
-- Same detection stack as Basic, plus **person graph** built with GLiNER ReLex (demo uses a captured fixture so the graph appears without waiting for the relation model)
+- Same detection stack as Basic, plus **person graph** via GLiNER ReLex
 - Soft-exclude sync between category chips and graph cards
-- **Show person graph** — full-page **react-force-graph-2d** overlay (drag, zoom, Esc to close)
+- **Show person graph** — full-page **react-force-graph-2d** overlay
 - CSV exports (long form and one row per person)
 
 ### Generative modes
@@ -55,10 +57,8 @@ This is an **anonymization assistant**, not a guarantee of full anonymization. A
 
 ### Shared review & export
 
-- **Interactive review** — category toggles, per-value exclusion, manual span add/remove
-- **Audit report** / **Label Studio** — Basic & Advanced
-- **FR / EN UI** — language toggle in the header
-- Sample corpora under [`samples/`](samples/) (FR interviews + EN/DE/IT/ES snippets)
+- Interactive review, audit report, Label Studio, FR/EN UI
+- Sample corpora under [`samples/`](samples/)
 
 ## Quick start (local)
 
@@ -68,11 +68,9 @@ npm install
 npm run dev
 ```
 
+Or from the repo root: `npm run dev` (delegates here).
+
 Open the URL printed by Vite (default `http://127.0.0.1:5173`).
-
-The app opens in **Basic anonymization** with a pre-loaded sample demo.
-
-**First run on your own text:** the selected ONNX model downloads from Hugging Face and is cached in the browser. Progress bars show download and detection status.
 
 ## Build for static hosting
 
@@ -91,18 +89,16 @@ The `dist/` folder can be served by any static file host.
 
 [`.gitlab-ci.yml`](../.gitlab-ci.yml) builds the app for [mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito).
 
-1. Push `main` to `https://gitlab.huma-num.fr/mshs-sud-est/incognito.git` (changes under `web_interface/` or `.gitlab-ci.yml`).
-2. After the first green `pages` job, the site is at **https://mshs-sud-est.gitpages.huma-num.fr/incognito/**
-3. Redeploy without code changes: **Build → Pipelines → Run pipeline**.
+1. Push `main` to `https://gitlab.huma-num.fr/mshs-sud-est/incognito.git`.
+2. After a green `pages` job: **https://mshs-sud-est.gitpages.huma-num.fr/incognito/**
+3. Redeploy: **Build → Pipelines → Run pipeline**.
 
 ### GitHub Pages (mirror)
 
-[`.github/workflows/deploy-web.yml`](../.github/workflows/deploy-web.yml) builds `web_interface/` and publishes `dist/` when you push to `main` **and** the commit touches `web_interface/` (or the workflow file itself).
+[`.github/workflows/deploy-web.yml`](../.github/workflows/deploy-web.yml) publishes when `main` touches `web_interface/` (or the workflow file).
 
 1. Push the same `main` to the GitHub mirror.
-2. In the GitHub repo: **Settings → Pages → Build and deployment → Source** → **GitHub Actions**.
-3. Site mirror: **https://xiaoouwang.github.io/Incognito/**
-4. Redeploy without code changes: **Actions → Deploy web interface → Run workflow**.
+2. Site mirror: **https://xiaoouwang.github.io/Incognito/**
 
 ## Stack
 

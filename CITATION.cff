@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: "Incognito: A privacy-first, cross-platform tool for reviewing and anonymizing qualitative texts in the social sciences"
+title: "Incognito: A privacy-first tool for reviewing and anonymizing qualitative texts in the social sciences"
 message: "If you use this software, please cite it as below."
 type: software
 authors:
@@ -11,20 +11,19 @@ repository-code: "https://gitlab.huma-num.fr/mshs-sud-est/incognito"
 url: "https://mshs-sud-est.gitpages.huma-num.fr/incognito/"
 # Public mirror: https://github.com/xiaoouwang/Incognito
 abstract: >-
-  A privacy-first, cross-platform tool for reviewing and anonymizing qualitative
-  texts in the social sciences. Available as a desktop application (Electron,
-  spaCy, CamemBERT) and as a client-side web interface (Transformers.js ONNX in
-  the browser). Interactive NER review, batch processing, audit reports, and
-  Label Studio export.
-version: 0.3.0
-date-released: 2026-06-25
+  A privacy-first web tool for reviewing and anonymizing qualitative texts in
+  the social sciences. Client-side browser interface (React, GLiNER2 / ONNX,
+  optional Albert generative mode). Interactive NER review, batch processing,
+  audit reports, and Label Studio export.
+version: 1.0.1
+date-released: 2026-11-23
 keywords:
   - anonymization
   - digital humanities
   - named entity recognition
   - qualitative research
   - French
-  - spaCy
-  - CamemBERT
+  - GLiNER
   - web application
   - Transformers.js
+  - browser NER
