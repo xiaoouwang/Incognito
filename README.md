@@ -156,6 +156,8 @@ Copyright (c) 2026 Xiaoou Wang
 
 ### 2026-11-24 — v1.0.2 — longs textes, workers, puces ×/↩, lot & audit
 
+Fixes [#2](https://github.com/xiaoouwang/Incognito/issues/2) (long interviews freezing the web UI).
+
 - **Décision — rester fluide sur de longs entretiens** — la détection NER / ReLex ne doit plus bloquer l'UI Chrome sur des textes type entretien (ex. `web_interface/edge_cases/`). Travail déplacé vers des **Web Workers** (`gliner2DetectWorker`, `glinerRelexWorker`), avec progression, `yieldToMain` et peints incrémentaux des surlignages.
 - **Décision — paginer plutôt qu'afficher tout d'un coup** — au-delà d'un seuil, Original / Anonymized se découpent en pages (~4500 caractères) avec navigation fléchée (`TextPageNav`, `textPages.js`), pour éviter le gel des puces et du DOM.
 - **Décision — retirer ≠ masquer** — l'œil continue d'inclure / exclure une valeur de l'anonymisation ; **×** retire la détection (tous les spans de cette valeur). Les valeurs retirées passent **sous une ligne** dans la catégorie ; **↩** les rétablit. Ainsi on peut revenir sur une décision sans relancer le modèle.
