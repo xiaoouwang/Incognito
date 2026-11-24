@@ -1,6 +1,8 @@
 # Incognito Web
 
-**Version 1.0.1** — standalone, **client-side** web interface for qualitative text anonymization. Detection runs in the browser — no Electron, no Python server required for the core UI (optional Albert API in generative API mode; optional local GLiNER2-PII sidecar under `gliner2_pii_server/`).
+**Version 1.0.2** — standalone, **client-side** web interface for qualitative text anonymization. Detection runs in the browser — no Electron, no Python server required for the core UI (optional Albert API in generative API mode; optional local GLiNER2-PII sidecar under `gliner2_pii_server/`).
+
+**1.0.2 highlights** — NER/ReLex on Web Workers for long interviews; text pagination; chip **×** / **↩** (remove detection vs soft-exclude with eye); batch load normalizes classic Mac `\r` newlines; taller audit report window.
 
 **Live app (canonical):** [https://mshs-sud-est.gitpages.huma-num.fr/incognito/](https://mshs-sud-est.gitpages.huma-num.fr/incognito/) · mirror: [https://xiaoouwang.github.io/Incognito/](https://xiaoouwang.github.io/Incognito/)
 

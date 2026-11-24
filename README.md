@@ -6,7 +6,7 @@ Outil pour les sciences humaines et sociales — entretiens, notes de terrain, r
 
 Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Humanités Numériques · [MSHS Sud-Est](https://mshs.univ-cotedazur.fr/) · [Université Côte d'Azur](https://univ-cotedazur.fr/)
 
-**Version actuelle : 1.0.1** (web)
+**Version actuelle : 1.0.2** (web)
 
 **Dépôt canonique** — [GitLab Huma-Num](https://gitlab.huma-num.fr/mshs-sud-est/incognito) · miroir public : [GitHub](https://github.com/xiaoouwang/Incognito)
 
@@ -46,10 +46,10 @@ Disponibles dans l'interface web :
 - 🔍 **NER configurable** — **de base** (GLiNER2-multi ou GLiNER2-PII ONNX), **avancée** (GLiNER2 + ReLex), **générative locale** et **générative API** (Albert)
 - 🕸️ **Graphe de personnes** — aliases / attributs / relations ; vue **react-force-graph** ; soft-exclude ; export CSV
 - 📧 **Règles regex** — e-mails, URL, téléphones (prioritaires en mode avancé)
-- 🖍️ **Revue interactive** — surlignage, ajout/suppression de spans, bascule par entité
-- 📁 **Mode lot** — dossier ou fichiers choisis, vagues de traitement, ZIP
+- 🖍️ **Revue interactive** — surlignage, œil (anonymiser / garder), × / ↩ (retirer / rétablir une valeur), pagination des longs textes
+- 📁 **Mode lot** — dossier ou fichiers choisis, vagues de traitement, ZIP ; fins de ligne CR/CRLF normalisées à l'import
 - 🏷️ **Label Studio** — pré-annotations + configuration XML
-- 📊 **Rapport d'audit** — provenance, positions de caractères (start/end)
+- 📊 **Rapport d'audit** — provenance, positions de caractères (start/end) ; fenêtre de lecture pleine hauteur
 
 ---
 
@@ -115,7 +115,7 @@ Les changements hors `web_interface/` (et hors les fichiers CI) ne redéploient 
 
 ## 📚 Citer cet outil
 
-> Wang, X. (2026). *Incognito: A privacy-first tool for reviewing and anonymizing qualitative texts in the social sciences* (Version 1.0.1) [Logiciel]. Maison des Sciences de l'Homme Sud-Est / Université Côte d'Azur. [https://gitlab.huma-num.fr/mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito)
+> Wang, X. (2026). *Incognito: A privacy-first tool for reviewing and anonymizing qualitative texts in the social sciences* (Version 1.0.2) [Logiciel]. Maison des Sciences de l'Homme Sud-Est / Université Côte d'Azur. [https://gitlab.huma-num.fr/mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito)
 
 **BibTeX**
 
@@ -124,7 +124,7 @@ Les changements hors `web_interface/` (et hors les fichiers CI) ne redéploient 
   author  = {Wang, Xiaoou},
   title   = {{Incognito}: A privacy-first tool for reviewing and anonymizing qualitative texts in the social sciences},
   year    = {2026},
-  version = {1.0.1},
+  version = {1.0.2},
   url     = {https://gitlab.huma-num.fr/mshs-sud-est/incognito},
   note    = {Browser interface (React + GLiNER2 / Transformers.js).
              Maison des Sciences de l'Homme Sud-Est, Universit{\'e} C{\^o}te d'Azur.
@@ -153,6 +153,16 @@ Copyright (c) 2026 Xiaoou Wang
 ---
 
 ## 📝 Mises à jour
+
+### 2026-11-24 — v1.0.2 — longs textes, workers, puces ×/↩, lot & audit
+
+- **Décision — rester fluide sur de longs entretiens** — la détection NER / ReLex ne doit plus bloquer l'UI Chrome sur des textes type entretien (ex. `web_interface/edge_cases/`). Travail déplacé vers des **Web Workers** (`gliner2DetectWorker`, `glinerRelexWorker`), avec progression, `yieldToMain` et peints incrémentaux des surlignages.
+- **Décision — paginer plutôt qu'afficher tout d'un coup** — au-delà d'un seuil, Original / Anonymized se découpent en pages (~4500 caractères) avec navigation fléchée (`TextPageNav`, `textPages.js`), pour éviter le gel des puces et du DOM.
+- **Décision — retirer ≠ masquer** — l'œil continue d'inclure / exclure une valeur de l'anonymisation ; **×** retire la détection (tous les spans de cette valeur). Les valeurs retirées passent **sous une ligne** dans la catégorie ; **↩** les rétablit. Ainsi on peut revenir sur une décision sans relancer le modèle.
+- **Person names** — catégorie « person name » normalisée / priorisée en tête de revue ; filtre des pronoms issus de mentions personne.
+- **Mode lot** — normalisation des fins de ligne (`\r` / `\r\n` → `\n`) et BOM à l'import, pour que les `.txt` « Mac classique » gardent leurs paragraphes.
+- **Audit** — hauteur de fenêtre corrigée (lecture pleine hauteur) ; construction du rapport allégée côté UI.
+- Pas de dialogue de « permission » pour les longs textes : le parcours reste direct (workers + pagination).
 
 ### 2026-11-23 — Web only : retrait de l'application de bureau
 
