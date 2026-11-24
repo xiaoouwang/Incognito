@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import AnonymizedReplacementEditor from "./AnonymizedReplacementEditor.jsx";
 import EditableAnonymizedText from "./EditableAnonymizedText.jsx";
 import HighlightedText from "./HighlightedText.jsx";
+import TextPageNav from "./TextPageNav.jsx";
 import { useUiLocale } from "../context/UiLocaleContext.jsx";
 import { useSyncedScroll } from "../hooks/useSyncedScroll.js";
 import {
@@ -20,6 +21,7 @@ import "./anonymizedSplitPreview.css";
 /** Preferred chip order in the replacement-methods bar. */
 const REPLACEMENT_CATEGORY_PRIORITY = [
   "person",
+  "person name",
   "age",
   "date",
   "address",
@@ -81,6 +83,9 @@ export default function AnonymizedSplitPreview({
   generalizationMode = "idle",
   generalizationLoading = false,
   generalizationError = "",
+  pageIndex = 0,
+  pageCount = 1,
+  onPageChange = null,
 }) {
   const { t } = useUiLocale();
   const leftScrollRef = useRef(null);
@@ -145,13 +150,18 @@ export default function AnonymizedSplitPreview({
     [segments, text, entities],
   );
 
+  const multiPage = pageCount > 1 && typeof onPageChange === "function";
+  // Full-text free edit spans the whole document — keep it off while paging.
   const displayAnonymizedText =
-    anonymizedTextOverride != null ? anonymizedTextOverride : anonymizedText;
+    !multiPage && anonymizedTextOverride != null ? anonymizedTextOverride : anonymizedText;
   const canEditFullText =
-    !disabled && typeof onAnonymizedTextOverrideChange === "function" && Boolean(anonymizedText);
+    !disabled &&
+    !multiPage &&
+    typeof onAnonymizedTextOverrideChange === "function" &&
+    Boolean(anonymizedText);
   const canEditReplacements =
     !disabled && typeof onSurfaceOverrideChange === "function" && Boolean(anonymizedText);
-  const hasManualFullText = anonymizedTextOverride != null;
+  const hasManualFullText = !multiPage && anonymizedTextOverride != null;
 
   useSyncedScroll(
     leftScrollRef,
@@ -443,7 +453,17 @@ export default function AnonymizedSplitPreview({
 
       <div className="split-preview-panes">
         <div className="split-preview-pane">
-          <div className="split-preview-pane-header">{t("splitPreviewOriginal")}</div>
+          <div className="split-preview-pane-header">
+            <span className="split-preview-pane-title-row">{t("splitPreviewOriginal")}</span>
+            {multiPage ? (
+              <TextPageNav
+                pageIndex={pageIndex}
+                pageCount={pageCount}
+                onPageChange={onPageChange}
+                disabled={disabled}
+              />
+            ) : null}
+          </div>
           <div className="split-preview-pane-body" ref={leftScrollRef}>
             {hasContent ? (
               entities.length > 0 || (Array.isArray(segments) && segments.some((item) => item.entity)) ? (
@@ -473,8 +493,16 @@ export default function AnonymizedSplitPreview({
                   : t("splitPreviewAnonymizedHint")}
               </span>
             </span>
-            {hasManualFullText && canEditFullText ? (
-              <span className="split-preview-pane-actions">
+            <span className="split-preview-pane-actions">
+              {multiPage ? (
+                <TextPageNav
+                  pageIndex={pageIndex}
+                  pageCount={pageCount}
+                  onPageChange={onPageChange}
+                  disabled={disabled}
+                />
+              ) : null}
+              {hasManualFullText && canEditFullText ? (
                 <button
                   type="button"
                   className="split-preview-view-toggle"
@@ -483,8 +511,8 @@ export default function AnonymizedSplitPreview({
                 >
                   {t("splitPreviewResetGenerated")}
                 </button>
-              </span>
-            ) : null}
+              ) : null}
+            </span>
           </div>
           <div
             className="split-preview-pane-body text-preview"

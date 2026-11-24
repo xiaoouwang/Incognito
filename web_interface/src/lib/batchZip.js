@@ -130,7 +130,11 @@ export async function downloadSingleExportZip({
   });
   root.file("label-studio-ner-config.xml", LABEL_STUDIO_NER_CONFIG);
 
-  const blob = await zip.generateAsync({ type: "blob" });
+  // streamFiles keeps compression off the main-thread burst for large audit reports.
+  const blob = await zip.generateAsync({ type: "blob", streamFiles: true });
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

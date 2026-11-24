@@ -65,6 +65,8 @@ import {
   inferCustomCategoriesFromEntities,
   isEntityActive,
   removeEntityById,
+  extractEntitiesByValue,
+  mergeEntitiesBySpan,
   buildAnonymizedPreviewModel,
 } from "../lib/entityUtils.js";
 import AnonymizedSplitPreview from "./AnonymizedSplitPreview.jsx";
@@ -92,6 +94,7 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
   const [surfaceOverrides, setSurfaceOverrides] = useState({});
   const [anonymizedTextOverride, setAnonymizedTextOverride] = useState(null);
   const [entities, setEntities] = useState([]);
+  const [removedEntities, setRemovedEntities] = useState([]);
   const [anonymizedText, setAnonymizedText] = useState("");
   const [replacements, setReplacements] = useState([]);
   const [persons, setPersons] = useState([]);
@@ -443,6 +446,7 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
         setUsedModel(detectionModel);
       }
       setEntities(normalized);
+      setRemovedEntities([]);
       setSelectedCategories(categorySelection);
       setExcludedEntityKeys({});
       setCustomCategories(nextCustom);
@@ -543,6 +547,7 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
   function resetSample() {
     setText(ALBERT_SAMPLE_TEXT);
     setEntities([]);
+    setRemovedEntities([]);
     clearAlbertOutputs();
     setSelectedCategories({});
     setExcludedEntityKeys({});
@@ -562,6 +567,7 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
   function clearAll() {
     setText("");
     setEntities([]);
+    setRemovedEntities([]);
     clearAlbertOutputs();
     setSelectedCategories({});
     setExcludedEntityKeys({});
@@ -597,6 +603,7 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
     setText(next);
     if (entities.length || persons.length || anonymizedText || replacements.length) {
       setEntities([]);
+      setRemovedEntities([]);
       clearAlbertOutputs();
       setSelectedCategories({});
       setExcludedEntityKeys({});
@@ -720,6 +727,59 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
     clearAlbertOutputs();
     closeEntityMenu();
     setStatus(t("generativeStatusRemoved", { text: entityMenu.entity.text }));
+  }
+
+  function removeEntityValue(category, entityText) {
+    const key = getEntityValueKey(category, entityText);
+    const { kept, extracted } = extractEntitiesByValue(entities, category, entityText);
+    if (!extracted.length) {
+      return;
+    }
+    setEntities(kept);
+    setRemovedEntities((current) => mergeEntitiesBySpan(current, extracted));
+    setExcludedEntityKeys((current) => {
+      if (!current[key]) {
+        return current;
+      }
+      const updated = { ...current };
+      delete updated[key];
+      return updated;
+    });
+    setSelectedCategories((current) => {
+      if (kept.some((entity) => entity.label === category)) {
+        return current;
+      }
+      const updated = { ...current };
+      delete updated[category];
+      return updated;
+    });
+    clearAlbertOutputs();
+    setStatus(
+      t("chipRemovedStatus", {
+        text: entityText,
+        count: extracted.length,
+      }),
+    );
+  }
+
+  function restoreEntityValue(category, entityText) {
+    const { kept, extracted } = extractEntitiesByValue(removedEntities, category, entityText);
+    if (!extracted.length) {
+      return;
+    }
+    const next = mergeEntitiesBySpan(entities, extracted);
+    setRemovedEntities(kept);
+    setEntities(next);
+    setSelectedCategories((current) =>
+      category in current ? current : { ...current, [category]: true },
+    );
+    clearAlbertOutputs();
+    setStatus(
+      t("chipRestoredStatus", {
+        text: entityText,
+        count: extracted.length,
+      }),
+    );
   }
 
   function handleAddToPerson(personIndex) {
@@ -1103,15 +1163,18 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
                   : t("generativeEntitiesEmpty")}
             </span>
           </div>
-          {Object.keys(sidebarGrouped).length ? (
+          {Object.keys(sidebarGrouped).length || removedEntities.length ? (
             <CategoryReview
               entities={sidebarEntities}
               groupedEntities={sidebarGrouped}
+              removedEntities={removedEntities}
               categoryLabels={categoryLabels}
               selectedCategories={selectedCategories}
               excludedEntityKeys={excludedEntityKeys}
               onToggleCategory={handleToggleCategory}
               onToggleEntity={handleToggleEntityValue}
+              onRemoveEntity={removeEntityValue}
+              onRestoreEntity={restoreEntityValue}
             />
           ) : (
             <div className="empty-state">{t("categoryEmpty")}</div>

@@ -10,6 +10,7 @@ import {
   normalizeReplacementMethod,
   replacementForCategoryValue,
 } from "./pseudonymize.js";
+import { filterPronounPersonEntities } from "./personMentionFilter.js";
 import { detectWithGlinerRules, mergeEntities } from "./ruleDetection.js";
 
 export function slugifyCategoryId(name) {
@@ -300,8 +301,16 @@ export function expandEntityValueOccurrences(text, entities) {
   }
 
   const expanded = [];
+  // One regex scan per unique label+value — repeating per span was O(n²) on long docs.
+  const seenValues = new Set();
 
   for (const entity of entities) {
+    const valueKey = `${entity.label || ""}\0${String(entity.text || "").toLocaleLowerCase()}`;
+    if (seenValues.has(valueKey)) {
+      continue;
+    }
+    seenValues.add(valueKey);
+
     const ranges = findAllOccurrenceRanges(text, entity.text);
     if (!ranges.length) {
       expanded.push(entity);
@@ -321,6 +330,16 @@ export function expandEntityValueOccurrences(text, entities) {
   return expanded;
 }
 
+/** O(n) occurrence counts keyed by getEntityValueKey(label, text). */
+export function buildEntitySpanCounts(entities) {
+  const counts = new Map();
+  for (const entity of entities || []) {
+    const key = getEntityValueKey(entity.label, entity.text);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return counts;
+}
+
 /**
  * Expand model spans to every matching occurrence, merge regex rules (email, phone,
  * identity documents…), and normalize.
@@ -334,8 +353,9 @@ export function finalizeDetectedEntities(text, entities, options = {}) {
   const modelEntities = incoming.filter((entity) => entity.source !== "rule");
   const expandedModel = expandEntityValueOccurrences(text, modelEntities);
   const ruleEntities = ruleLabels.length ? detectWithGlinerRules(text, ruleLabels) : [];
+  const cleaned = filterPronounPersonEntities([...expandedModel, ...ruleEntities]);
 
-  return normalizeEntities(mergeEntities([...expandedModel, ...ruleEntities]), text);
+  return normalizeEntities(mergeEntities(cleaned), text);
 }
 
 export function removeEntityById(entities, entityId, entity = null) {
@@ -356,6 +376,44 @@ export function removeEntityById(entities, entityId, entity = null) {
   }
 
   return entities;
+}
+
+/** Split out every span for a category + value (chip remove / restore). */
+export function extractEntitiesByValue(entities, category, entityText) {
+  const normalized = String(entityText || "").toLocaleLowerCase();
+  const kept = [];
+  const extracted = [];
+  for (const item of entities || []) {
+    if (
+      item.label === category &&
+      String(item.text || "").toLocaleLowerCase() === normalized
+    ) {
+      extracted.push(item);
+    } else {
+      kept.push(item);
+    }
+  }
+  return { kept, extracted };
+}
+
+/** Remove every span for a category + value (chip delete). */
+export function removeEntitiesByValue(entities, category, entityText) {
+  return extractEntitiesByValue(entities, category, entityText).kept;
+}
+
+function sortEntitiesBySpan(entities) {
+  return [...(entities || [])].sort(
+    (left, right) =>
+      (left.start ?? 0) - (right.start ?? 0) || (left.end ?? 0) - (right.end ?? 0),
+  );
+}
+
+/** Re-insert extracted spans into the active entity list. */
+export function mergeEntitiesBySpan(entities, toAdd) {
+  if (!toAdd?.length) {
+    return entities || [];
+  }
+  return sortEntitiesBySpan([...(entities || []), ...toAdd]);
 }
 
 export function groupEntities(entities) {

@@ -51,7 +51,7 @@ const DEMO_ENTITY_SPECS = [
   { label: "location", text: "Cannes" },
   { label: "location", text: "Pékin" },
   { label: "school", text: "lycée Masséna" },
-  { label: "hospital", text: "hôpital Pasteur" },
+  { label: "organization", text: "hôpital Pasteur" },
   { label: "organization", text: "Université Côte d’Azur" },
   { label: "organization", text: "mairie de Cannes" },
   { label: "profession", text: "enseignante" },

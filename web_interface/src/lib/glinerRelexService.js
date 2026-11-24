@@ -21,6 +21,7 @@ import {
   GLINER_RELEX_SPECIAL_TOKENS_URL,
 } from "./glinerRelexConstants.js";
 import { GLINER_LABELS } from "./glinerConstants.js";
+import { yieldToMain } from "./yieldToMain.js";
 
 let runtimePromise = null;
 
@@ -369,6 +370,9 @@ export async function extractGlinerRelexRelations(text, entities = [], onProgres
   const collected = [];
 
   for (let index = 0; index < chunks.length; index += 1) {
+    if (index > 0) {
+      await yieldToMain();
+    }
     const chunk = chunks[index];
     const chunkEnd = chunk.start + chunk.text.length;
     const localEntities = entitiesFullyInsideChunk(entities, chunk.start, chunkEnd);

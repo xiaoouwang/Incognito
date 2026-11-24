@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { yieldToMain } from "../lib/yieldToMain.js";
 import AuditReportWindow from "./AuditReportWindow.jsx";
 import CategoryReview from "./CategoryReview.jsx";
 import EntityEditMenu from "./EntityEditMenu.jsx";
@@ -68,6 +69,8 @@ import {
   inferCustomCategoriesFromEntities,
   isEntityActive,
   removeEntityById,
+  extractEntitiesByValue,
+  mergeEntitiesBySpan,
   buildAnonymizedPreviewModel,
 } from "../lib/entityUtils.js";
 import "./generativeWorkflow.css";
@@ -103,6 +106,8 @@ export default function GlinerWorkflowSection() {
   const [selectedCategories, setSelectedCategories] = useState(initialDemo.selectedCategories);
   const [excludedEntityKeys, setExcludedEntityKeys] = useState(initialDemo.excludedEntityKeys);
   const [reportOpen, setReportOpen] = useState(false);
+  const [auditReportText, setAuditReportText] = useState("");
+  const [auditReportBusy, setAuditReportBusy] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [isBatchLoading, setIsBatchLoading] = useState(false);
   const [batchJobProgress, setBatchJobProgress] = useState(null);
@@ -122,6 +127,7 @@ export default function GlinerWorkflowSection() {
   const [entityMenu, setEntityMenu] = useState(null);
   const [customCategories, setCustomCategories] = useState({});
   const [isEditingSource, setIsEditingSource] = useState(false);
+  const [removedEntities, setRemovedEntities] = useState([]);
 
   const {
     persons,
@@ -231,6 +237,8 @@ export default function GlinerWorkflowSection() {
     [activeLabels, customCategories],
   );
   const groupedEntities = useMemo(() => groupEntities(entities), [entities]);
+  const deferredSelectedCategories = useDeferredValue(selectedCategories);
+  const deferredExcludedEntityKeys = useDeferredValue(excludedEntityKeys);
   const {
     ladders: generalizationLadders,
     loading: generalizationLoading,
@@ -239,7 +247,7 @@ export default function GlinerWorkflowSection() {
   } = useGeneralizationLadders({
     entities,
     categoryMethods,
-    selectedCategories,
+    selectedCategories: deferredSelectedCategories,
   });
   const highlightedSegments = useMemo(
     () => createHighlightSegments(text, entities),
@@ -251,8 +259,8 @@ export default function GlinerWorkflowSection() {
         text,
         entities,
         groupedEntities,
-        selectedCategories,
-        excludedEntityKeys,
+        deferredSelectedCategories,
+        deferredExcludedEntityKeys,
         customCategories,
         {
           categoryMethods,
@@ -266,8 +274,8 @@ export default function GlinerWorkflowSection() {
       text,
       entities,
       groupedEntities,
-      selectedCategories,
-      excludedEntityKeys,
+      deferredSelectedCategories,
+      deferredExcludedEntityKeys,
       customCategories,
       categoryMethods,
       generalizationLadders,
@@ -284,7 +292,7 @@ export default function GlinerWorkflowSection() {
         text,
         entities,
         groupedEntities,
-        selectedCategories,
+        selectedCategories: deferredSelectedCategories,
         customCategories,
         persons,
         excludedPlaceholders,
@@ -298,7 +306,7 @@ export default function GlinerWorkflowSection() {
       text,
       entities,
       groupedEntities,
-      selectedCategories,
+      deferredSelectedCategories,
       customCategories,
       persons,
       excludedPlaceholders,
@@ -317,26 +325,8 @@ export default function GlinerWorkflowSection() {
       ),
     [entities, selectedCategories, excludedEntityKeys],
   );
-  const auditReport = useMemo(
-    () =>
-      createAuditReport({
-        text,
-        entities,
-        anonymizedText,
-        groupedEntities,
-        selectedCategories,
-        excludedEntityKeys,
-        modelName,
-        sourceFile: currentFile?.name || null,
-        nerBackend: "gliner",
-        batchMode,
-        customCategories,
-        categoryMethods,
-        generalizationLadders,
-        persons,
-        surfaceOverrides,
-      }),
-    [
+  function buildAuditReportSnapshot() {
+    return createAuditReport({
       text,
       entities,
       anonymizedText,
@@ -344,15 +334,36 @@ export default function GlinerWorkflowSection() {
       selectedCategories,
       excludedEntityKeys,
       modelName,
-      currentFile,
+      sourceFile: currentFile?.name || null,
+      nerBackend: "gliner",
       batchMode,
-      surfaceOverrides,
       customCategories,
       categoryMethods,
       generalizationLadders,
       persons,
-    ],
-  );
+      surfaceOverrides,
+    });
+  }
+
+  async function openAuditReport() {
+    setReportOpen(true);
+    setAuditReportBusy(true);
+    setAuditReportText("");
+    setStatus(t("auditBuilding"));
+    try {
+      await yieldToMain();
+      const report = buildAuditReportSnapshot();
+      await yieldToMain();
+      setAuditReportText(report);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : String(caughtError));
+      setStatus("Audit report failed.");
+      setReportOpen(false);
+    } finally {
+      setAuditReportBusy(false);
+    }
+  }
+
   const labelStudioExport = useMemo(
     () =>
       createLabelStudioExport({
@@ -460,6 +471,7 @@ export default function GlinerWorkflowSection() {
       const categorySelection = createCategorySelectionFromEntities(normalized);
 
       setEntities(normalized);
+      setRemovedEntities([]);
       setSelectedCategories(categorySelection);
       setExcludedEntityKeys({});
       setModelName(GLINER_RELEX_MODEL_ID);
@@ -835,6 +847,8 @@ export default function GlinerWorkflowSection() {
     setStatus(t("buildingZip"));
     try {
       const graphOptions = { excludedPlaceholders, excludedSurfaces };
+      await yieldToMain();
+      const auditReport = buildAuditReportSnapshot();
       await downloadSingleExportZip({
         baseName: "incognito-export",
         originalText: text,
@@ -871,6 +885,7 @@ export default function GlinerWorkflowSection() {
     const demo = buildSampleDemoPersonGraph();
     setText(demo.text);
     setEntities(demo.entities);
+    setRemovedEntities([]);
     setSelectedCategories(demo.selectedCategories);
     setExcludedEntityKeys(demo.excludedEntityKeys);
     setCategoryMethods({});
@@ -920,6 +935,7 @@ export default function GlinerWorkflowSection() {
 
     setText("");
     setEntities([]);
+    setRemovedEntities([]);
     clearPersonGraph();
     setSelectedCategories({});
     setExcludedEntityKeys({});
@@ -941,6 +957,7 @@ export default function GlinerWorkflowSection() {
     if (isDemoMode) {
       setText("");
       setEntities([]);
+      setRemovedEntities([]);
       clearPersonGraph();
       setSelectedCategories({});
       setExcludedEntityKeys({});
@@ -984,6 +1001,14 @@ export default function GlinerWorkflowSection() {
     });
   }
 
+  function selectAllLabels() {
+    setActiveLabels(new Set(GLINER_LABELS));
+  }
+
+  function deselectAllLabels() {
+    setActiveLabels(new Set());
+  }
+
   function toggleCategory(category) {
     setSelectedCategories((current) => ({
       ...current,
@@ -1003,7 +1028,68 @@ export default function GlinerWorkflowSection() {
       }
       return next;
     });
-    syncEntityChipToGraph(category, entityText, excluding);
+    startTransition(() => {
+      syncEntityChipToGraph(category, entityText, excluding);
+    });
+  }
+
+  function removeEntityValue(category, entityText) {
+    const key = getEntityValueKey(category, entityText);
+    const { kept, extracted } = extractEntitiesByValue(entities, category, entityText);
+    if (!extracted.length) {
+      return;
+    }
+    setEntities(kept);
+    setRemovedEntities((current) => mergeEntitiesBySpan(current, extracted));
+    setExcludedEntityKeys((current) => {
+      if (!current[key]) {
+        return current;
+      }
+      const updated = { ...current };
+      delete updated[key];
+      return updated;
+    });
+    setSelectedCategories((current) => {
+      if (kept.some((entity) => entity.label === category)) {
+        return current;
+      }
+      const updated = { ...current };
+      delete updated[category];
+      return updated;
+    });
+    setAnonymizedTextOverride(null);
+    startTransition(() => {
+      refreshPersonGraph(text, kept, { resetExclusions: false });
+    });
+    setStatus(
+      t("chipRemovedStatus", {
+        text: entityText,
+        count: extracted.length,
+      }),
+    );
+  }
+
+  function restoreEntityValue(category, entityText) {
+    const { kept, extracted } = extractEntitiesByValue(removedEntities, category, entityText);
+    if (!extracted.length) {
+      return;
+    }
+    const next = mergeEntitiesBySpan(entities, extracted);
+    setRemovedEntities(kept);
+    setEntities(next);
+    setSelectedCategories((current) =>
+      category in current ? current : { ...current, [category]: true },
+    );
+    setAnonymizedTextOverride(null);
+    startTransition(() => {
+      refreshPersonGraph(text, next, { resetExclusions: false });
+    });
+    setStatus(
+      t("chipRestoredStatus", {
+        text: entityText,
+        count: extracted.length,
+      }),
+    );
   }
 
   function copyAnonymizedText() {
@@ -1012,12 +1098,18 @@ export default function GlinerWorkflowSection() {
   }
 
   function copyAuditReport() {
-    navigator.clipboard.writeText(auditReport);
+    if (!auditReportText) {
+      return;
+    }
+    navigator.clipboard.writeText(auditReportText);
     setStatus("Audit report copied to clipboard.");
   }
 
   function downloadAuditReport() {
-    downloadFile(auditReport, "anonymization-audit-report.md", "text/markdown;charset=utf-8");
+    if (!auditReportText) {
+      return;
+    }
+    downloadFile(auditReportText, "anonymization-audit-report.md", "text/markdown;charset=utf-8");
     setStatus("Audit report downloaded.");
   }
 
@@ -1199,8 +1291,8 @@ export default function GlinerWorkflowSection() {
         <button onClick={copyAnonymizedText} disabled={!entities.length}>
           {t("copyAnonymized")}
         </button>
-        <button onClick={() => setReportOpen(true)} disabled={!entities.length}>
-          {t("showAuditReport")}
+        <button onClick={openAuditReport} disabled={!entities.length || auditReportBusy}>
+          {auditReportBusy ? t("auditBuilding") : t("showAuditReport")}
         </button>
         <button
           className="secondary"
@@ -1266,8 +1358,30 @@ export default function GlinerWorkflowSection() {
 
       <div className="panel gliner-labels-panel">
         <div className="panel-header">
-          <h3>{t("glinerLabelsTitle")}</h3>
-          <span>{t("glinerLabelsHint", { count: selectedDetectionLabels.length })}</span>
+          <div className="gliner-labels-header-left">
+            <h3>{t("glinerLabelsTitle")}</h3>
+            <div className="gliner-labels-bulk-actions">
+              <button
+                type="button"
+                className="link-button"
+                disabled={isDetecting || selectedDetectionLabels.length === GLINER_LABELS.length}
+                onClick={selectAllLabels}
+              >
+                {t("glinerLabelsSelectAll")}
+              </button>
+              <button
+                type="button"
+                className="link-button"
+                disabled={isDetecting || selectedDetectionLabels.length === 0}
+                onClick={deselectAllLabels}
+              >
+                {t("glinerLabelsDeselectAll")}
+              </button>
+            </div>
+          </div>
+          <span className="gliner-labels-count">
+            {t("glinerLabelsHint", { count: selectedDetectionLabels.length })}
+          </span>
         </div>
         <div className="gliner-label-list">
           {GLINER_LABELS.map((label) => {
@@ -1434,11 +1548,14 @@ export default function GlinerWorkflowSection() {
           <CategoryReview
             entities={entities}
             groupedEntities={groupedEntities}
+            removedEntities={removedEntities}
             categoryLabels={categoryLabels}
             selectedCategories={selectedCategories}
             excludedEntityKeys={excludedEntityKeys}
             onToggleCategory={toggleCategory}
             onToggleEntity={toggleEntityValue}
+            onRemoveEntity={removeEntityValue}
+            onRestoreEntity={restoreEntityValue}
           />
         </div>
 
@@ -1480,8 +1597,8 @@ export default function GlinerWorkflowSection() {
                 text={text}
                 segments={highlightedSegments}
                 categoryLabels={categoryLabels}
-                selectedCategories={selectedCategories}
-                excludedEntityKeys={excludedEntityKeys}
+                selectedCategories={deferredSelectedCategories}
+                excludedEntityKeys={deferredExcludedEntityKeys}
                 focusRanges={personFocusRanges}
                 persons={persons}
                 pinnedPlaceholder={pinnedPersonPlaceholder}
@@ -1512,6 +1629,7 @@ export default function GlinerWorkflowSection() {
                 onChange={(event) => {
                   setText(event.target.value);
                   setEntities([]);
+                  setRemovedEntities([]);
                   clearPersonGraph();
                   setSelectedCategories({});
                   setExcludedEntityKeys({});
@@ -1717,7 +1835,11 @@ export default function GlinerWorkflowSection() {
                 ))}
               </div>
             ) : (
-              <p className="gen-maps-empty">{t("generativeGraphEmpty")}</p>
+              <p className="gen-maps-empty">
+                  {isRegeneratingPersonGraph || isDetecting
+                    ? t("personGraphBuilding")
+                    : t("personGraphEmpty")}
+                </p>
             )}
             <p className="category-hint">{t("personGraphMoveHint")}</p>
             <p className="category-hint">{t("personGraphFocusHint")}</p>
@@ -1751,8 +1873,8 @@ export default function GlinerWorkflowSection() {
               entities={entities}
               segments={highlightedSegments}
               categoryLabels={categoryLabels}
-              selectedCategories={selectedCategories}
-              excludedEntityKeys={excludedEntityKeys}
+              selectedCategories={deferredSelectedCategories}
+              excludedEntityKeys={deferredExcludedEntityKeys}
               categoryMethods={categoryMethods}
               onCategoryMethodChange={setCategoryMethods}
               anonymizedText={anonymizedPreview.anonymizedText}
@@ -1846,8 +1968,12 @@ export default function GlinerWorkflowSection() {
 
       {reportOpen ? (
         <AuditReportWindow
-          report={auditReport}
-          onClose={() => setReportOpen(false)}
+          report={auditReportText}
+          busy={auditReportBusy}
+          onClose={() => {
+            setReportOpen(false);
+            setAuditReportBusy(false);
+          }}
           onCopy={copyAuditReport}
           onDownload={downloadAuditReport}
         />

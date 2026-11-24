@@ -156,7 +156,7 @@ export function finalizeGlinerEntities(text, entities, source = "gliner") {
 const GLINER_CHUNK_CHAR_LIMIT = 1000;
 
 export function splitTextForGlinerDetection(text, maxChars = GLINER_CHUNK_CHAR_LIMIT) {
-  const normalized = text.replace(/\r\n/g, "\n").trim();
+  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
   if (!normalized) {
     return [];
   }

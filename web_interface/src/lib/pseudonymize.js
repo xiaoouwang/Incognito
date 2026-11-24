@@ -394,7 +394,12 @@ function normalizeCategory(category) {
   ) {
     return "identity document number";
   }
-  if (key === "people" || key === "per") {
+  if (
+    key === "people" ||
+    key === "per" ||
+    key === "person name" ||
+    key === "person names"
+  ) {
     return "person";
   }
   if (key === "org" || key === "organisation") {

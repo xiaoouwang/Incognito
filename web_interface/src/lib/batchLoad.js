@@ -8,14 +8,22 @@ export function isSupportedBatchFileName(name) {
   return SUPPORTED_NAME_PATTERN.test(name);
 }
 
+/** Normalize CR / CRLF / BOM so classic Mac .txt files keep visible line breaks. */
+export function normalizeLoadedText(text) {
+  return String(text ?? "")
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+}
+
 async function extractTextFromFile(file) {
   if (/\.docx$/i.test(file.name)) {
     const arrayBuffer = await file.arrayBuffer();
     const { value } = await mammoth.extractRawText({ arrayBuffer });
-    return value;
+    return normalizeLoadedText(value);
   }
 
-  return file.text();
+  return normalizeLoadedText(await file.text());
 }
 
 async function fileToBatchEntry(file, relativePath) {

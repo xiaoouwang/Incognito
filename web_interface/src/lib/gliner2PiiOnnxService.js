@@ -17,6 +17,7 @@ import {
   decodeGliner2PiiOnnxSpanProbs,
 } from "./gliner2PiiOnnxPreprocess.js";
 import { splitTextForGlinerDetection } from "./glinerUtils.js";
+import { yieldToMain } from "./yieldToMain.js";
 
 transformersEnv.allowRemoteModels = true;
 transformersEnv.backends.onnx.wasm.numThreads = 1;
@@ -226,6 +227,9 @@ export async function runGliner2PiiOnnxDetection({
   const chunks = splitTextForGlinerDetection(source);
   const entities = [];
   for (let index = 0; index < chunks.length; index += 1) {
+    if (index > 0) {
+      await yieldToMain();
+    }
     const chunk = chunks[index];
     const chunkText = typeof chunk === "string" ? chunk : chunk.text;
     const offset = typeof chunk === "string" ? 0 : Number(chunk.start) || 0;
@@ -236,6 +240,7 @@ export async function runGliner2PiiOnnxDetection({
       detail: "segment",
       current: index + 1,
       total: chunks.length,
+      entities: entities.slice(),
     });
   }
 

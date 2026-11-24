@@ -9,7 +9,8 @@ Quelques minutes plus tard, elle ajoute : « Mon père, Jean Dupont, était prof
 Enfin, Marie indique qu’elle est la seule enseignante de chinois de son établissement à avoir participé à un programme d’échange universitaire avec Pékin en 2019.`;
 
 export const CATEGORY_LABELS = {
-  person: "People",
+  person: "Person names",
+  "person name": "Person names",
   location: "Locations",
   organization: "Organizations",
   date: "Dates",
@@ -33,6 +34,7 @@ export const CATEGORY_LABELS = {
 
 export const CATEGORY_PREFIXES = {
   person: "PERSON",
+  "person name": "PERSON",
   location: "LOCATION",
   organization: "ORG",
   date: "DATE",

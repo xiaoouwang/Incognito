@@ -274,6 +274,10 @@
   padding: 0.45rem 0.75rem;
 }
 
+.split-preview-pane-header .text-page-nav {
+  flex: 0 0 auto;
+}
+
 .split-preview-pane-title-row {
   align-items: baseline;
   display: inline-flex;

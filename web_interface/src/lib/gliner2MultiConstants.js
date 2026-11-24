@@ -41,7 +41,19 @@ export function buildGliner2LabelMap(labels) {
     if (!key || map[key]) {
       continue;
     }
-    map[key] = GLINER_LABEL_DESCRIPTIONS[key] || `a ${key}`;
+    // Custom people/persons aliases should use the same tight person-name prompt.
+    const normalized = key.toLocaleLowerCase();
+    if (
+      normalized === "people" ||
+      normalized === "persons" ||
+      normalized === "personne" ||
+      normalized === "person"
+    ) {
+      map[key] =
+        GLINER_LABEL_DESCRIPTIONS["person name"] || GLINER_LABEL_DESCRIPTIONS.person;
+      continue;
+    }
+    map[key] = GLINER_LABEL_DESCRIPTIONS[key] || GLINER_LABEL_DESCRIPTIONS[normalized] || `a ${key}`;
   }
   return map;
 }

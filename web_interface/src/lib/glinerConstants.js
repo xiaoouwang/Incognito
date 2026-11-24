@@ -11,7 +11,7 @@ export const GLINER_DEFAULT_THRESHOLD = 0.2;
 export const GLINER_RULE_LABELS = ["email", "url", "phone number", "identity document number"];
 
 export const GLINER_LABELS = [
-  "person",
+  "person name",
   "organization",
   "location",
   "address",
@@ -24,7 +24,6 @@ export const GLINER_LABELS = [
   "profession",
   "job title or project role",
   "school",
-  "hospital",
   "family member",
   "nationality",
   "disease",
@@ -33,7 +32,8 @@ export const GLINER_LABELS = [
 
 /** CSS suffix after highlight-/chip- (Advanced + Basic shared). */
 export const GLINER_LABEL_STYLE_KEYS = {
-  person: "person",
+  "person name": "person",
+  person: "person", // legacy / normalized spans
   organization: "organization",
   location: "location",
   address: "address",
@@ -46,7 +46,7 @@ export const GLINER_LABEL_STYLE_KEYS = {
   profession: "profession",
   "job title or project role": "job-role",
   school: "school",
-  hospital: "hospital",
+  hospital: "hospital", // legacy spans from older runs
   "family member": "family",
   nationality: "nationality",
   disease: "disease",
@@ -55,7 +55,12 @@ export const GLINER_LABEL_STYLE_KEYS = {
 
 /** Short English descriptions for GLiNER2 schema [DESCRIPTION] prompts. */
 export const GLINER_LABEL_DESCRIPTIONS = {
-  person: "a person's name",
+  "person name":
+    "a proper personal name (given name and/or surname), not a pronoun and not a generic word like people, person, or human",
+  person:
+    "a proper personal name (given name and/or surname), not a pronoun and not a generic word like people, person, or human",
+  people:
+    "a proper personal name (given name and/or surname), not a pronoun and not a generic word like people, person, or human",
   organization: "a company, brand or organisation name",
   location: "a place, city, country or region",
   address: "a street address or postal address",

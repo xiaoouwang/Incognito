@@ -2,7 +2,8 @@ const LABEL_STUDIO_FROM_NAME = "label";
 const LABEL_STUDIO_TO_NAME = "text";
 
 const APP_TO_LABEL_STUDIO = {
-  person: "Person",
+  person: "Person name",
+  "person name": "Person name",
   location: "Location",
   organization: "Organization",
   date: "Date",

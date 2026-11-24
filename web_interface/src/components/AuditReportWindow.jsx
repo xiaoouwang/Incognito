@@ -1,7 +1,14 @@
 import { useUiLocale } from "../context/UiLocaleContext.jsx";
 
-export default function AuditReportWindow({ report, onClose, onCopy, onDownload }) {
+export default function AuditReportWindow({
+  report,
+  busy = false,
+  onClose,
+  onCopy,
+  onDownload,
+}) {
   const { t } = useUiLocale();
+  const ready = Boolean(report) && !busy;
 
   return (
     <div className="report-backdrop" role="presentation">
@@ -12,14 +19,30 @@ export default function AuditReportWindow({ report, onClose, onCopy, onDownload 
             <h2>{t("auditTitle")}</h2>
           </div>
           <div className="report-actions">
-            <button onClick={onCopy}>{t("auditCopy")}</button>
-            <button onClick={onDownload}>{t("auditDownload")}</button>
+            <button onClick={onCopy} disabled={!ready}>
+              {t("auditCopy")}
+            </button>
+            <button onClick={onDownload} disabled={!ready}>
+              {t("auditDownload")}
+            </button>
             <button className="secondary" onClick={onClose}>
               {t("close")}
             </button>
           </div>
         </div>
-        <pre className="report-body">{report}</pre>
+        {busy || !report ? (
+          <p className="report-body report-body-status" role="status">
+            {t("auditBuilding")}
+          </p>
+        ) : (
+          <textarea
+            className="report-body report-body-text"
+            readOnly
+            value={report}
+            spellCheck={false}
+            aria-label={t("auditTitle")}
+          />
+        )}
       </section>
     </div>
   );

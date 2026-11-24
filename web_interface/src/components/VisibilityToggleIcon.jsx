@@ -59,6 +59,7 @@ export function VisibilityToggleButton({
   onClick,
   className = "",
   size = 15,
+  disabled = false,
 }) {
   return (
     <button
@@ -70,6 +71,7 @@ export function VisibilityToggleButton({
       title={title}
       aria-pressed={shown}
       aria-label={title}
+      disabled={disabled}
     >
       <VisibilityIcon shown={shown} size={size} />
     </button>

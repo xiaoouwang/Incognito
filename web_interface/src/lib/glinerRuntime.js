@@ -11,6 +11,7 @@ import {
   splitTextForGlinerDetection,
 } from "./glinerUtils.js";
 import { detectWithGlinerRules, mergeEntities } from "./ruleDetection.js";
+import { yieldToMain } from "./yieldToMain.js";
 
 const FETCH_TIMEOUT_MS = 15 * 60 * 1000;
 const GLINER_MODEL_CACHE_NAME = "incognito-gliner-v1";
@@ -366,6 +367,9 @@ async function runGlinerModelDetection(gliner, text, modelLabels, threshold, pro
   const entities = [];
 
   for (let index = 0; index < chunks.length; index += 1) {
+    if (index > 0) {
+      await yieldToMain();
+    }
     reportDetectProgress(progressCallback, index, chunks.length);
 
     const chunk = chunks[index];

@@ -5,7 +5,6 @@ import {
   getCategoryPrefix,
   getEntityValueKey,
   isManualEntity,
-  countEntitySpans,
   isEntityActive,
   unifyPersonGraphReplacements,
 } from "./entityUtils.js";
@@ -33,7 +32,28 @@ function formatProvenanceLabel(source) {
   return `Automatic detection (${source})`;
 }
 
-function getSpansForValue(entities, category, value) {
+function spanValueKey(category, value) {
+  return `${category}\0${String(value || "").toLocaleLowerCase()}`;
+}
+
+function indexSpansByValue(entities) {
+  const map = new Map();
+  for (const entity of entities || []) {
+    const key = spanValueKey(entity.label, entity.text);
+    const list = map.get(key);
+    if (list) {
+      list.push(entity);
+    } else {
+      map.set(key, [entity]);
+    }
+  }
+  return map;
+}
+
+function getSpansForValue(entities, category, value, spanIndex = null) {
+  if (spanIndex) {
+    return spanIndex.get(spanValueKey(category, value)) || [];
+  }
   const normalized = value.toLocaleLowerCase();
   return entities.filter(
     (entity) =>
@@ -41,8 +61,8 @@ function getSpansForValue(entities, category, value) {
   );
 }
 
-function summarizeSpanProvenance(entities, category, value) {
-  const spans = getSpansForValue(entities, category, value);
+function summarizeSpanProvenance(entities, category, value, spanIndex = null) {
+  const spans = getSpansForValue(entities, category, value, spanIndex);
   const manualSpans = spans.filter(isManualEntity);
   const machineSpans = spans.filter((entity) => !isManualEntity(entity));
   const machineBySource = machineSpans.reduce((counts, entity) => {
@@ -224,6 +244,7 @@ export function createAuditReport({
   const selected = categories.filter((category) => selectedCategories[category]);
   const kept = categories.filter((category) => !selectedCategories[category]);
   const provenance = summarizeDocumentProvenance(entities);
+  const spanIndex = indexSpansByValue(entities);
   const replacementMap = buildReplacementMap(groupedEntities, selectedCategories, {
     style: replacementStyle,
     categoryMethods,
@@ -267,7 +288,8 @@ export function createAuditReport({
     .map((category) => {
       const uniqueCount = groupedEntities[category].length;
       const occurrenceCount = groupedEntities[category].reduce(
-        (total, entity) => total + countEntitySpans(entities, category, entity.text),
+        (total, entity) =>
+          total + (spanIndex.get(spanValueKey(category, entity.text)) || []).length,
         0,
       );
       const categorySpans = entities.filter((entity) => entity.label === category);
@@ -309,7 +331,12 @@ export function createAuditReport({
       const replacement = selectedCategories[category]
         ? mappedReplacement || fallbackPlaceholder
         : null;
-      const spanProvenance = summarizeSpanProvenance(entities, category, entity.text);
+      const spanProvenance = summarizeSpanProvenance(
+        entities,
+        category,
+        entity.text,
+        spanIndex,
+      );
       const occurrences = spanProvenance.spans.length;
       const active = isEntityActive(entity, selectedCategories, excludedEntityKeys);
       const replaced = Boolean(active && replacement);

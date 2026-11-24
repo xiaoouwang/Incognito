@@ -19,6 +19,8 @@ const KNOWN_LABELS = new Set(GLINER_LABELS);
 const LABEL_ALIASES = {
   people: "person",
   persons: "person",
+  "person name": "person",
+  "person names": "person",
   personne: "person",
   personnes: "person",
   name: "person",

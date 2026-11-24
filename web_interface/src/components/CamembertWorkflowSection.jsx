@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { yieldToMain } from "../lib/yieldToMain.js";
 import AuditReportWindow from "./AuditReportWindow.jsx";
 import CategoryReview from "./CategoryReview.jsx";
 import EntityEditMenu from "./EntityEditMenu.jsx";
@@ -47,8 +48,17 @@ import {
 import { NER_MODEL_IDS } from "../lib/constants.js";
 import { GLINER_LABELS, GLINER_RULE_LABELS } from "../lib/glinerConstants.js";
 import { useNerWorker } from "../hooks/useNerWorker.js";
+import { useGliner2DetectWorker } from "../hooks/useGliner2DetectWorker.js";
+import { useGlinerRelexWorker } from "../hooks/useGlinerRelexWorker.js";
 import { useGeneralizationLadders } from "../hooks/useGeneralizationLadders.js";
 import { usePersonGraphPanel } from "../hooks/usePersonGraphPanel.js";
+import { LONG_TEXT_WARN_CHARS } from "../lib/textLimits.js";
+import {
+  sliceEntitiesForPage,
+  sliceFocusRangesForPage,
+  splitTextIntoPages,
+} from "../lib/textPages.js";
+import TextPageNav from "./TextPageNav.jsx";
 import {
   addEntitySpans,
   buildCategoryLabels,
@@ -67,8 +77,11 @@ import {
   isEntityActive,
   finalizeDetectedEntities,
   removeEntityById,
+  extractEntitiesByValue,
+  mergeEntitiesBySpan,
   buildAnonymizedPreviewModel,
 } from "../lib/entityUtils.js";
+import { filterPronounPersonEntities } from "../lib/personMentionFilter.js";
 import AnonymizedSplitPreview from "./AnonymizedSplitPreview.jsx";
 import AnonymizedPersonGraphPanel from "./AnonymizedPersonGraphPanel.jsx";
 import DomReconcileErrorBoundary from "./DomReconcileErrorBoundary.jsx";
@@ -109,6 +122,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
   const [selectedCategories, setSelectedCategories] = useState(initialDemo.selectedCategories);
   const [excludedEntityKeys, setExcludedEntityKeys] = useState({});
   const [reportOpen, setReportOpen] = useState(false);
+  const [auditReportText, setAuditReportText] = useState("");
+  const [auditReportBusy, setAuditReportBusy] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [isBatchLoading, setIsBatchLoading] = useState(false);
   const [batchJobProgress, setBatchJobProgress] = useState(null);
@@ -140,6 +155,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
   const [threshold, setThreshold] = useState(GLINER2_PII_ONNX_DEFAULT_THRESHOLD);
   const { detectEntities: detectWithCamembert, progressItems: camembertProgressItems } =
     useNerWorker();
+  const { detectEntities: detectWithGliner2Worker } = useGliner2DetectWorker();
+  const { extractRelations: extractRelexWithWorker } = useGlinerRelexWorker();
   const [isEditingSource, setIsEditingSource] = useState(false);
   const [categoryMethods, setCategoryMethods] = useState({});
   const [surfaceOverrides, setSurfaceOverrides] = useState({});
@@ -147,6 +164,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
   const [showAnonymizedPersonGraph, setShowAnonymizedPersonGraph] = useState(true);
   const [isRegeneratingPersonGraph, setIsRegeneratingPersonGraph] = useState(false);
   const [isExportingPackage, setIsExportingPackage] = useState(false);
+  const [textPageIndex, setTextPageIndex] = useState(0);
+  const [removedEntities, setRemovedEntities] = useState([]);
 
   const {
     persons,
@@ -185,14 +204,15 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
               noteKey: "personGraphRelexDemoReady",
             };
           }
-          const { extractGlinerRelexRelations } = await import("../lib/glinerRelexService.js");
-          return extractGlinerRelexRelations(sourceText, nextEntities);
+          return extractRelexWithWorker({ text: sourceText, entities: nextEntities });
         }
       : null,
   });
   const [graphDropTarget, setGraphDropTarget] = useState(null);
 
-  const showSourceHighlight = entities.length > 0 && !isEditingSource;
+  // During detection, show the highlight pane early so segment results can paint live.
+  const showSourceHighlight =
+    !isEditingSource && (entities.length > 0 || isDetecting);
 
   const availableDetectionLabels = useMemo(() => {
     const extras = customDetectionLabels.filter((label) => !GLINER_LABELS.includes(label));
@@ -257,25 +277,87 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
   }
 
   async function runSelectedNerDetection({ text: sourceText, onProgress }) {
-    if (activeNerEngine === BASIC_NER_ENGINE_PII_ONNX) {
-      const { runGliner2PiiOnnxDetection } = await import("../lib/gliner2PiiOnnxService.js");
-      return runGliner2PiiOnnxDetection({
-        text: sourceText,
-        labels: selectedDetectionLabels,
-        threshold,
-        onProgress,
-      });
-    }
     if (activeNerEngine === BASIC_NER_ENGINE_CAMEMBERT) {
       return detectWithCamembert(sourceText, BASIC_NER_ENGINE_CAMEMBERT);
     }
-    const { runGliner2MultiDetection } = await import("../lib/gliner2MultiService.js");
-    return runGliner2MultiDetection({
+    // GLiNER2-PII / multi: dedicated worker so long interviews do not freeze the UI.
+    return detectWithGliner2Worker({
+      engine:
+        activeNerEngine === BASIC_NER_ENGINE_PII_ONNX
+          ? BASIC_NER_ENGINE_PII_ONNX
+          : BASIC_NER_ENGINE_MULTI,
       text: sourceText,
+      labels: selectedDetectionLabels,
       labelMap: detectionLabelMap,
       threshold,
       onProgress,
     });
+  }
+
+  function paintPartialEntities(partialEntities) {
+    if (!Array.isArray(partialEntities)) {
+      return;
+    }
+    // Sync updates so highlights paint as each worker segment lands (not deferred).
+    const painted = filterPronounPersonEntities(partialEntities).map((entity, index) => ({
+      ...entity,
+      id: entity.id || `live-${index}-${entity.start ?? 0}`,
+      source: entity.source || "gliner2",
+    }));
+    setEntities(painted);
+    setSelectedCategories(createCategorySelectionFromEntities(painted));
+  }
+
+  function handleNerProgress(progress) {
+    if (!progress) {
+      return;
+    }
+    if (progress.phase === "download") {
+      const pct =
+        typeof progress.percent === "number" ? ` ${Math.round(progress.percent)}%` : "";
+      setStatus(
+        `Downloading ${nerEngineMeta.downloadLabel} (${progress.file || "model"})${pct}…`,
+      );
+      return;
+    }
+    if (progress.phase === "infer") {
+      if (progress.entities) {
+        paintPartialEntities(progress.entities);
+      }
+      if (progress.current && progress.total) {
+        setStatus(
+          t("detectingSegment", {
+            current: progress.current,
+            total: progress.total,
+          }),
+        );
+      } else {
+        setStatus(t("glinerStatusRunning"));
+      }
+    }
+  }
+
+  function handleRelexProgress(progress) {
+    if (!progress) {
+      return;
+    }
+    if (progress.phase === "download") {
+      const pct =
+        typeof progress.percent === "number" ? ` ${Math.round(progress.percent)}%` : "";
+      setStatus(
+        t("personGraphRelexLoading") +
+          (progress.file ? ` (${progress.file}${pct})` : pct ? ` ${pct}` : ""),
+      );
+      return;
+    }
+    if (progress.phase === "infer" && progress.current && progress.total) {
+      setStatus(
+        t("personGraphRelexSegment", {
+          current: progress.current,
+          total: progress.total,
+        }),
+      );
+    }
   }
 
   useEffect(() => {
@@ -305,6 +387,14 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
       }
       return next;
     });
+  }
+
+  function selectAllDetectionLabels() {
+    setActiveLabels(new Set(availableDetectionLabels));
+  }
+
+  function deselectAllDetectionLabels() {
+    setActiveLabels(new Set());
   }
 
   function handleAddDetectionLabel(event) {
@@ -395,6 +485,42 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     [customCategories],
   );
   const groupedEntities = useMemo(() => groupEntities(entities), [entities]);
+  const textPages = useMemo(() => splitTextIntoPages(text), [text]);
+  const textPageCount = textPages.length;
+  const safeTextPageIndex = Math.min(
+    Math.max(0, textPageIndex),
+    Math.max(0, textPageCount - 1),
+  );
+  const currentTextPage = textPages[safeTextPageIndex] || {
+    start: 0,
+    end: text.length,
+    text,
+  };
+
+  useEffect(() => {
+    setTextPageIndex(0);
+  }, [text]);
+
+  useEffect(() => {
+    if (textPageIndex > 0 && textPageIndex >= textPageCount) {
+      setTextPageIndex(Math.max(0, textPageCount - 1));
+    }
+  }, [textPageIndex, textPageCount]);
+
+  const pageEntities = useMemo(
+    () => sliceEntitiesForPage(entities, currentTextPage.start, currentTextPage.end),
+    [entities, currentTextPage.start, currentTextPage.end],
+  );
+  const pageFocusRanges = useMemo(
+    () =>
+      sliceFocusRangesForPage(personFocusRanges, currentTextPage.start, currentTextPage.end),
+    [personFocusRanges, currentTextPage.start, currentTextPage.end],
+  );
+  const pageHighlightedSegments = useMemo(
+    () => createHighlightSegments(currentTextPage.text, pageEntities),
+    [currentTextPage.text, pageEntities],
+  );
+
   const {
     ladders: generalizationLadders,
     loading: generalizationLoading,
@@ -405,15 +531,13 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     categoryMethods,
     selectedCategories,
   });
-  const highlightedSegments = useMemo(
-    () => createHighlightSegments(text, entities),
-    [text, entities],
-  );
-  const anonymizedPreview = useMemo(
+
+  // Page-scoped anonymized preview — small enough to update immediately on chip clicks.
+  const pageAnonymizedPreview = useMemo(
     () =>
       buildAnonymizedPreviewModel(
-        text,
-        entities,
+        currentTextPage.text,
+        pageEntities,
         groupedEntities,
         selectedCategories,
         excludedEntityKeys,
@@ -427,8 +551,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
         },
       ),
     [
-      text,
-      entities,
+      currentTextPage.text,
+      pageEntities,
       groupedEntities,
       selectedCategories,
       excludedEntityKeys,
@@ -437,41 +561,70 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
       generalizationLadders,
       persons,
       surfaceOverrides,
+      text,
     ],
   );
-  const anonymizedText =
-    anonymizedTextOverride != null ? anonymizedTextOverride : anonymizedPreview.anonymizedText;
-  const anonymizedSegments = anonymizedPreview.segments;
-  const anonymizedGraphModel = useMemo(
-    () =>
-      resolveAnonymizedPersonGraph({
-        text,
-        entities,
-        groupedEntities,
-        selectedCategories,
-        customCategories,
-        persons,
-        excludedPlaceholders,
-        excludedSurfaces,
-        categoryMethods,
-        generalizationLadders,
-        salt: text,
-        surfaceOverrides,
-      }),
-    [
+
+  function buildFullAnonymizedPreview() {
+    return buildAnonymizedPreviewModel(
       text,
       entities,
       groupedEntities,
       selectedCategories,
+      excludedEntityKeys,
+      customCategories,
+      {
+        categoryMethods,
+        salt: text,
+        generalizationLadders,
+        persons,
+        surfaceOverrides,
+      },
+    );
+  }
+
+  function getFullAnonymizedText() {
+    if (anonymizedTextOverride != null) {
+      return anonymizedTextOverride;
+    }
+    return buildFullAnonymizedPreview().anonymizedText;
+  }
+
+  // Person-graph anonymization can stay a step behind chip clicks.
+  const deferredSelectedCategories = useDeferredValue(selectedCategories);
+  const anonymizedGraphModel = useMemo(() => {
+    if (!showPersonGraph || !showAnonymizedPersonGraph) {
+      return { persons: [], replacementMap: new Map() };
+    }
+    return resolveAnonymizedPersonGraph({
+      text,
+      entities,
+      groupedEntities,
+      selectedCategories: deferredSelectedCategories,
       customCategories,
       persons,
       excludedPlaceholders,
       excludedSurfaces,
       categoryMethods,
       generalizationLadders,
+      salt: text,
       surfaceOverrides,
-    ],
-  );
+    });
+  }, [
+    showPersonGraph,
+    showAnonymizedPersonGraph,
+    text,
+    entities,
+    groupedEntities,
+    deferredSelectedCategories,
+    customCategories,
+    persons,
+    excludedPlaceholders,
+    excludedSurfaces,
+    categoryMethods,
+    generalizationLadders,
+    surfaceOverrides,
+  ]);
   const anonymizedPersons = anonymizedGraphModel.persons;
   const anonymizedReplacementMap = anonymizedGraphModel.replacementMap;
   const activeEntities = useMemo(
@@ -481,43 +634,45 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
       ),
     [entities, selectedCategories, excludedEntityKeys],
   );
-  const auditReport = useMemo(
-    () =>
-      createAuditReport({
-        text,
-        entities,
-        anonymizedText,
-        groupedEntities,
-        selectedCategories,
-        excludedEntityKeys,
-        modelName,
-        sourceFile: currentFile?.name || null,
-        nerBackend: batchMode ? activeNerEngine : null,
-        batchMode,
-        customCategories,
-        categoryMethods,
-        generalizationLadders,
-        persons,
-        surfaceOverrides,
-      }),
-    [
+  function buildAuditReportSnapshot() {
+    return createAuditReport({
       text,
       entities,
-      anonymizedText,
+      anonymizedText: getFullAnonymizedText(),
       groupedEntities,
       selectedCategories,
       excludedEntityKeys,
       modelName,
-      currentFile,
+      sourceFile: currentFile?.name || null,
+      nerBackend: batchMode ? activeNerEngine : null,
+      batchMode,
+      customCategories,
       categoryMethods,
       generalizationLadders,
       persons,
-      batchMode,
-      customCategories,
       surfaceOverrides,
-      activeNerEngine,
-    ],
-  );
+    });
+  }
+
+  async function openAuditReport() {
+    setReportOpen(true);
+    setAuditReportBusy(true);
+    setAuditReportText("");
+    setStatus(t("auditBuilding"));
+    try {
+      await yieldToMain();
+      const report = buildAuditReportSnapshot();
+      await yieldToMain();
+      setAuditReportText(report);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : String(caughtError));
+      setStatus("Audit report failed.");
+      setReportOpen(false);
+    } finally {
+      setAuditReportBusy(false);
+    }
+  }
+
   const labelStudioExport = useMemo(
     () =>
       createLabelStudioExport({
@@ -611,56 +766,63 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
 
     setError("");
     setIsDetecting(true);
+    setIsDemoMode(false);
+    setIsEditingSource(false);
+    setEntities([]);
+    setRemovedEntities([]);
+    setSelectedCategories({});
+    setExcludedEntityKeys({});
+    clearPersonGraph();
     setStatus(nerEngineMeta.downloadHint);
 
     try {
       const result = await runSelectedNerDetection({
         text: textToAnalyze,
-        onProgress: (progress) => {
-          if (progress?.phase === "download") {
-            const pct =
-              typeof progress.percent === "number" ? ` ${Math.round(progress.percent)}%` : "";
-            setStatus(
-              `Downloading ${nerEngineMeta.downloadLabel} (${progress.file || "model"})${pct}…`,
-            );
-          }
-        },
+        onProgress: handleNerProgress,
       });
       const resolvedModel = result.model || nerEngineMeta.id;
+      setStatus(t("glinerStatusRunning"));
+      await yieldToMain();
       const normalized = finalizeDetectedEntities(textToAnalyze, result.entities || [], {
         ruleLabels: selectedDetectionLabels.filter((label) =>
           GLINER_RULE_LABELS.includes(label),
         ),
       });
       const categorySelection = createCategorySelectionFromEntities(normalized);
+      await yieldToMain();
 
-      setEntities(normalized);
-      setSelectedCategories(categorySelection);
-      setExcludedEntityKeys({});
+      // Unblock the UI first; commit the heavy final span tree as a transition.
+      setIsDetecting(false);
       setModelName(resolvedModel);
-      setIsDemoMode(false);
       setIsEditingSource(false);
+      startTransition(() => {
+        setEntities(normalized);
+        setSelectedCategories(categorySelection);
+        setExcludedEntityKeys({});
+      });
+      await yieldToMain();
 
       let relations = [];
       let graphNote = "";
       if (showPersonGraph) {
         setStatus(t("personGraphRegenerateStatus"));
-        const { extractGlinerRelexRelations } = await import("../lib/glinerRelexService.js");
         graphNote = "person graph";
         try {
-          relations = await extractGlinerRelexRelations(textToAnalyze, normalized, (progress) => {
-            if (progress?.phase === "download") {
-              const pct =
-                typeof progress.percent === "number" ? ` ${Math.round(progress.percent)}%` : "";
-              setStatus(
-                t("personGraphRelexLoading") +
-                  (progress.file ? ` (${progress.file}${pct})` : pct ? ` ${pct}` : ""),
-              );
-            }
+          relations = await extractRelexWithWorker({
+            text: textToAnalyze,
+            entities: normalized,
+            onProgress: handleRelexProgress,
           });
-          applyRelexPersonGraph(textToAnalyze, normalized, relations, { resetExclusions: true });
+          await yieldToMain();
+          startTransition(() => {
+            applyRelexPersonGraph(textToAnalyze, normalized, relations, {
+              resetExclusions: true,
+            });
+          });
         } catch (graphError) {
-          refreshPersonGraph(textToAnalyze, normalized, { resetExclusions: true });
+          startTransition(() => {
+            refreshPersonGraph(textToAnalyze, normalized, { resetExclusions: true });
+          });
           graphNote = `proximity fallback (${
             graphError instanceof Error ? graphError.message : String(graphError)
           })`;
@@ -767,6 +929,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     if (isDemoMode) {
       setText("");
       setEntities([]);
+      setRemovedEntities([]);
       clearPersonGraph();
       setSelectedCategories({});
       setExcludedEntityKeys({});
@@ -804,10 +967,6 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     const chunkSize = resolveBatchChunkSize(files.length);
 
     try {
-      const extractGlinerRelexRelations = showPersonGraph
-        ? (await import("../lib/glinerRelexService.js")).extractGlinerRelexRelations
-        : null;
-
       for (let index = 0; index < files.length; index += 1) {
         const file = files[index];
         const chunkIndex = Math.floor(index / chunkSize) + 1;
@@ -826,7 +985,10 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
         // Let React paint progress between WASM-heavy inferences.
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        const result = await runSelectedNerDetection({ text: file.text });
+        const result = await runSelectedNerDetection({
+          text: file.text,
+          onProgress: handleNerProgress,
+        });
         const resolvedModel = result.model || nerEngineMeta.id;
         const normalized = finalizeDetectedEntities(file.text, result.entities || [], {
           ruleLabels: selectedDetectionLabels.filter((label) =>
@@ -836,13 +998,17 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
         const categorySelection = createCategorySelectionFromEntities(normalized);
 
         let relations = [];
-        if (extractGlinerRelexRelations) {
+        if (showPersonGraph) {
           try {
             setStatus(
               `Linking person graph (ReLex): ${index + 1} of ${files.length} — ${file.name}`,
             );
             await new Promise((resolve) => setTimeout(resolve, 0));
-            relations = await extractGlinerRelexRelations(file.text, normalized);
+            relations = await extractRelexWithWorker({
+              text: file.text,
+              entities: normalized,
+              onProgress: handleRelexProgress,
+            });
           } catch {
             relations = [];
           }
@@ -1173,29 +1339,55 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     setStatus(t("buildingZip"));
     try {
       const graphOptions = { excludedPlaceholders, excludedSurfaces };
+      await yieldToMain();
+      const anonymizedText = getFullAnonymizedText();
+      await yieldToMain();
+      const auditReport = createAuditReport({
+        text,
+        entities,
+        anonymizedText,
+        groupedEntities,
+        selectedCategories,
+        excludedEntityKeys,
+        modelName,
+        sourceFile: currentFile?.name || null,
+        nerBackend: batchMode ? activeNerEngine : null,
+        batchMode,
+        customCategories,
+        categoryMethods,
+        generalizationLadders,
+        persons,
+        surfaceOverrides,
+      });
+      await yieldToMain();
+      const correspondenceCsv = buildCorrespondenceCsv({
+        text,
+        entities,
+        groupedEntities,
+        selectedCategories,
+        excludedEntityKeys,
+        customCategories,
+        categoryMethods,
+        generalizationLadders,
+        persons,
+        surfaceOverrides,
+      });
+      await yieldToMain();
+      const personGraphCsv =
+        showPersonGraph && persons.length ? buildPersonGraphCsv(persons, graphOptions) : "";
+      const personGraphByPersonCsv =
+        showPersonGraph && persons.length
+          ? buildPersonGraphByPersonCsv(persons, graphOptions)
+          : "";
+      await yieldToMain();
       await downloadSingleExportZip({
         baseName: "incognito-export",
         originalText: text,
         anonymizedText,
         auditReport,
-        correspondenceCsv: buildCorrespondenceCsv({
-          text,
-          entities,
-          groupedEntities,
-          selectedCategories,
-          excludedEntityKeys,
-          customCategories,
-          categoryMethods,
-          generalizationLadders,
-          persons,
-          surfaceOverrides,
-        }),
-        personGraphCsv: showPersonGraph && persons.length
-          ? buildPersonGraphCsv(persons, graphOptions)
-          : "",
-        personGraphByPersonCsv: showPersonGraph && persons.length
-          ? buildPersonGraphByPersonCsv(persons, graphOptions)
-          : "",
+        correspondenceCsv,
+        personGraphCsv,
+        personGraphByPersonCsv,
         labelStudioJson,
       });
       setStatus(t("exportEverythingDone"));
@@ -1211,6 +1403,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     const demo = buildSampleDemoPersonGraph();
     setText(demo.text);
     setEntities(demo.entities);
+    setRemovedEntities([]);
     setSelectedCategories(demo.selectedCategories);
     setExcludedEntityKeys(demo.excludedEntityKeys);
     setCategoryMethods({});
@@ -1264,6 +1457,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
 
     setText("");
     setEntities([]);
+    setRemovedEntities([]);
     clearPersonGraph();
     setSelectedCategories({});
     setExcludedEntityKeys({});
@@ -1316,21 +1510,103 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
       }
       return next;
     });
-    syncEntityChipToGraph(category, entityText, excluding);
+    // Graph surface sync can wait; keep the chip click itself urgent.
+    startTransition(() => {
+      syncEntityChipToGraph(category, entityText, excluding);
+    });
+  }
+
+  function removeEntityValue(category, entityText) {
+    const key = getEntityValueKey(category, entityText);
+    const { kept, extracted } = extractEntitiesByValue(entities, category, entityText);
+    if (!extracted.length) {
+      return;
+    }
+    setEntities(kept);
+    setRemovedEntities((current) => mergeEntitiesBySpan(current, extracted));
+    setExcludedEntityKeys((current) => {
+      if (!current[key]) {
+        return current;
+      }
+      const updated = { ...current };
+      delete updated[key];
+      return updated;
+    });
+    setSelectedCategories((current) => {
+      if (kept.some((entity) => entity.label === category)) {
+        return current;
+      }
+      const updated = { ...current };
+      delete updated[category];
+      return updated;
+    });
+    setAnonymizedTextOverride(null);
+    if (showPersonGraph) {
+      startTransition(() => {
+        refreshPersonGraph(text, kept, { resetExclusions: false });
+      });
+    }
+    setStatus(
+      t("chipRemovedStatus", {
+        text: entityText,
+        count: extracted.length,
+      }),
+    );
+  }
+
+  function restoreEntityValue(category, entityText) {
+    const { kept, extracted } = extractEntitiesByValue(removedEntities, category, entityText);
+    if (!extracted.length) {
+      return;
+    }
+    const next = mergeEntitiesBySpan(entities, extracted);
+    setRemovedEntities(kept);
+    setEntities(next);
+    setSelectedCategories((current) =>
+      category in current ? current : { ...current, [category]: true },
+    );
+    setAnonymizedTextOverride(null);
+    if (showPersonGraph) {
+      startTransition(() => {
+        refreshPersonGraph(text, next, { resetExclusions: false });
+      });
+    }
+    setStatus(
+      t("chipRestoredStatus", {
+        text: entityText,
+        count: extracted.length,
+      }),
+    );
   }
 
   function copyAnonymizedText() {
-    navigator.clipboard.writeText(anonymizedText);
+    navigator.clipboard.writeText(getFullAnonymizedText());
     setStatus("Anonymized text copied to clipboard.");
   }
 
+  function handleTextPageChange(nextIndex) {
+    setTextPageIndex(nextIndex);
+    if (sourceScrollRef.current) {
+      sourceScrollRef.current.scrollTop = 0;
+    }
+    if (previewScrollRef.current) {
+      previewScrollRef.current.scrollTop = 0;
+    }
+  }
+
   function copyAuditReport() {
-    navigator.clipboard.writeText(auditReport);
+    if (!auditReportText) {
+      return;
+    }
+    navigator.clipboard.writeText(auditReportText);
     setStatus("Audit report copied to clipboard.");
   }
 
   function downloadAuditReport() {
-    downloadFile(auditReport, "anonymization-audit-report.md", "text/markdown;charset=utf-8");
+    if (!auditReportText) {
+      return;
+    }
+    downloadFile(auditReportText, "anonymization-audit-report.md", "text/markdown;charset=utf-8");
     setStatus("Audit report downloaded.");
   }
 
@@ -1468,23 +1744,10 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     setIsDemoMode(false);
     setStatus(t("personGraphRegenerateStatus"));
     try {
-      const { extractGlinerRelexRelations } = await import("../lib/glinerRelexService.js");
-      const relations = await extractGlinerRelexRelations(text, entities, (progress) => {
-        if (progress?.phase === "download") {
-          const pct =
-            typeof progress.percent === "number" ? ` ${Math.round(progress.percent)}%` : "";
-          setStatus(
-            `${t("personGraphRegenerateStatus")} (${progress.file || "model"}${pct})`,
-          );
-          return;
-        }
-        if (progress?.phase === "infer") {
-          const step =
-            progress.current && progress.total
-              ? ` ${progress.current}/${progress.total}`
-              : "";
-          setStatus(`${t("personGraphRegenerateStatus")}${step}`);
-        }
+      const relations = await extractRelexWithWorker({
+        text,
+        entities,
+        onProgress: handleRelexProgress,
       });
       applyRelexPersonGraph(text, entities, relations, {
         resetExclusions: false,
@@ -1533,7 +1796,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
 
       <section className="controls">
         <button
-          onClick={detectEntities}
+          onClick={() => void detectEntities()}
           disabled={!text.trim() || isDetecting || !selectedDetectionLabels.length}
         >
           {isDetecting ? t("anonymizing") : t("runAnonymization")}
@@ -1546,8 +1809,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
         <button onClick={copyAnonymizedText} disabled={!entities.length}>
           {t("copyAnonymized")}
         </button>
-        <button onClick={() => setReportOpen(true)} disabled={!entities.length}>
-          {t("showAuditReport")}
+        <button onClick={openAuditReport} disabled={!entities.length || auditReportBusy}>
+          {auditReportBusy ? t("auditBuilding") : t("showAuditReport")}
         </button>
         <button
           className="secondary"
@@ -1843,8 +2106,30 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
       {usesGlinerLabels ? (
       <div className="panel gliner-labels-panel">
         <div className="panel-header">
-          <h3>{t("glinerLabelsTitle")}</h3>
-          <span>{t("glinerLabelsHint", { count: selectedDetectionLabels.length })}</span>
+          <div className="gliner-labels-header-left">
+            <h3>{t("glinerLabelsTitle")}</h3>
+            <div className="gliner-labels-bulk-actions">
+              <button
+                type="button"
+                className="link-button"
+                disabled={isDetecting || selectedDetectionLabels.length === availableDetectionLabels.length}
+                onClick={selectAllDetectionLabels}
+              >
+                {t("glinerLabelsSelectAll")}
+              </button>
+              <button
+                type="button"
+                className="link-button"
+                disabled={isDetecting || selectedDetectionLabels.length === 0}
+                onClick={deselectAllDetectionLabels}
+              >
+                {t("glinerLabelsDeselectAll")}
+              </button>
+            </div>
+          </div>
+          <span className="gliner-labels-count">
+            {t("glinerLabelsHint", { count: selectedDetectionLabels.length })}
+          </span>
         </div>
         <div className="gliner-label-list">
           {availableDetectionLabels.map((label) => {
@@ -1958,11 +2243,14 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
           <CategoryReview
             entities={entities}
             groupedEntities={groupedEntities}
+            removedEntities={removedEntities}
             categoryLabels={categoryLabels}
             selectedCategories={selectedCategories}
             excludedEntityKeys={excludedEntityKeys}
             onToggleCategory={toggleCategory}
             onToggleEntity={toggleEntityValue}
+            onRemoveEntity={removeEntityValue}
+            onRestoreEntity={restoreEntityValue}
           />
         </div>
 
@@ -1990,12 +2278,22 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
                 </span>
               )}
             </div>
-            <span className="panel-header-meta">
-              {batchMode && currentFile ? `${currentFile.name} · ` : ""}
-              {showSourceHighlight
-                ? t("panel3Hint", { count: entities.length })
-                : t("characters", { count: text.length })}
-            </span>
+            <div className="panel-header-meta workspace-source-header-meta">
+              {showSourceHighlight && textPageCount > 1 ? (
+                <TextPageNav
+                  pageIndex={safeTextPageIndex}
+                  pageCount={textPageCount}
+                  onPageChange={handleTextPageChange}
+                  disabled={isDetecting}
+                />
+              ) : null}
+              <span>
+                {batchMode && currentFile ? `${currentFile.name} · ` : ""}
+                {showSourceHighlight
+                  ? t("panel3Hint", { count: entities.length })
+                  : t("characters", { count: text.length })}
+              </span>
+            </div>
           </div>
           <DomReconcileErrorBoundary
             onRecover={() =>
@@ -2005,35 +2303,44 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
             }
           >
             <div
-              key={`${showSourceHighlight ? "highlight" : "edit"}-${sourceBodyKey}`}
+              key={`${showSourceHighlight ? "highlight" : "edit"}-${sourceBodyKey}-${safeTextPageIndex}`}
               className="workspace-source-body"
               translate="no"
             >
               {showSourceHighlight ? (
                 <HighlightedText
                   ref={sourceScrollRef}
-                  text={text}
-                  segments={highlightedSegments}
+                  text={currentTextPage.text}
+                  segments={pageHighlightedSegments}
                   categoryLabels={categoryLabels}
                   selectedCategories={selectedCategories}
                   excludedEntityKeys={excludedEntityKeys}
-                  focusRanges={personFocusRanges}
+                  focusRanges={pageFocusRanges}
                   persons={persons}
                   pinnedPlaceholder={pinnedPersonPlaceholder}
                   onPinPerson={setPinnedPersonPlaceholder}
                   onAddSelection={(selection) => {
+                    const pageOffset = currentTextPage.start || 0;
                     const nextMenu = {
                       mode: "add",
                       scope: "all",
                       ...selection,
+                      start: selection.start + pageOffset,
+                      end: selection.end + pageOffset,
                     };
                     entityMenuRef.current = nextMenu;
                     setEntityMenu(nextMenu);
                   }}
                   onEntityClick={(entity, position) => {
+                    const pageOffset = currentTextPage.start || 0;
+                    const documentEntity = {
+                      ...entity,
+                      start: Number(entity.start) + pageOffset,
+                      end: Number(entity.end) + pageOffset,
+                    };
                     const nextMenu = {
                       mode: "remove",
-                      entity,
+                      entity: documentEntity,
                       ...position,
                     };
                     entityMenuRef.current = nextMenu;
@@ -2046,6 +2353,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
                   onChange={(event) => {
                     setText(event.target.value);
                     setEntities([]);
+                    setRemovedEntities([]);
                     clearPersonGraph();
                     setSelectedCategories({});
                     setExcludedEntityKeys({});
@@ -2058,7 +2366,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
                   autoComplete="off"
                   autoCorrect="off"
                   autoCapitalize="off"
-                  spellCheck={true}
+                  spellCheck={text.length < LONG_TEXT_WARN_CHARS}
                   data-1p-ignore="true"
                   data-lpignore="true"
                 />
@@ -2257,7 +2565,11 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
                   ))}
                 </div>
               ) : (
-                <p className="gen-maps-empty">{t("generativeGraphEmpty")}</p>
+                <p className="gen-maps-empty">
+                  {isRegeneratingPersonGraph || isDetecting
+                    ? t("personGraphBuilding")
+                    : t("personGraphEmpty")}
+                </p>
               )}
               <p className="category-hint">{t("personGraphMoveHint")}</p>
               <p className="category-hint">{t("personGraphFocusHint")}</p>
@@ -2301,25 +2613,28 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
             </div>
             <DomReconcileErrorBoundary>
               <AnonymizedSplitPreview
-                text={text}
-                entities={entities}
-                segments={highlightedSegments}
+                text={currentTextPage.text}
+                entities={pageEntities}
+                segments={pageHighlightedSegments}
                 categoryLabels={categoryLabels}
                 selectedCategories={selectedCategories}
                 excludedEntityKeys={excludedEntityKeys}
                 categoryMethods={categoryMethods}
                 onCategoryMethodChange={setCategoryMethods}
-                anonymizedText={anonymizedPreview.anonymizedText}
-                anonymizedSegments={anonymizedSegments}
+                anonymizedText={pageAnonymizedPreview.anonymizedText}
+                anonymizedSegments={pageAnonymizedPreview.segments}
                 surfaceOverrides={surfaceOverrides}
                 onSurfaceOverrideChange={setSurfaceOverrides}
-                anonymizedTextOverride={anonymizedTextOverride}
+                anonymizedTextOverride={textPageCount > 1 ? null : anonymizedTextOverride}
                 onAnonymizedTextOverrideChange={setAnonymizedTextOverride}
                 emptyLabel={t("panel4Empty")}
                 previewRef={previewScrollRef}
                 generalizationMode={generalizationMode}
                 generalizationLoading={generalizationLoading}
                 generalizationError={generalizationError}
+                pageIndex={safeTextPageIndex}
+                pageCount={textPageCount}
+                onPageChange={handleTextPageChange}
               />
             </DomReconcileErrorBoundary>
           </div>
@@ -2348,7 +2663,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
                   previousReplacement: origin.previousReplacement || currentValue,
                   nextReplacement: nextValue,
                   anonymizedTextOverride,
-                  generatedAnonymizedText: anonymizedPreview.anonymizedText,
+                  generatedAnonymizedText: getFullAnonymizedText(),
                 });
                 if (!result) {
                   return;
@@ -2401,8 +2716,12 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
 
       {reportOpen ? (
         <AuditReportWindow
-          report={auditReport}
-          onClose={() => setReportOpen(false)}
+          report={auditReportText}
+          busy={auditReportBusy}
+          onClose={() => {
+            setReportOpen(false);
+            setAuditReportBusy(false);
+          }}
           onCopy={copyAuditReport}
           onDownload={downloadAuditReport}
         />
