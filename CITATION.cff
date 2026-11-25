@@ -16,7 +16,7 @@ abstract: >-
   optional Albert generative mode). Interactive NER review, batch processing,
   audit reports, and Label Studio export.
 version: 1.0.3
-date-released: 2026-11-24
+date-released: 2026-11-25
 keywords:
   - anonymization
   - digital humanities
