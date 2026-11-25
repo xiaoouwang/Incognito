@@ -115,7 +115,7 @@ Les changements hors `web_interface/` (et hors les fichiers CI) ne redéploient 
 
 ## 📚 Citer cet outil
 
-> Wang, X. (2026). *Incognito: A privacy-first tool for reviewing and anonymizing qualitative texts in the social sciences* (Version 1.0.2) [Logiciel]. Maison des Sciences de l'Homme Sud-Est / Université Côte d'Azur. [https://gitlab.huma-num.fr/mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito)
+> Wang, X. (2026). *Incognito: A privacy-first tool for reviewing and anonymizing qualitative texts in the social sciences* (Version 1.0.3) [Logiciel]. Maison des Sciences de l'Homme Sud-Est / Université Côte d'Azur. [https://gitlab.huma-num.fr/mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito)
 
 **BibTeX**
 
@@ -124,7 +124,7 @@ Les changements hors `web_interface/` (et hors les fichiers CI) ne redéploient 
   author  = {Wang, Xiaoou},
   title   = {{Incognito}: A privacy-first tool for reviewing and anonymizing qualitative texts in the social sciences},
   year    = {2026},
-  version = {1.0.2},
+  version = {1.0.3},
   url     = {https://gitlab.huma-num.fr/mshs-sud-est/incognito},
   note    = {Browser interface (React + GLiNER2 / Transformers.js).
              Maison des Sciences de l'Homme Sud-Est, Universit{\'e} C{\^o}te d'Azur.
