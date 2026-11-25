@@ -45,18 +45,27 @@ export default function GenerativeEditMenu({
     }
 
     const margin = 12;
-    const rect = element.getBoundingClientRect();
-    let top = menu.y;
-    let left = menu.x;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const maxWidth = Math.max(240, viewportWidth - margin * 2);
+    element.style.maxWidth = `${Math.min(520, maxWidth)}px`;
+    element.style.maxHeight = `${Math.max(200, viewportHeight - margin * 2)}px`;
 
-    if (left + rect.width > window.innerWidth - margin) {
-      left = Math.max(margin, window.innerWidth - rect.width - margin);
-    }
-    if (top + rect.height > window.innerHeight - margin) {
-      top = Math.max(margin, window.innerHeight - rect.height - margin);
+    const width = element.offsetWidth;
+    const height = element.offsetHeight;
+    let left = menu.x;
+    let top = menu.y;
+    if (left + width > viewportWidth - margin) {
+      left = menu.x - width;
     }
     if (left < margin) {
       left = margin;
+    }
+    if (left + width > viewportWidth - margin) {
+      left = Math.max(margin, viewportWidth - width - margin);
+    }
+    if (top + height > viewportHeight - margin) {
+      top = Math.max(margin, viewportHeight - height - margin);
     }
     if (top < margin) {
       top = margin;

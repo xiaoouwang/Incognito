@@ -6,8 +6,13 @@ import {
 } from "../lib/basicPersonGraph.js";
 import { useUiLocale } from "../context/UiLocaleContext.jsx";
 import {
+  canonicalCategoryId,
+  countEntitiesMatchingValue,
   countOccurrences,
   getCategoryChipClass,
+  getEntityOccurrenceKey,
+  getEntityValueKey,
+  resolveLinkedValueKey,
 } from "../lib/entityUtils.js";
 
 export default function EntityEditMenu({
@@ -15,12 +20,19 @@ export default function EntityEditMenu({
   sourceText,
   menuCategories,
   categoryLabels,
+  entities = [],
   persons = [],
   relatedPlaceholders = null,
+  distinctOccurrenceKeys = {},
+  linkedValueKeys = {},
   onScopeChange,
   onAdd,
   onAddCustom,
+  onChangeCategory,
+  onChangeCategoryCustom,
   onRelateToPerson,
+  onToggleDistinctOccurrence,
+  onLinkSameCode,
   onRemove,
   onClose,
 }) {
@@ -28,17 +40,99 @@ export default function EntityEditMenu({
   const menuRef = useRef(null);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [position, setPosition] = useState({ top: menu.y, left: menu.x });
-  const scope = menu.mode === "add" && menu.scope === "single" ? "single" : "all";
+  const isAdd = menu.mode === "add";
+  const isEdit = menu.mode === "remove" && Boolean(menu.entity);
+  const scope = menu.scope === "single" ? "single" : "all";
   const occurrenceCount = useMemo(() => {
-    if (menu.mode !== "add" || typeof menu.text !== "string") {
+    if (!isAdd || typeof menu.text !== "string") {
       return 0;
     }
 
     return countOccurrences(sourceText, menu.text);
-  }, [menu.mode, menu.text, sourceText]);
+  }, [isAdd, menu.text, sourceText]);
+
+  const matchingValueCount = useMemo(() => {
+    if (!isEdit) {
+      return 0;
+    }
+    return countEntitiesMatchingValue(entities, menu.entity.label, menu.entity.text);
+  }, [isEdit, entities, menu.entity]);
+
+  const occurrenceKey = isEdit ? getEntityOccurrenceKey(menu.entity) : "";
+  const isDistinctOccurrence = Boolean(
+    occurrenceKey && distinctOccurrenceKeys[occurrenceKey],
+  );
+  const canToggleDistinct =
+    isEdit &&
+    typeof onToggleDistinctOccurrence === "function" &&
+    matchingValueCount > 1;
+
+  const sameCodeCandidates = useMemo(() => {
+    if (!isEdit || typeof onLinkSameCode !== "function") {
+      return [];
+    }
+    const category = menu.entity.label;
+    const selfLower = String(menu.entity.text || "").toLocaleLowerCase();
+    const seen = new Set();
+    const candidates = [];
+    for (const entity of entities || []) {
+      if (entity.label !== category) {
+        continue;
+      }
+      const lower = String(entity.text || "").toLocaleLowerCase();
+      if (!lower || lower === selfLower || seen.has(lower)) {
+        continue;
+      }
+      seen.add(lower);
+      candidates.push(entity.text);
+    }
+    return candidates.sort((left, right) => left.localeCompare(right));
+  }, [isEdit, entities, menu.entity, onLinkSameCode]);
+
+  const currentValueKey = isEdit
+    ? getEntityValueKey(menu.entity.label, menu.entity.text)
+    : "";
+  const linkedPartnerText = useMemo(() => {
+    if (!isEdit || !currentValueKey) {
+      return "";
+    }
+    const canonical = resolveLinkedValueKey(currentValueKey, linkedValueKeys);
+    let partnerKey = "";
+    if (canonical !== currentValueKey) {
+      partnerKey = canonical;
+    } else {
+      partnerKey =
+        Object.entries(linkedValueKeys || {}).find(
+          ([, target]) => target === currentValueKey,
+        )?.[0] || "";
+    }
+    if (!partnerKey) {
+      return "";
+    }
+    const lower = partnerKey.slice(partnerKey.indexOf(":") + 1);
+    const match = sameCodeCandidates.find(
+      (text) => String(text || "").toLocaleLowerCase() === lower,
+    );
+    return match || lower;
+  }, [isEdit, currentValueKey, linkedValueKeys, sameCodeCandidates]);
+
+  const changeCategories = useMemo(() => {
+    if (!isEdit) {
+      return [];
+    }
+    const currentCanonical = canonicalCategoryId(menu.entity.label);
+    return menuCategories.filter(
+      ([category]) => canonicalCategoryId(category) !== currentCanonical,
+    );
+  }, [isEdit, menuCategories, menu.entity]);
+
+  const canChangeCategory =
+    isEdit &&
+    typeof onChangeCategory === "function" &&
+    typeof onChangeCategoryCustom === "function";
 
   const relatedCandidates = useMemo(() => {
-    if (menu.mode !== "remove" || !menu.entity || !persons.length) {
+    if (!isEdit || !persons.length) {
       return [];
     }
     const entityLower = String(menu.entity.text || "").toLocaleLowerCase();
@@ -48,17 +142,17 @@ export default function EntityEditMenu({
       }
       return String(person.name || "").toLocaleLowerCase() !== entityLower;
     });
-  }, [menu.mode, menu.entity, persons]);
+  }, [isEdit, menu.entity, persons]);
 
   const currentOwnerPlaceholders = useMemo(() => {
-    if (menu.mode !== "remove" || !menu.entity) {
+    if (!isEdit) {
       return [];
     }
     if (Array.isArray(relatedPlaceholders)) {
       return relatedPlaceholders;
     }
     return findSurfaceOwnerPlaceholders(persons, menu.entity.text);
-  }, [menu.mode, menu.entity, persons, relatedPlaceholders]);
+  }, [isEdit, menu.entity, persons, relatedPlaceholders]);
 
   const currentOwners = useMemo(
     () =>
@@ -79,18 +173,28 @@ export default function EntityEditMenu({
     }
 
     const margin = 12;
-    const rect = element.getBoundingClientRect();
-    let top = menu.y;
-    let left = menu.x;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const maxWidth = Math.max(240, viewportWidth - margin * 2);
+    element.style.maxWidth = `${Math.min(520, maxWidth)}px`;
+    element.style.maxHeight = `${Math.max(200, viewportHeight - margin * 2)}px`;
 
-    if (left + rect.width > window.innerWidth - margin) {
-      left = Math.max(margin, window.innerWidth - rect.width - margin);
-    }
-    if (top + rect.height > window.innerHeight - margin) {
-      top = Math.max(margin, window.innerHeight - rect.height - margin);
+    // Prefer opening to the left of the click when close to the right edge.
+    const width = element.offsetWidth;
+    const height = element.offsetHeight;
+    let left = menu.x;
+    let top = menu.y;
+    if (left + width > viewportWidth - margin) {
+      left = menu.x - width;
     }
     if (left < margin) {
       left = margin;
+    }
+    if (left + width > viewportWidth - margin) {
+      left = Math.max(margin, viewportWidth - width - margin);
+    }
+    if (top + height > viewportHeight - margin) {
+      top = Math.max(margin, viewportHeight - height - margin);
     }
     if (top < margin) {
       top = margin;
@@ -105,7 +209,12 @@ export default function EntityEditMenu({
     menu.scope,
     menuCategories.length,
     occurrenceCount,
+    matchingValueCount,
     relatedCandidates.length,
+    sameCodeCandidates.length,
+    canChangeCategory,
+    canToggleDistinct,
+    linkedPartnerText,
   ]);
 
   useEffect(() => {
@@ -124,10 +233,10 @@ export default function EntityEditMenu({
         ref={menuRef}
         style={{ top: position.top, left: position.left }}
         role="dialog"
-        aria-label={menu.mode === "add" ? "Add entity" : "Edit entity"}
+        aria-label={isAdd ? "Add entity" : "Edit entity"}
         onClick={(event) => event.stopPropagation()}
       >
-        {menu.mode === "add" ? (
+        {isAdd ? (
           <>
             <p className="entity-menu-title">Add entity</p>
             <p className="entity-menu-selection">&quot;{menu.text}&quot;</p>
@@ -206,12 +315,89 @@ export default function EntityEditMenu({
               </aside>
             </div>
           </>
-        ) : menu.entity ? (
+        ) : isEdit ? (
           <>
             <p className="entity-menu-title">
               {categoryLabels[menu.entity.label] || formatCategoryDisplayName(menu.entity.label)}
             </p>
             <p className="entity-menu-selection">&quot;{menu.entity.text}&quot;</p>
+            {canChangeCategory ? (
+              <>
+                <p className="entity-menu-section-label">{t("entityMenuChangeCategory")}</p>
+                {matchingValueCount > 1 ? (
+                  <div
+                    className="entity-menu-scope"
+                    role="radiogroup"
+                    aria-label={t("entityMenuChangeScopeLabel")}
+                    title={t("entityMenuChangeScopeHint")}
+                  >
+                    <button
+                      className={`entity-menu-scope-option ${scope === "all" ? "active" : ""}`}
+                      type="button"
+                      role="radio"
+                      aria-checked={scope === "all"}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => onScopeChange("all")}
+                    >
+                      {t("entityMenuChangeAll", { count: matchingValueCount })}
+                    </button>
+                    <button
+                      className={`entity-menu-scope-option ${scope === "single" ? "active" : ""}`}
+                      type="button"
+                      role="radio"
+                      aria-checked={scope === "single"}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => onScopeChange("single")}
+                    >
+                      {t("entityMenuChangeSingle")}
+                    </button>
+                  </div>
+                ) : null}
+                <div className="entity-menu-columns">
+                  <div className="entity-menu-main">
+                    <p className="entity-menu-section-label">{t("entityMenuCategories")}</p>
+                    <div className="entity-menu-actions">
+                      {changeCategories.map(([category, label]) => (
+                        <button
+                          key={category}
+                          className={`entity-menu-chip ${getCategoryChipClass(category)}`}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => onChangeCategory(category)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <aside className="entity-menu-new-category-panel">
+                    <p className="entity-menu-section-label">{t("entityMenuNewCategory")}</p>
+                    <input
+                      className="entity-menu-new-category-input"
+                      type="text"
+                      value={newCategoryName}
+                      placeholder={t("entityMenuNewCategoryPlaceholder")}
+                      onChange={(event) => setNewCategoryName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && newCategoryName.trim()) {
+                          event.preventDefault();
+                          onChangeCategoryCustom(newCategoryName);
+                        }
+                      }}
+                    />
+                    <button
+                      className="entity-menu-new-category-submit"
+                      type="button"
+                      disabled={!newCategoryName.trim()}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => onChangeCategoryCustom(newCategoryName)}
+                    >
+                      {t("entityMenuCreateAndMove")}
+                    </button>
+                  </aside>
+                </div>
+              </>
+            ) : null}
             {relatedCandidates.length && onRelateToPerson ? (
               <>
                 <p className="entity-menu-section-label">
@@ -304,8 +490,55 @@ export default function EntityEditMenu({
                 ) : null}
               </>
             ) : null}
-            <p className="entity-menu-hint">{t("entityMenuRemoveHint")}</p>
-            <button className="entity-menu-danger" type="button" onClick={onRemove}>
+            {typeof onLinkSameCode === "function" && sameCodeCandidates.length ? (
+              <div className="entity-menu-same-code-row" title={t("entityMenuSameCodeHint")}>
+                <label className="entity-menu-section-label" htmlFor="entity-menu-same-code">
+                  {t("entityMenuSameCodeSection")}
+                </label>
+                <select
+                  id="entity-menu-same-code"
+                  className="entity-menu-same-code-select"
+                  value={linkedPartnerText}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    if (!next) {
+                      if (linkedPartnerText) {
+                        onLinkSameCode(linkedPartnerText);
+                      }
+                      return;
+                    }
+                    onLinkSameCode(next);
+                  }}
+                >
+                  <option value="">{t("entityMenuSameCodeNone")}</option>
+                  {sameCodeCandidates.map((candidateText) => (
+                    <option key={candidateText} value={candidateText}>
+                      {candidateText}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            {typeof onToggleDistinctOccurrence === "function" && canToggleDistinct ? (
+              <button
+                type="button"
+                className={`entity-menu-category entity-menu-compact-action${isDistinctOccurrence ? " is-current" : ""}`}
+                title={t("entityMenuDistinctHint")}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => onToggleDistinctOccurrence()}
+              >
+                {isDistinctOccurrence
+                  ? t("entityMenuDistinctDisable")
+                  : t("entityMenuDistinctEnable")}
+              </button>
+            ) : null}
+            <button
+              className="entity-menu-danger"
+              type="button"
+              title={t("entityMenuRemoveHint")}
+              onClick={onRemove}
+            >
               {t("entityMenuRemove")}
             </button>
           </>

@@ -62,6 +62,7 @@ export function buildAnonymizationReplacementMap(
     generalizationLadders = {},
     persons: personsOption,
     surfaceOverrides = {},
+    unifyPersonSurfaces = false,
   } = options;
 
   const replacementMap = buildReplacementMap(groupedEntities, selectedCategories, {
@@ -72,18 +73,21 @@ export function buildAnonymizationReplacementMap(
     generalizationLadders,
   });
 
-  unifyPersonGraphReplacements(
-    replacementMap,
-    resolvePersons(text, entities, personsOption),
-    {
-      style,
-      categoryMethods,
-      customCategories,
-      salt,
-      generalizationLadders,
-      selectedCategories,
-    },
-  );
+  // Match anonymized preview: NER surfaces stay distinct unless opted in.
+  if (unifyPersonSurfaces) {
+    unifyPersonGraphReplacements(
+      replacementMap,
+      resolvePersons(text, entities, personsOption),
+      {
+        style,
+        categoryMethods,
+        customCategories,
+        salt,
+        generalizationLadders,
+        selectedCategories,
+      },
+    );
+  }
 
   applySurfaceReplacementOverrides(replacementMap, surfaceOverrides, {
     customCategories,

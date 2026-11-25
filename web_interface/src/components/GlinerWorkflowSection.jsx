@@ -69,9 +69,15 @@ import {
   inferCustomCategoriesFromEntities,
   isEntityActive,
   removeEntityById,
+  retargetEntityCategory,
   extractEntitiesByValue,
   mergeEntitiesBySpan,
+  pruneSelectedCategories,
+  migrateSurfaceOverrideOnRetarget,
   buildAnonymizedPreviewModel,
+  buildPlaceholderHintMap,
+  getEntityOccurrenceKey,
+  toggleLinkedValueKeys,
 } from "../lib/entityUtils.js";
 import "./generativeWorkflow.css";
 
@@ -128,6 +134,8 @@ export default function GlinerWorkflowSection() {
   const [customCategories, setCustomCategories] = useState({});
   const [isEditingSource, setIsEditingSource] = useState(false);
   const [removedEntities, setRemovedEntities] = useState([]);
+  const [distinctOccurrenceKeys, setDistinctOccurrenceKeys] = useState({});
+  const [linkedValueKeys, setLinkedValueKeys] = useState({});
 
   const {
     persons,
@@ -156,6 +164,7 @@ export default function GlinerWorkflowSection() {
     text,
     entities,
     t,
+    distinctOccurrenceKeys,
     // Advanced: GLiNER ReLex (demo uses the same captured fixture as Basic — no download).
     extractRelations: async (sourceText, nextEntities) => {
       if (isDemoModeRef.current) {
@@ -237,6 +246,15 @@ export default function GlinerWorkflowSection() {
     [activeLabels, customCategories],
   );
   const groupedEntities = useMemo(() => groupEntities(entities), [entities]);
+  const placeholderHints = useMemo(
+    () =>
+      buildPlaceholderHintMap(groupedEntities, customCategories, {
+        entities,
+        distinctOccurrenceKeys,
+        linkedValueKeys,
+      }),
+    [groupedEntities, customCategories, entities, distinctOccurrenceKeys, linkedValueKeys],
+  );
   const deferredSelectedCategories = useDeferredValue(selectedCategories);
   const deferredExcludedEntityKeys = useDeferredValue(excludedEntityKeys);
   const {
@@ -268,6 +286,8 @@ export default function GlinerWorkflowSection() {
           generalizationLadders,
           persons,
           surfaceOverrides,
+          distinctOccurrenceKeys,
+          linkedValueKeys,
         },
       ),
     [
@@ -281,6 +301,8 @@ export default function GlinerWorkflowSection() {
       generalizationLadders,
       persons,
       surfaceOverrides,
+      distinctOccurrenceKeys,
+      linkedValueKeys,
     ],
   );
   const anonymizedText =
@@ -342,6 +364,8 @@ export default function GlinerWorkflowSection() {
       generalizationLadders,
       persons,
       surfaceOverrides,
+      distinctOccurrenceKeys,
+      linkedValueKeys,
     });
   }
 
@@ -472,6 +496,8 @@ export default function GlinerWorkflowSection() {
 
       setEntities(normalized);
       setRemovedEntities([]);
+      setDistinctOccurrenceKeys({});
+      setLinkedValueKeys({});
       setSelectedCategories(categorySelection);
       setExcludedEntityKeys({});
       setModelName(GLINER_RELEX_MODEL_ID);
@@ -865,6 +891,8 @@ export default function GlinerWorkflowSection() {
           generalizationLadders,
           persons,
           surfaceOverrides,
+          distinctOccurrenceKeys,
+          linkedValueKeys,
         }),
         personGraphCsv: persons.length ? buildPersonGraphCsv(persons, graphOptions) : "",
         personGraphByPersonCsv: persons.length
@@ -886,6 +914,8 @@ export default function GlinerWorkflowSection() {
     setText(demo.text);
     setEntities(demo.entities);
     setRemovedEntities([]);
+    setDistinctOccurrenceKeys({});
+    setLinkedValueKeys({});
     setSelectedCategories(demo.selectedCategories);
     setExcludedEntityKeys(demo.excludedEntityKeys);
     setCategoryMethods({});
@@ -936,6 +966,8 @@ export default function GlinerWorkflowSection() {
     setText("");
     setEntities([]);
     setRemovedEntities([]);
+    setDistinctOccurrenceKeys({});
+    setLinkedValueKeys({});
     clearPersonGraph();
     setSelectedCategories({});
     setExcludedEntityKeys({});
@@ -958,6 +990,8 @@ export default function GlinerWorkflowSection() {
       setText("");
       setEntities([]);
       setRemovedEntities([]);
+      setDistinctOccurrenceKeys({});
+      setLinkedValueKeys({});
       clearPersonGraph();
       setSelectedCategories({});
       setExcludedEntityKeys({});
@@ -1137,6 +1171,27 @@ export default function GlinerWorkflowSection() {
     if (!result) {
       return;
     }
+    if (result.mode === "alias" && result.name) {
+      const fromKey = getEntityValueKey(entity.label || "person", entity.text);
+      const toKey = getEntityValueKey("person", result.name);
+      if (result.removed) {
+        setLinkedValueKeys((current) => {
+          const next = { ...current };
+          delete next[fromKey];
+          delete next[toKey];
+          for (const [key, target] of Object.entries(next)) {
+            if (target === fromKey || target === toKey) {
+              delete next[key];
+            }
+          }
+          return next;
+        });
+      } else {
+        const { next } = toggleLinkedValueKeys({}, fromKey, toKey, entities);
+        setLinkedValueKeys((current) => ({ ...current, ...next }));
+      }
+      setAnonymizedTextOverride(null);
+    }
     const statusKey = result.removed
       ? result.mode === "alias"
         ? "entityMenuUnaliasStatus"
@@ -1213,6 +1268,154 @@ export default function GlinerWorkflowSection() {
     refreshPersonGraph(text, next, { resetExclusions: false });
     closeEntityMenu();
     setStatus(`Removed entity "${entityMenu.entity.text}".`);
+  }
+
+  function changeEntityCategory(categoryId, displayLabel = null) {
+    const menu = entityMenuRef.current;
+    if (!menu || menu.mode !== "remove" || !menu.entity) {
+      return;
+    }
+    if (menu.entity.label === categoryId) {
+      closeEntityMenu();
+      return;
+    }
+
+    const scope = menu.scope === "single" ? "single" : "all";
+    const previousLabel = menu.entity.label;
+    const entityText = menu.entity.text;
+    const { entities: next, changedCount } = retargetEntityCategory(
+      entities,
+      menu.entity,
+      categoryId,
+      scope,
+    );
+    if (!changedCount) {
+      closeEntityMenu();
+      return;
+    }
+
+    const oldKey = getEntityValueKey(previousLabel, entityText);
+    const newKey = getEntityValueKey(categoryId, entityText);
+    const stillInOld = next.some(
+      (entity) =>
+        entity.label === previousLabel &&
+        String(entity.text || "").toLocaleLowerCase() ===
+          String(entityText || "").toLocaleLowerCase(),
+    );
+    setEntities(next);
+    setSelectedCategories((current) =>
+      pruneSelectedCategories(
+        {
+          ...current,
+          [categoryId]: current[categoryId] ?? true,
+        },
+        next,
+        categoryId,
+      ),
+    );
+    setExcludedEntityKeys((current) => {
+      if (!current[oldKey]) {
+        return current;
+      }
+      const updated = { ...current };
+      if (!stillInOld) {
+        delete updated[oldKey];
+      }
+      updated[newKey] = true;
+      return updated;
+    });
+    setSurfaceOverrides((current) =>
+      migrateSurfaceOverrideOnRetarget(current, oldKey, newKey, categoryId, {
+        keepOldKey: stillInOld,
+      }),
+    );
+    setAnonymizedTextOverride(null);
+    refreshPersonGraph(text, next, { resetExclusions: false });
+    closeEntityMenu();
+    const labelName = displayLabel || getCategoryLabel(categoryId, customCategories);
+    setStatus(
+      t("entityMenuChangedStatus", {
+        text: entityText,
+        category: labelName,
+        count: changedCount,
+        scopeNote:
+          scope === "single"
+            ? t("entityMenuChangedScopeSingle")
+            : changedCount > 1
+              ? t("entityMenuChangedScopeAll")
+              : "",
+      }),
+    );
+  }
+
+  function handleChangeEntityCategory(categoryId) {
+    changeEntityCategory(categoryId);
+  }
+
+  function handleChangeEntityCategoryCustom(displayName) {
+    const trimmed = String(displayName || "").trim();
+    const menu = entityMenuRef.current;
+    if (!trimmed || !menu || menu.mode !== "remove" || !menu.entity) {
+      return;
+    }
+    const categoryId = createCustomCategoryId(
+      trimmed,
+      batchMode ? batchCustomCategoriesRef.current : customCategories,
+    );
+    mergeCustomCategories({ [categoryId]: trimmed });
+    changeEntityCategory(categoryId, trimmed);
+  }
+
+  function handleToggleDistinctOccurrence() {
+    const menu = entityMenuRef.current;
+    if (!menu?.entity) {
+      return;
+    }
+    const occKey = getEntityOccurrenceKey(menu.entity);
+    if (!occKey) {
+      return;
+    }
+    const enabling = !distinctOccurrenceKeys[occKey];
+    setDistinctOccurrenceKeys((current) => {
+      const next = { ...current };
+      if (next[occKey]) {
+        delete next[occKey];
+      } else {
+        next[occKey] = true;
+      }
+      return next;
+    });
+    setAnonymizedTextOverride(null);
+    closeEntityMenu();
+    setStatus(
+      t(enabling ? "entityMenuDistinctStatusOn" : "entityMenuDistinctStatusOff", {
+        text: menu.entity.text,
+      }),
+    );
+  }
+
+  function handleLinkSameCode(targetText) {
+    const menu = entityMenuRef.current;
+    if (!menu?.entity || !targetText) {
+      return;
+    }
+    const fromKey = getEntityValueKey(menu.entity.label, menu.entity.text);
+    const toKey = getEntityValueKey(menu.entity.label, targetText);
+    const { next, linked } = toggleLinkedValueKeys(
+      linkedValueKeys,
+      fromKey,
+      toKey,
+      entities,
+    );
+    setLinkedValueKeys(next);
+    setAnonymizedTextOverride(null);
+    closeEntityMenu();
+    setStatus(
+      t(linked ? "entityMenuSameCodeStatusOn" : "entityMenuSameCodeStatusOff", {
+        text: menu.entity.text,
+        other: targetText,
+      }),
+    );
   }
 
   async function handleRegeneratePersonGraph() {
@@ -1599,6 +1802,7 @@ export default function GlinerWorkflowSection() {
                 categoryLabels={categoryLabels}
                 selectedCategories={deferredSelectedCategories}
                 excludedEntityKeys={deferredExcludedEntityKeys}
+                placeholderHints={placeholderHints}
                 focusRanges={personFocusRanges}
                 persons={persons}
                 pinnedPlaceholder={pinnedPersonPlaceholder}
@@ -1617,6 +1821,7 @@ export default function GlinerWorkflowSection() {
                   const nextMenu = {
                     mode: "remove",
                     entity,
+                    scope: "all",
                     ...position,
                   };
                   entityMenuRef.current = nextMenu;
@@ -1630,6 +1835,8 @@ export default function GlinerWorkflowSection() {
                   setText(event.target.value);
                   setEntities([]);
                   setRemovedEntities([]);
+                  setDistinctOccurrenceKeys({});
+                  setLinkedValueKeys({});
                   clearPersonGraph();
                   setSelectedCategories({});
                   setExcludedEntityKeys({});
@@ -1951,6 +2158,7 @@ export default function GlinerWorkflowSection() {
           sourceText={text}
           menuCategories={menuCategories}
           categoryLabels={categoryLabels}
+          entities={entities}
           persons={persons}
           relatedPlaceholders={
             entityMenu.entity?.text
@@ -1960,6 +2168,12 @@ export default function GlinerWorkflowSection() {
           onScopeChange={setEntityMenuScope}
           onAdd={handleAddEntity}
           onAddCustom={handleAddCustomCategory}
+          onChangeCategory={handleChangeEntityCategory}
+          onChangeCategoryCustom={handleChangeEntityCategoryCustom}
+          distinctOccurrenceKeys={distinctOccurrenceKeys}
+          linkedValueKeys={linkedValueKeys}
+          onToggleDistinctOccurrence={handleToggleDistinctOccurrence}
+          onLinkSameCode={handleLinkSameCode}
           onRelateToPerson={handleRelateEntityToPerson}
           onRemove={handleRemoveEntity}
           onClose={closeEntityMenu}

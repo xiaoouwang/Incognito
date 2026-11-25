@@ -65,9 +65,16 @@ import {
   inferCustomCategoriesFromEntities,
   isEntityActive,
   removeEntityById,
+  retargetEntityCategory,
   extractEntitiesByValue,
   mergeEntitiesBySpan,
+  pruneSelectedCategories,
+  migrateSurfaceOverrideOnRetarget,
+  getCategoryLabel,
   buildAnonymizedPreviewModel,
+  buildPlaceholderHintMap,
+  getEntityOccurrenceKey,
+  toggleLinkedValueKeys,
 } from "../lib/entityUtils.js";
 import AnonymizedSplitPreview from "./AnonymizedSplitPreview.jsx";
 import "./generativeWorkflow.css";
@@ -95,6 +102,8 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
   const [anonymizedTextOverride, setAnonymizedTextOverride] = useState(null);
   const [entities, setEntities] = useState([]);
   const [removedEntities, setRemovedEntities] = useState([]);
+  const [distinctOccurrenceKeys, setDistinctOccurrenceKeys] = useState({});
+  const [linkedValueKeys, setLinkedValueKeys] = useState({});
   const [anonymizedText, setAnonymizedText] = useState("");
   const [replacements, setReplacements] = useState([]);
   const [persons, setPersons] = useState([]);
@@ -281,6 +290,15 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
     [groups, text, customCategories],
   );
   const groupedEntities = useMemo(() => groupEntities(entities), [entities]);
+  const placeholderHints = useMemo(
+    () =>
+      buildPlaceholderHintMap(groupedEntities, customCategories, {
+        entities,
+        distinctOccurrenceKeys,
+        linkedValueKeys,
+      }),
+    [groupedEntities, customCategories, entities, distinctOccurrenceKeys, linkedValueKeys],
+  );
   const highlightSegments = useMemo(
     () => createHighlightSegments(text, entities),
     [text, entities],
@@ -306,6 +324,8 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
           generalizationLadders,
           persons,
           surfaceOverrides,
+          distinctOccurrenceKeys,
+          linkedValueKeys,
         },
       ),
     [
@@ -319,6 +339,8 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
       generalizationLadders,
       persons,
       surfaceOverrides,
+      distinctOccurrenceKeys,
+      linkedValueKeys,
     ],
   );
   const generatedAnonymizedText = anonymizedPreview.anonymizedText || anonymizedText;
@@ -447,6 +469,8 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
       }
       setEntities(normalized);
       setRemovedEntities([]);
+      setDistinctOccurrenceKeys({});
+      setLinkedValueKeys({});
       setSelectedCategories(categorySelection);
       setExcludedEntityKeys({});
       setCustomCategories(nextCustom);
@@ -548,6 +572,8 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
     setText(ALBERT_SAMPLE_TEXT);
     setEntities([]);
     setRemovedEntities([]);
+    setDistinctOccurrenceKeys({});
+    setLinkedValueKeys({});
     clearAlbertOutputs();
     setSelectedCategories({});
     setExcludedEntityKeys({});
@@ -568,6 +594,8 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
     setText("");
     setEntities([]);
     setRemovedEntities([]);
+    setDistinctOccurrenceKeys({});
+    setLinkedValueKeys({});
     clearAlbertOutputs();
     setSelectedCategories({});
     setExcludedEntityKeys({});
@@ -604,6 +632,8 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
     if (entities.length || persons.length || anonymizedText || replacements.length) {
       setEntities([]);
       setRemovedEntities([]);
+      setDistinctOccurrenceKeys({});
+      setLinkedValueKeys({});
       clearAlbertOutputs();
       setSelectedCategories({});
       setExcludedEntityKeys({});
@@ -661,6 +691,7 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
       text: entity.text,
       start: entity.start,
       end: entity.end,
+      scope: "all",
       x: position.x,
       y: position.y,
     };
@@ -727,6 +758,150 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
     clearAlbertOutputs();
     closeEntityMenu();
     setStatus(t("generativeStatusRemoved", { text: entityMenu.entity.text }));
+  }
+
+  function handleToggleDistinctOccurrence() {
+    const menu = entityMenuRef.current;
+    if (!menu?.entity) {
+      return;
+    }
+    const occKey = getEntityOccurrenceKey(menu.entity);
+    if (!occKey) {
+      return;
+    }
+    const enabling = !distinctOccurrenceKeys[occKey];
+    setDistinctOccurrenceKeys((current) => {
+      const next = { ...current };
+      if (next[occKey]) {
+        delete next[occKey];
+      } else {
+        next[occKey] = true;
+      }
+      return next;
+    });
+    setAnonymizedTextOverride(null);
+    closeEntityMenu();
+    setStatus(
+      t(enabling ? "entityMenuDistinctStatusOn" : "entityMenuDistinctStatusOff", {
+        text: menu.entity.text,
+      }),
+    );
+  }
+
+  function handleLinkSameCode(targetText) {
+    const menu = entityMenuRef.current;
+    if (!menu?.entity || !targetText) {
+      return;
+    }
+    const fromKey = getEntityValueKey(menu.entity.label, menu.entity.text);
+    const toKey = getEntityValueKey(menu.entity.label, targetText);
+    const { next, linked } = toggleLinkedValueKeys(
+      linkedValueKeys,
+      fromKey,
+      toKey,
+      entities,
+    );
+    setLinkedValueKeys(next);
+    setAnonymizedTextOverride(null);
+    closeEntityMenu();
+    setStatus(
+      t(linked ? "entityMenuSameCodeStatusOn" : "entityMenuSameCodeStatusOff", {
+        text: menu.entity.text,
+        other: targetText,
+      }),
+    );
+  }
+
+  function changeEntityCategory(categoryId, displayLabel = null) {
+    const menu = entityMenuRef.current;
+    if (!menu || menu.mode !== "remove" || !menu.entity) {
+      return;
+    }
+    if (menu.entity.label === categoryId) {
+      closeEntityMenu();
+      return;
+    }
+
+    const scope = menu.scope === "single" ? "single" : "all";
+    const previousLabel = menu.entity.label;
+    const entityText = menu.entity.text;
+    const { entities: next, changedCount } = retargetEntityCategory(
+      entities,
+      menu.entity,
+      categoryId,
+      scope,
+    );
+    if (!changedCount) {
+      closeEntityMenu();
+      return;
+    }
+
+    const oldKey = getEntityValueKey(previousLabel, entityText);
+    const newKey = getEntityValueKey(categoryId, entityText);
+    const stillInOld = next.some(
+      (entity) =>
+        entity.label === previousLabel &&
+        String(entity.text || "").toLocaleLowerCase() ===
+          String(entityText || "").toLocaleLowerCase(),
+    );
+    setEntities(next);
+    setSelectedCategories((current) =>
+      pruneSelectedCategories(
+        {
+          ...current,
+          [categoryId]: current[categoryId] ?? true,
+        },
+        next,
+        categoryId,
+      ),
+    );
+    setExcludedEntityKeys((current) => {
+      if (!current[oldKey]) {
+        return current;
+      }
+      const updated = { ...current };
+      if (!stillInOld) {
+        delete updated[oldKey];
+      }
+      updated[newKey] = true;
+      return updated;
+    });
+    setSurfaceOverrides((current) =>
+      migrateSurfaceOverrideOnRetarget(current, oldKey, newKey, categoryId, {
+        keepOldKey: stillInOld,
+      }),
+    );
+    clearAlbertOutputs();
+    closeEntityMenu();
+    const labelName = displayLabel || getCategoryLabel(categoryId, customCategories);
+    setStatus(
+      t("entityMenuChangedStatus", {
+        text: entityText,
+        category: labelName,
+        count: changedCount,
+        scopeNote:
+          scope === "single"
+            ? t("entityMenuChangedScopeSingle")
+            : changedCount > 1
+              ? t("entityMenuChangedScopeAll")
+              : "",
+      }),
+    );
+  }
+
+  function handleChangeEntityCategory(categoryId) {
+    changeEntityCategory(categoryId);
+  }
+
+  function handleChangeEntityCategoryCustom(displayName) {
+    const trimmed = String(displayName || "").trim();
+    const menu = entityMenuRef.current;
+    if (!trimmed || !menu || menu.mode !== "remove" || !menu.entity) {
+      return;
+    }
+    const categoryId = createCustomCategoryId(trimmed, customCategories);
+    setCustomCategories((current) => ({ ...current, [categoryId]: trimmed }));
+    changeEntityCategory(categoryId, trimmed);
   }
 
   function removeEntityValue(category, entityText) {
@@ -1232,6 +1407,7 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
               categoryLabels={categoryLabels}
               selectedCategories={selectedCategories}
               excludedEntityKeys={excludedEntityKeys}
+              placeholderHints={placeholderHints}
               onAddSelection={handleAddSelection}
               onEntityClick={handleEntityClick}
             />
@@ -1342,10 +1518,17 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
           sourceText={text}
           menuCategories={menuCategories}
           categoryLabels={categoryLabels}
+          entities={entities}
           persons={[]}
           onScopeChange={setEntityMenuScope}
           onAdd={handleAddEntity}
           onAddCustom={handleAddCustomEntityCategory}
+          onChangeCategory={handleChangeEntityCategory}
+          onChangeCategoryCustom={handleChangeEntityCategoryCustom}
+          distinctOccurrenceKeys={distinctOccurrenceKeys}
+          linkedValueKeys={linkedValueKeys}
+          onToggleDistinctOccurrence={handleToggleDistinctOccurrence}
+          onLinkSameCode={handleLinkSameCode}
           onRemove={handleRemoveEntity}
           onClose={closeEntityMenu}
         />

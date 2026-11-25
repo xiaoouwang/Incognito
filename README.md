@@ -6,7 +6,7 @@ Outil pour les sciences humaines et sociales — entretiens, notes de terrain, r
 
 Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Humanités Numériques · [MSHS Sud-Est](https://mshs.univ-cotedazur.fr/) · [Université Côte d'Azur](https://univ-cotedazur.fr/)
 
-**Version actuelle : 1.0.2** (web)
+**Version actuelle : 1.0.3** (web)
 
 **Dépôt canonique** — [GitLab Huma-Num](https://gitlab.huma-num.fr/mshs-sud-est/incognito) · miroir public : [GitHub](https://github.com/xiaoouwang/Incognito)
 
@@ -46,7 +46,7 @@ Disponibles dans l'interface web :
 - 🔍 **NER configurable** — **de base** (GLiNER2-multi ou GLiNER2-PII ONNX), **avancée** (GLiNER2 + ReLex), **générative locale** et **générative API** (Albert)
 - 🕸️ **Graphe de personnes** — aliases / attributs / relations ; vue **react-force-graph** ; soft-exclude ; export CSV
 - 📧 **Règles regex** — e-mails, URL, téléphones (prioritaires en mode avancé)
-- 🖍️ **Revue interactive** — surlignage, œil (anonymiser / garder), × / ↩ (retirer / rétablir une valeur), pagination des longs textes
+- 🖍️ **Revue interactive** — surlignage, œil (anonymiser / garder), × / ↩ (retirer / rétablir une valeur), changement de catégorie, codes liés / occurrences distinctes, pagination des longs textes
 - 📁 **Mode lot** — dossier ou fichiers choisis, vagues de traitement, ZIP ; fins de ligne CR/CRLF normalisées à l'import
 - 🏷️ **Label Studio** — pré-annotations + configuration XML
 - 📊 **Rapport d'audit** — provenance, positions de caractères (start/end) ; fenêtre de lecture pleine hauteur
@@ -153,6 +153,16 @@ Copyright (c) 2026 Xiaoou Wang
 ---
 
 ## 📝 Mises à jour
+
+### 2026-11-25 — v1.0.3 — catégories, codes d’entité, menu de revue
+
+Fixes [#3](https://github.com/xiaoouwang/Incognito/issues/3), [#4](https://github.com/xiaoouwang/Incognito/issues/4), [#5](https://github.com/xiaoouwang/Incognito/issues/5).
+
+- **Décision — suivre les surfaces NER, puis laisser l’humain unifier ou séparer** — `Marie Dupont` et `Marie` ont des codes distincts par défaut (ordre = première apparition dans le texte). **Same code as** lie deux orthographes ; **Treat as distinct** isole une occurrence ; la régénération du graphe de personnes respecte ces choix.
+- **Changer de catégorie** — menu d’entité : déplacer une occurrence ou toutes les valeurs identiques (y compris vers une catégorie personnalisée, ex. *Industry sector*).
+- **Menu d’édition** — plus compact ; **New category** sous les puces ; positionnement qui reste dans le viewport (plus de fenêtre coupée au bord droit).
+- **Doublons de catégories** — alias (`person name` / `phone number`) masqués dans Ajouter / Changer ; les labels canoniques restent une seule fois.
+- **Démo toy** — même résolution des chevauchements qu’un run live (`mergeEntities`), pour des codes / surlignages cohérents dès l’ouverture.
 
 ### 2026-11-24 — v1.0.2 — longs textes, workers, puces ×/↩, lot & audit
 

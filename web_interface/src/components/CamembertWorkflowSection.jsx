@@ -77,9 +77,15 @@ import {
   isEntityActive,
   finalizeDetectedEntities,
   removeEntityById,
+  retargetEntityCategory,
   extractEntitiesByValue,
   mergeEntitiesBySpan,
+  pruneSelectedCategories,
+  migrateSurfaceOverrideOnRetarget,
   buildAnonymizedPreviewModel,
+  buildPlaceholderHintMap,
+  getEntityOccurrenceKey,
+  toggleLinkedValueKeys,
 } from "../lib/entityUtils.js";
 import { filterPronounPersonEntities } from "../lib/personMentionFilter.js";
 import AnonymizedSplitPreview from "./AnonymizedSplitPreview.jsx";
@@ -166,6 +172,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
   const [isExportingPackage, setIsExportingPackage] = useState(false);
   const [textPageIndex, setTextPageIndex] = useState(0);
   const [removedEntities, setRemovedEntities] = useState([]);
+  const [distinctOccurrenceKeys, setDistinctOccurrenceKeys] = useState({});
+  const [linkedValueKeys, setLinkedValueKeys] = useState({});
 
   const {
     persons,
@@ -194,6 +202,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     text,
     entities,
     t,
+    distinctOccurrenceKeys,
     // Advanced: ReLex person graph after NER (demo uses captured fixture).
     extractRelations: showPersonGraph
       ? async (sourceText, nextEntities) => {
@@ -485,6 +494,15 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     [customCategories],
   );
   const groupedEntities = useMemo(() => groupEntities(entities), [entities]);
+  const placeholderHints = useMemo(
+    () =>
+      buildPlaceholderHintMap(groupedEntities, customCategories, {
+        entities,
+        distinctOccurrenceKeys,
+        linkedValueKeys,
+      }),
+    [groupedEntities, customCategories, entities, distinctOccurrenceKeys, linkedValueKeys],
+  );
   const textPages = useMemo(() => splitTextIntoPages(text), [text]);
   const textPageCount = textPages.length;
   const safeTextPageIndex = Math.min(
@@ -548,6 +566,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
           generalizationLadders,
           persons,
           surfaceOverrides,
+          distinctOccurrenceKeys,
+          linkedValueKeys,
         },
       ),
     [
@@ -561,6 +581,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
       generalizationLadders,
       persons,
       surfaceOverrides,
+      distinctOccurrenceKeys,
+      linkedValueKeys,
       text,
     ],
   );
@@ -579,6 +601,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
         generalizationLadders,
         persons,
         surfaceOverrides,
+        distinctOccurrenceKeys,
+        linkedValueKeys,
       },
     );
   }
@@ -651,6 +675,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
       generalizationLadders,
       persons,
       surfaceOverrides,
+      distinctOccurrenceKeys,
+      linkedValueKeys,
     });
   }
 
@@ -770,6 +796,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     setIsEditingSource(false);
     setEntities([]);
     setRemovedEntities([]);
+    setDistinctOccurrenceKeys({});
+    setLinkedValueKeys({});
     setSelectedCategories({});
     setExcludedEntityKeys({});
     clearPersonGraph();
@@ -930,6 +958,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
       setText("");
       setEntities([]);
       setRemovedEntities([]);
+      setDistinctOccurrenceKeys({});
+      setLinkedValueKeys({});
       clearPersonGraph();
       setSelectedCategories({});
       setExcludedEntityKeys({});
@@ -1358,6 +1388,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
         generalizationLadders,
         persons,
         surfaceOverrides,
+        distinctOccurrenceKeys,
+        linkedValueKeys,
       });
       await yieldToMain();
       const correspondenceCsv = buildCorrespondenceCsv({
@@ -1371,6 +1403,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
         generalizationLadders,
         persons,
         surfaceOverrides,
+        distinctOccurrenceKeys,
+        linkedValueKeys,
       });
       await yieldToMain();
       const personGraphCsv =
@@ -1404,6 +1438,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     setText(demo.text);
     setEntities(demo.entities);
     setRemovedEntities([]);
+    setDistinctOccurrenceKeys({});
+    setLinkedValueKeys({});
     setSelectedCategories(demo.selectedCategories);
     setExcludedEntityKeys(demo.excludedEntityKeys);
     setCategoryMethods({});
@@ -1458,6 +1494,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     setText("");
     setEntities([]);
     setRemovedEntities([]);
+    setDistinctOccurrenceKeys({});
+    setLinkedValueKeys({});
     clearPersonGraph();
     setSelectedCategories({});
     setExcludedEntityKeys({});
@@ -1634,6 +1672,27 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     if (!result) {
       return;
     }
+    if (result.mode === "alias" && result.name) {
+      const fromKey = getEntityValueKey(entity.label || "person", entity.text);
+      const toKey = getEntityValueKey("person", result.name);
+      if (result.removed) {
+        setLinkedValueKeys((current) => {
+          const next = { ...current };
+          delete next[fromKey];
+          delete next[toKey];
+          for (const [key, target] of Object.entries(next)) {
+            if (target === fromKey || target === toKey) {
+              delete next[key];
+            }
+          }
+          return next;
+        });
+      } else {
+        const { next } = toggleLinkedValueKeys({}, fromKey, toKey, entities);
+        setLinkedValueKeys((current) => ({ ...current, ...next }));
+      }
+      setAnonymizedTextOverride(null);
+    }
     const statusKey = result.removed
       ? result.mode === "alias"
         ? "entityMenuUnaliasStatus"
@@ -1733,6 +1792,156 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     }
     closeEntityMenu();
     setStatus(`Removed entity "${entityMenu.entity.text}".`);
+  }
+
+  function changeEntityCategory(categoryId, displayLabel = null) {
+    const menu = entityMenuRef.current;
+    if (!menu || menu.mode !== "remove" || !menu.entity) {
+      return;
+    }
+    if (menu.entity.label === categoryId) {
+      closeEntityMenu();
+      return;
+    }
+
+    const scope = menu.scope === "single" ? "single" : "all";
+    const previousLabel = menu.entity.label;
+    const entityText = menu.entity.text;
+    const { entities: next, changedCount } = retargetEntityCategory(
+      entities,
+      menu.entity,
+      categoryId,
+      scope,
+    );
+    if (!changedCount) {
+      closeEntityMenu();
+      return;
+    }
+
+    const oldKey = getEntityValueKey(previousLabel, entityText);
+    const newKey = getEntityValueKey(categoryId, entityText);
+    const stillInOld = next.some(
+      (entity) =>
+        entity.label === previousLabel &&
+        String(entity.text || "").toLocaleLowerCase() ===
+          String(entityText || "").toLocaleLowerCase(),
+    );
+    setEntities(next);
+    setSelectedCategories((current) =>
+      pruneSelectedCategories(
+        {
+          ...current,
+          [categoryId]: current[categoryId] ?? true,
+        },
+        next,
+        categoryId,
+      ),
+    );
+    setExcludedEntityKeys((current) => {
+      if (!current[oldKey]) {
+        return current;
+      }
+      const updated = { ...current };
+      if (!stillInOld) {
+        delete updated[oldKey];
+      }
+      updated[newKey] = true;
+      return updated;
+    });
+    setSurfaceOverrides((current) =>
+      migrateSurfaceOverrideOnRetarget(current, oldKey, newKey, categoryId, {
+        keepOldKey: stillInOld,
+      }),
+    );
+    setAnonymizedTextOverride(null);
+    if (showPersonGraph) {
+      refreshPersonGraph(text, next, { resetExclusions: false });
+    }
+    closeEntityMenu();
+    const labelName = displayLabel || getCategoryLabel(categoryId, customCategories);
+    setStatus(
+      t("entityMenuChangedStatus", {
+        text: entityText,
+        category: labelName,
+        count: changedCount,
+        scopeNote:
+          scope === "single"
+            ? t("entityMenuChangedScopeSingle")
+            : changedCount > 1
+              ? t("entityMenuChangedScopeAll")
+              : "",
+      }),
+    );
+  }
+
+  function handleChangeEntityCategory(categoryId) {
+    changeEntityCategory(categoryId);
+  }
+
+  function handleChangeEntityCategoryCustom(displayName) {
+    const trimmed = String(displayName || "").trim();
+    const menu = entityMenuRef.current;
+    if (!trimmed || !menu || menu.mode !== "remove" || !menu.entity) {
+      return;
+    }
+    const categoryId = createCustomCategoryId(
+      trimmed,
+      batchMode ? batchCustomCategoriesRef.current : customCategories,
+    );
+    mergeCustomCategories({ [categoryId]: trimmed });
+    changeEntityCategory(categoryId, trimmed);
+  }
+
+  function handleToggleDistinctOccurrence() {
+    const menu = entityMenuRef.current;
+    if (!menu?.entity) {
+      return;
+    }
+    const occKey = getEntityOccurrenceKey(menu.entity);
+    if (!occKey) {
+      return;
+    }
+    const enabling = !distinctOccurrenceKeys[occKey];
+    setDistinctOccurrenceKeys((current) => {
+      const next = { ...current };
+      if (next[occKey]) {
+        delete next[occKey];
+      } else {
+        next[occKey] = true;
+      }
+      return next;
+    });
+    setAnonymizedTextOverride(null);
+    closeEntityMenu();
+    setStatus(
+      t(enabling ? "entityMenuDistinctStatusOn" : "entityMenuDistinctStatusOff", {
+        text: menu.entity.text,
+      }),
+    );
+  }
+
+  function handleLinkSameCode(targetText) {
+    const menu = entityMenuRef.current;
+    if (!menu?.entity || !targetText) {
+      return;
+    }
+    const fromKey = getEntityValueKey(menu.entity.label, menu.entity.text);
+    const toKey = getEntityValueKey(menu.entity.label, targetText);
+    const { next, linked } = toggleLinkedValueKeys(
+      linkedValueKeys,
+      fromKey,
+      toKey,
+      entities,
+    );
+    setLinkedValueKeys(next);
+    setAnonymizedTextOverride(null);
+    closeEntityMenu();
+    setStatus(
+      t(linked ? "entityMenuSameCodeStatusOn" : "entityMenuSameCodeStatusOff", {
+        text: menu.entity.text,
+        other: targetText,
+      }),
+    );
   }
 
   async function handleRegeneratePersonGraph() {
@@ -2315,6 +2524,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
                   categoryLabels={categoryLabels}
                   selectedCategories={selectedCategories}
                   excludedEntityKeys={excludedEntityKeys}
+                  placeholderHints={placeholderHints}
                   focusRanges={pageFocusRanges}
                   persons={persons}
                   pinnedPlaceholder={pinnedPersonPlaceholder}
@@ -2341,6 +2551,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
                     const nextMenu = {
                       mode: "remove",
                       entity: documentEntity,
+                      scope: "all",
                       ...position,
                     };
                     entityMenuRef.current = nextMenu;
@@ -2354,6 +2565,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
                     setText(event.target.value);
                     setEntities([]);
                     setRemovedEntities([]);
+                    setDistinctOccurrenceKeys({});
+                    setLinkedValueKeys({});
                     clearPersonGraph();
                     setSelectedCategories({});
                     setExcludedEntityKeys({});
@@ -2699,6 +2912,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
           sourceText={text}
           menuCategories={menuCategories}
           categoryLabels={categoryLabels}
+          entities={entities}
           persons={persons}
           relatedPlaceholders={
             entityMenu.entity?.text
@@ -2708,6 +2922,12 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
           onScopeChange={setEntityMenuScope}
           onAdd={handleAddEntity}
           onAddCustom={handleAddCustomCategory}
+          onChangeCategory={handleChangeEntityCategory}
+          onChangeCategoryCustom={handleChangeEntityCategoryCustom}
+          distinctOccurrenceKeys={distinctOccurrenceKeys}
+          linkedValueKeys={linkedValueKeys}
+          onToggleDistinctOccurrence={handleToggleDistinctOccurrence}
+          onLinkSameCode={handleLinkSameCode}
           onRelateToPerson={handleRelateEntityToPerson}
           onRemove={handleRemoveEntity}
           onClose={closeEntityMenu}

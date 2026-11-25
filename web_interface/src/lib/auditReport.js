@@ -1,14 +1,14 @@
 import {
+  applyLinkedValueReplacements,
   applySurfaceReplacementOverrides,
+  buildDistinctOccurrenceReplacements,
   formatCategoryDisplayName,
   getCategoryLabel,
   getCategoryPrefix,
   getEntityValueKey,
   isManualEntity,
   isEntityActive,
-  unifyPersonGraphReplacements,
 } from "./entityUtils.js";
-import { buildBasicPersonGraph } from "./basicPersonGraph.js";
 import { buildCorrespondenceRows } from "./correspondenceExport.js";
 import {
   DEFAULT_REPLACEMENT_STYLE,
@@ -239,6 +239,8 @@ export function createAuditReport({
   generalizationLadders = {},
   persons = null,
   surfaceOverrides = {},
+  distinctOccurrenceKeys = {},
+  linkedValueKeys = {},
 }) {
   const categories = Object.keys(groupedEntities);
   const selected = categories.filter((category) => selectedCategories[category]);
@@ -252,26 +254,25 @@ export function createAuditReport({
     salt: text || "",
     generalizationLadders,
   });
-  const resolvedPersons =
-    Array.isArray(persons) && persons.length
-      ? persons
-      : text && entities?.length
-        ? buildBasicPersonGraph(text, entities, null).persons || []
-        : [];
-  unifyPersonGraphReplacements(replacementMap, resolvedPersons, {
-    style: replacementStyle,
-    categoryMethods,
-    customCategories,
-    salt: text || "",
-    generalizationLadders,
-    selectedCategories,
-  });
+  applyLinkedValueReplacements(replacementMap, linkedValueKeys);
   applySurfaceReplacementOverrides(replacementMap, surfaceOverrides, {
     customCategories,
     salt: text || "",
     generalizationLadders,
     groupedEntities,
   });
+  const occurrenceReplacements = buildDistinctOccurrenceReplacements(
+    replacementMap,
+    entities,
+    distinctOccurrenceKeys,
+    {
+      style: replacementStyle,
+      categoryMethods,
+      customCategories,
+      salt: text || "",
+      generalizationLadders,
+    },
+  );
 
   const machineSourceLines = Object.entries(provenance.machineBySource)
     .sort(([left], [right]) => left.localeCompare(right))
@@ -321,6 +322,9 @@ export function createAuditReport({
     customCategories,
     replacementMap,
     surfaceOverrides,
+    distinctOccurrenceKeys,
+    occurrenceReplacements,
+    linkedValueKeys,
   });
 
   categories.forEach((category) => {

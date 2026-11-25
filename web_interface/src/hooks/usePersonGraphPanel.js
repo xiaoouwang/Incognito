@@ -63,6 +63,7 @@ export function usePersonGraphPanel({
   parseDependencies,
   extractRelations = null,
   resolveRelexOptions = null,
+  distinctOccurrenceKeys = {},
 }) {
   const [persons, setPersons] = useState([]);
   const [excludedPlaceholders, setExcludedPlaceholders] = useState({});
@@ -76,6 +77,8 @@ export function usePersonGraphPanel({
   const edgeLabelOverridesRef = useRef({});
   const [edgeValueOverrides, setEdgeValueOverrides] = useState({});
   const edgeValueOverridesRef = useRef({});
+  const distinctOccurrenceKeysRef = useRef(distinctOccurrenceKeys);
+  distinctOccurrenceKeysRef.current = distinctOccurrenceKeys || {};
 
   function commitPersons(personsList) {
     return applyEdgeLabelOverrides(
@@ -105,7 +108,9 @@ export function usePersonGraphPanel({
       if (resetExclusions) {
         resetManualGraphEdits();
       }
-      const graph = buildBasicPersonGraph(sourceText, nextEntities, depResult);
+      const graph = buildBasicPersonGraph(sourceText, nextEntities, depResult, {
+        distinctOccurrenceKeys: distinctOccurrenceKeysRef.current,
+      });
       setPersons(commitPersons(graph.persons));
       setPersonGraphNote(
         graph.usedDependencyParse
@@ -142,6 +147,7 @@ export function usePersonGraphPanel({
                 : true;
           const graph = buildPersonGraphFromRelex(sourceText, nextEntities, relations, {
             fillProximity,
+            distinctOccurrenceKeys: distinctOccurrenceKeysRef.current,
           });
           setPersons(commitPersons(graph.persons));
           const noteKey = payload.noteKey || "personGraphRelexReady";
@@ -210,6 +216,7 @@ export function usePersonGraphPanel({
       }
       const graph = buildPersonGraphFromRelex(sourceText, nextEntities, relations || [], {
         fillProximity: Boolean(fillProximity),
+        distinctOccurrenceKeys: distinctOccurrenceKeysRef.current,
       });
       setPersons(commitPersons(graph.persons));
       setPersonGraphNote(

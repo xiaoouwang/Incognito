@@ -32,6 +32,15 @@ export const CATEGORY_LABELS = {
   misc: "Other entities",
 };
 
+/** Alias ids kept for lookup / legacy spans; omit from add/change menus. */
+export const CATEGORY_MENU_ALIASES = new Set(["person name", "phone number"]);
+
+/** Map detection aliases onto the canonical category used in menus. */
+export const CATEGORY_CANONICAL_IDS = {
+  "person name": "person",
+  "phone number": "phone",
+};
+
 export const CATEGORY_PREFIXES = {
   person: "PERSON",
   "person name": "PERSON",

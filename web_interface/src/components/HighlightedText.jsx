@@ -1,4 +1,5 @@
-import { forwardRef, memo, useMemo, useRef } from "react";
+import { forwardRef, memo, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import PersonFocusChips from "./PersonFocusChips.jsx";
 import {
   getCategoryHighlightClass,
@@ -6,6 +7,8 @@ import {
   isEntityActive,
 } from "../lib/entityUtils.js";
 import { rangeOverlaps, splitRangeByFocus } from "../lib/personFocus.js";
+
+const TOOLTIP_SHOW_DELAY_MS = 120;
 
 const DENSE_SEGMENT_THRESHOLD = 120;
 
@@ -109,6 +112,7 @@ const HighlightedText = memo(
       categoryLabels,
       selectedCategories,
       excludedEntityKeys,
+      placeholderHints = null,
       focusRanges = [],
       persons = [],
       pinnedPlaceholder = null,
@@ -121,6 +125,9 @@ const HighlightedText = memo(
     forwardedRef,
   ) {
     const containerRef = useRef(null);
+    const tooltipTimerRef = useRef(null);
+    const [hoverTip, setHoverTip] = useState(null);
+    const [hoveredGroup, setHoveredGroup] = useState(null);
     const canEdit =
       interactive &&
       (typeof onAddSelection === "function" || typeof onEntityClick === "function");
@@ -139,6 +146,14 @@ const HighlightedText = memo(
       [text, displaySegments, focusRanges],
     );
 
+    useEffect(() => {
+      return () => {
+        if (tooltipTimerRef.current) {
+          window.clearTimeout(tooltipTimerRef.current);
+        }
+      };
+    }, []);
+
     if (!text) {
       return (
         <div className="empty-state" ref={forwardedRef} translate="no">
@@ -151,6 +166,69 @@ const HighlightedText = memo(
     const showChips = persons.length > 0 && typeof onPinPerson === "function";
     const dense = displaySegments.length >= DENSE_SEGMENT_THRESHOLD;
 
+    function clearHoverTip() {
+      if (tooltipTimerRef.current) {
+        window.clearTimeout(tooltipTimerRef.current);
+        tooltipTimerRef.current = null;
+      }
+      setHoverTip(null);
+    }
+
+    function clearHoverState() {
+      clearHoverTip();
+      setHoveredGroup(null);
+    }
+
+    function handleMouseOver(event) {
+      const mark = event.target.closest?.("mark.highlight");
+      if (!mark || !containerRef.current?.contains(mark)) {
+        return;
+      }
+      if (event.relatedTarget && mark.contains(event.relatedTarget)) {
+        return;
+      }
+      const group = mark.getAttribute("data-hover-group");
+      if (group) {
+        setHoveredGroup(group);
+      }
+      const tip = mark.getAttribute("data-tooltip");
+      if (!tip) {
+        return;
+      }
+      if (tooltipTimerRef.current) {
+        window.clearTimeout(tooltipTimerRef.current);
+      }
+      const rect = mark.getBoundingClientRect();
+      tooltipTimerRef.current = window.setTimeout(() => {
+        setHoverTip({
+          text: tip,
+          x: rect.left + rect.width / 2,
+          y: rect.bottom,
+        });
+      }, TOOLTIP_SHOW_DELAY_MS);
+    }
+
+    function handleMouseOut(event) {
+      const mark = event.target.closest?.("mark.highlight");
+      if (!mark || !containerRef.current?.contains(mark)) {
+        return;
+      }
+      if (event.relatedTarget && mark.contains(event.relatedTarget)) {
+        return;
+      }
+      // Leaving one mark for another matching mark keeps the group lit.
+      const nextMark = event.relatedTarget?.closest?.("mark.highlight");
+      if (
+        nextMark &&
+        containerRef.current?.contains(nextMark) &&
+        nextMark.getAttribute("data-hover-group") === mark.getAttribute("data-hover-group")
+      ) {
+        clearHoverTip();
+        return;
+      }
+      clearHoverState();
+    }
+
     function handleMouseUp(event) {
       if (!canEdit || typeof onAddSelection !== "function") return;
       if (event.target.closest(".highlight")) return;
@@ -159,6 +237,7 @@ const HighlightedText = memo(
       const selection = getSelectionOffsets(container, text);
       if (!selection || !selection.text.trim()) return;
 
+      clearHoverState();
       onAddSelection({
         ...selection,
         x: event.clientX,
@@ -176,6 +255,7 @@ const HighlightedText = memo(
         return;
       }
       event.stopPropagation();
+      clearHoverState();
       const start = Number(mark.dataset.start);
       const end = Number(mark.dataset.end);
       if (!Number.isFinite(start) || !Number.isFinite(end)) {
@@ -188,13 +268,29 @@ const HighlightedText = memo(
       onEntityClick(entity, { x: event.clientX, y: event.clientY }, { start, end, text: mark.textContent });
     }
 
+    const tooltipNode =
+      hoverTip && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="highlight-tooltip"
+              style={{ left: hoverTip.x, top: hoverTip.y }}
+              role="tooltip"
+            >
+              {hoverTip.text}
+            </div>,
+            document.body,
+          )
+        : null;
+
     const textPanel = (
       <div
         className={`highlighted-text${canEdit ? " interactive-highlight" : ""}${
           hasFocus ? " has-person-focus" : ""
-        }${dense ? " dense-highlights" : ""}`}
+        }${dense ? " dense-highlights" : ""}${hoveredGroup ? " has-value-hover" : ""}`}
         ref={mergeRefs(containerRef, forwardedRef)}
         translate="no"
+        onMouseOver={handleMouseOver}
+        onMouseOut={handleMouseOut}
         onMouseUp={canEdit ? handleMouseUp : undefined}
         onClick={canEdit && typeof onEntityClick === "function" ? handleClick : undefined}
       >
@@ -210,20 +306,24 @@ const HighlightedText = memo(
                   selectedCategories,
                   excludedEntityKeys,
                 );
+                const hint =
+                  (typeof placeholderHints?.get === "function"
+                    ? placeholderHints.get(segment.entity)
+                    : null) || label;
+                const hoverGroup = hint;
+                const isValueHovered = Boolean(hoveredGroup) && hoveredGroup === hoverGroup;
                 return (
                   <mark
                     className={`highlight ${getHighlightClass(segment.entity.label)} ${
                       active ? "selected" : "ignored"
-                    }${focused ? " person-focus-underline" : ""}`}
+                    }${focused ? " person-focus-underline" : ""}${
+                      isValueHovered ? " value-hover" : ""
+                    }`}
                     data-start={segment.start}
                     data-end={segment.end}
-                    title={
-                      canEdit
-                        ? typeof onAddSelection === "function"
-                          ? `${label}: click to remove`
-                          : `${label}: click to edit`
-                        : label
-                    }
+                    data-hover-group={hoverGroup}
+                    data-tooltip={hint}
+                    aria-label={hint}
                     key={`e-${segment.entity.id || segment.start}-${itemIndex}`}
                   >
                     {segment.text}
@@ -250,6 +350,7 @@ const HighlightedText = memo(
             ) : null}
           </div>
         ))}
+        {tooltipNode}
       </div>
     );
 

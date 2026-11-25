@@ -9,6 +9,17 @@
 
 import { childrenOf } from "./udpipeAlign.js";
 
+/** Local copy — avoid importing entityUtils (circular with buildBasicPersonGraph). */
+function occurrenceKey(entity) {
+  if (!entity) {
+    return "";
+  }
+  if (entity.id) {
+    return `id:${entity.id}`;
+  }
+  return `${entity.label}:${entity.start}:${entity.end}:${String(entity.text || "").toLocaleLowerCase()}`;
+}
+
 const PERSON_LABELS = new Set(["person"]);
 
 const LABEL_TO_ATTR = {
@@ -604,6 +615,10 @@ function unionAdjacentPersonClusters(clusters, sourceText = "") {
     changed = false;
     outer: for (let i = 0; i < next.length; i += 1) {
       for (let j = i + 1; j < next.length; j += 1) {
+        // Occurrence-level splits stay separate people after regenerate.
+        if (next[i].forceDistinct || next[j].forceDistinct) {
+          continue;
+        }
         const linked = (next[i].mentions || []).some((leftMention) =>
           (next[j].mentions || []).some((rightMention) =>
             mentionsAdjacentOrOverlap(leftMention, rightMention, sourceText),
@@ -622,8 +637,9 @@ function unionAdjacentPersonClusters(clusters, sourceText = "") {
   return next;
 }
 
-function mergePersonMentions(personEntities, sourceText = "") {
+function mergePersonMentions(personEntities, sourceText = "", distinctOccurrenceKeys = {}) {
   const clusters = [];
+  const flagged = distinctOccurrenceKeys || {};
 
   // Longer spans first so full names become the cluster seed when possible.
   const sorted = [...personEntities].sort(
@@ -636,15 +652,26 @@ function mergePersonMentions(personEntities, sourceText = "") {
       continue;
     }
     const lower = text.toLocaleLowerCase();
-    let cluster =
-      clusters.find((item) => clusterMatchesSurface(item, text)) ||
-      clusters.find((item) => clusterTouchesSpan(item, entity.start, entity.end, sourceText));
+    const occKey = occurrenceKey(entity);
+    const forceDistinct = Boolean(occKey && flagged[occKey]);
+    let cluster = null;
+
+    if (!forceDistinct) {
+      cluster =
+        clusters.find((item) => !item.forceDistinct && clusterMatchesSurface(item, text)) ||
+        clusters.find(
+          (item) =>
+            !item.forceDistinct &&
+            clusterTouchesSpan(item, entity.start, entity.end, sourceText),
+        );
+    }
 
     if (!cluster) {
       cluster = {
         name: text,
         aliases: [],
         mentions: [],
+        forceDistinct,
       };
       clusters.push(cluster);
     } else if (cluster.name.toLocaleLowerCase() !== lower) {
@@ -929,10 +956,12 @@ function attachViaProximity(cluster, entities, sentences, usedEntityKeys, source
  * @param {string} text
  * @param {Array} entities NER entities with label/start/end/text
  * @param {{ sentences?: Array }|null} depResult from depWorker
+ * @param {{ distinctOccurrenceKeys?: Record<string, boolean> }} [options]
  */
-export function buildBasicPersonGraph(text, entities = [], depResult = null) {
+export function buildBasicPersonGraph(text, entities = [], depResult = null, options = {}) {
+  const distinctOccurrenceKeys = options.distinctOccurrenceKeys || {};
   const personEntities = entities.filter((entity) => PERSON_LABELS.has(entity.label));
-  const clusters = mergePersonMentions(personEntities, text);
+  const clusters = mergePersonMentions(personEntities, text, distinctOccurrenceKeys);
   const sentences = depResult?.sentences || null;
 
   const persons = [];
@@ -1003,7 +1032,7 @@ export function buildBasicPersonGraph(text, entities = [], depResult = null) {
       const owner = surfaceOwners.get(key);
       return !owner || owner.placeholder === person.placeholder;
     });
-    delete person.mentions;
+    // Keep mentions for ReLex / regenerate so occurrence-level splits stay scoped.
   }
 
   const seenSurfaces = new Set(

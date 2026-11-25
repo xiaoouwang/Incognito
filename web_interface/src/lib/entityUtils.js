@@ -1,6 +1,8 @@
 import {
   BUILTIN_CATEGORY_IDS,
+  CATEGORY_CANONICAL_IDS,
   CATEGORY_LABELS,
+  CATEGORY_MENU_ALIASES,
 } from "./constants.js";
 import { GLINER_LABEL_STYLE_KEYS, GLINER_RULE_LABELS } from "./glinerConstants.js";
 import { buildBasicPersonGraph } from "./basicPersonGraph.js";
@@ -79,11 +81,21 @@ export function buildCategoryLabels(customCategories) {
   return { ...CATEGORY_LABELS, ...customCategories };
 }
 
+export function canonicalCategoryId(categoryId) {
+  const key = String(categoryId || "");
+  return CATEGORY_CANONICAL_IDS[key] || key;
+}
+
 export function buildMenuCategories(customCategories) {
   return [
-    ...Object.entries(CATEGORY_LABELS),
+    ...Object.entries(CATEGORY_LABELS).filter(
+      ([categoryId]) => !CATEGORY_MENU_ALIASES.has(categoryId),
+    ),
     ...Object.entries(customCategories)
-      .filter(([categoryId]) => !CATEGORY_LABELS[categoryId])
+      .filter(
+        ([categoryId]) =>
+          !CATEGORY_LABELS[categoryId] && !CATEGORY_MENU_ALIASES.has(categoryId),
+      )
       .sort(([, left], [, right]) => left.localeCompare(right)),
   ];
 }
@@ -120,6 +132,229 @@ export function getEntityValueKey(category, entityText) {
   return `${category}:${entityText.toLocaleLowerCase()}`;
 }
 
+/** Stable id for one span (used to single out same-spelling occurrences). */
+export function getEntityOccurrenceKey(entity) {
+  if (!entity) {
+    return "";
+  }
+  if (entity.id) {
+    return `id:${entity.id}`;
+  }
+  return `${entity.label}:${entity.start}:${entity.end}:${String(entity.text || "").toLocaleLowerCase()}`;
+}
+
+/**
+ * Extra replacements for spans the user singled out from their spelling group.
+ * Indices continue after the normal per-value placeholders for that category.
+ */
+export function buildDistinctOccurrenceReplacements(
+  replacementMap,
+  entities,
+  distinctOccurrenceKeys,
+  {
+    style = DEFAULT_REPLACEMENT_STYLE,
+    categoryMethods = {},
+    customCategories = {},
+    salt = "",
+    generalizationLadders = {},
+  } = {},
+) {
+  const flagged = distinctOccurrenceKeys || {};
+  const occurrenceMap = new Map();
+  if (!Object.keys(flagged).length) {
+    return occurrenceMap;
+  }
+
+  const nextIndexByCategory = new Map();
+  for (const key of replacementMap?.keys?.() || []) {
+    const category = String(key).split(":")[0];
+    if (!category) {
+      continue;
+    }
+    nextIndexByCategory.set(category, (nextIndexByCategory.get(category) || 0) + 1);
+  }
+
+  for (const entity of entities || []) {
+    const occKey = getEntityOccurrenceKey(entity);
+    if (!flagged[occKey] || occurrenceMap.has(occKey)) {
+      continue;
+    }
+    const category = entity.label || "misc";
+    const index = nextIndexByCategory.get(category) || 0;
+    nextIndexByCategory.set(category, index + 1);
+    const method = normalizeReplacementMethod(categoryMethods[category] || style);
+    occurrenceMap.set(
+      occKey,
+      replacementForCategoryValue(category, entity.text, {
+        method,
+        index,
+        salt,
+        customCategories,
+        generalizationLadders,
+      }),
+    );
+  }
+
+  return occurrenceMap;
+}
+
+export function resolveEntityReplacement(
+  entity,
+  replacementMap,
+  occurrenceReplacements,
+  distinctOccurrenceKeys = {},
+) {
+  if (!entity) {
+    return undefined;
+  }
+  const occKey = getEntityOccurrenceKey(entity);
+  if (distinctOccurrenceKeys[occKey] && occurrenceReplacements?.has(occKey)) {
+    return occurrenceReplacements.get(occKey);
+  }
+  return replacementMap?.get(getEntityValueKey(entity.label, entity.text));
+}
+
+/**
+ * Resolve a same-code link chain: `person:marie` → `person:marie dupont`.
+ */
+export function resolveLinkedValueKey(valueKey, linkedValueKeys = {}, seen = new Set()) {
+  const next = linkedValueKeys?.[valueKey];
+  if (!next || next === valueKey || seen.has(valueKey)) {
+    return valueKey;
+  }
+  seen.add(valueKey);
+  return resolveLinkedValueKey(next, linkedValueKeys, seen);
+}
+
+function earliestStartForValue(entities, category, entityText) {
+  const lower = String(entityText || "").toLocaleLowerCase();
+  let earliest = Number.POSITIVE_INFINITY;
+  for (const entity of entities || []) {
+    if (entity.label !== category) {
+      continue;
+    }
+    if (String(entity.text || "").toLocaleLowerCase() !== lower) {
+      continue;
+    }
+    const start = Number.isFinite(entity.start) ? entity.start : Number.POSITIVE_INFINITY;
+    if (start < earliest) {
+      earliest = start;
+    }
+  }
+  return earliest;
+}
+
+function clearLinksInvolving(next, valueKey) {
+  delete next[valueKey];
+  for (const [key, target] of Object.entries(next)) {
+    if (key === valueKey || target === valueKey) {
+      delete next[key];
+    }
+  }
+  return next;
+}
+
+/**
+ * Set or clear a same-code link for `fromKey`.
+ * Pass `toKey = null` / empty to clear. Replaces any previous link for this value.
+ * Selecting the same target again clears the link (toggle).
+ * The later-in-text surface points at the earlier one so numbering stays stable.
+ */
+export function toggleLinkedValueKeys(current, fromKey, toKey, entities = []) {
+  const prev = current || {};
+  const previousCanonical = resolveLinkedValueKey(fromKey, prev);
+  const previouslyLinked =
+    previousCanonical !== fromKey || Object.values(prev).includes(fromKey);
+  const previousPartner =
+    previousCanonical !== fromKey
+      ? previousCanonical
+      : Object.entries(prev).find(([, target]) => target === fromKey)?.[0] || null;
+
+  const next = { ...prev };
+  clearLinksInvolving(next, fromKey);
+
+  if (!toKey || toKey === fromKey) {
+    return { next, linked: false, canonicalKey: null };
+  }
+
+  if (previouslyLinked && previousPartner === toKey) {
+    clearLinksInvolving(next, toKey);
+    return { next, linked: false, canonicalKey: null };
+  }
+
+  clearLinksInvolving(next, toKey);
+
+  const fromCategory = fromKey.slice(0, fromKey.indexOf(":"));
+  const fromText = fromKey.slice(fromKey.indexOf(":") + 1);
+  const toCategory = toKey.slice(0, toKey.indexOf(":"));
+  const toText = toKey.slice(toKey.indexOf(":") + 1);
+  const fromStart = earliestStartForValue(entities, fromCategory, fromText);
+  const toStart = earliestStartForValue(entities, toCategory, toText);
+  // Later form → earlier form (earlier keeps its PERSON_N).
+  const [aliasKey, canonicalKey] =
+    fromStart <= toStart ? [toKey, fromKey] : [fromKey, toKey];
+  next[aliasKey] = canonicalKey;
+  return { next, linked: true, canonicalKey, aliasKey };
+}
+
+/**
+ * Make differently spelled surfaces share one replacement (earliest text form
+ * keeps its code; later linked forms copy it).
+ */
+export function applyLinkedValueReplacements(replacementMap, linkedValueKeys = {}) {
+  if (!replacementMap || !linkedValueKeys || !Object.keys(linkedValueKeys).length) {
+    return replacementMap;
+  }
+  for (const fromKey of Object.keys(linkedValueKeys)) {
+    const toKey = resolveLinkedValueKey(fromKey, linkedValueKeys);
+    if (toKey === fromKey) {
+      continue;
+    }
+    if (replacementMap.has(toKey)) {
+      replacementMap.set(fromKey, replacementMap.get(toKey));
+    } else if (replacementMap.has(fromKey)) {
+      replacementMap.set(toKey, replacementMap.get(fromKey));
+    }
+  }
+  return replacementMap;
+}
+
+/**
+ * Stable `[PREFIX_N]` codes for hover hints — same numbering as placeholder
+ * anonymization (per detected surface; optional same-code links).
+ */
+export function buildPlaceholderHintMap(
+  groupedEntities,
+  customCategories = {},
+  {
+    entities = [],
+    distinctOccurrenceKeys = {},
+    linkedValueKeys = {},
+  } = {},
+) {
+  const map = buildReplacementMap(groupedEntities, null, {
+    style: "placeholder",
+    customCategories,
+  });
+  applyLinkedValueReplacements(map, linkedValueKeys);
+  const occurrenceMap = buildDistinctOccurrenceReplacements(
+    map,
+    entities,
+    distinctOccurrenceKeys,
+    { style: "placeholder", customCategories },
+  );
+  return {
+    get(entity) {
+      return resolveEntityReplacement(
+        entity,
+        map,
+        occurrenceMap,
+        distinctOccurrenceKeys,
+      );
+    },
+  };
+}
+
 export function isEntityActive(entity, selectedCategories, excludedEntityKeys) {
   if (!selectedCategories[entity.label]) {
     return false;
@@ -132,6 +367,50 @@ export function createCategorySelectionFromEntities(entities) {
   return Object.fromEntries(
     [...new Set(entities.map((entity) => entity.label))].map((label) => [label, true]),
   );
+}
+
+/** Drop selection keys for categories that no longer have any spans. */
+export function pruneSelectedCategories(selectedCategories, entities, ensureCategory = null) {
+  const present = new Set(
+    (entities || []).map((entity) => entity.label).filter(Boolean),
+  );
+  const next = {};
+  for (const [category, enabled] of Object.entries(selectedCategories || {})) {
+    if (present.has(category)) {
+      next[category] = enabled;
+    }
+  }
+  if (ensureCategory && present.has(ensureCategory) && !(ensureCategory in next)) {
+    next[ensureCategory] = true;
+  }
+  return next;
+}
+
+/**
+ * Move a per-value override when a surface changes category.
+ * Keeps the old key if other spans still use the previous category+value.
+ */
+export function migrateSurfaceOverrideOnRetarget(
+  surfaceOverrides,
+  oldKey,
+  newKey,
+  nextCategory,
+  { keepOldKey = false } = {},
+) {
+  const current = surfaceOverrides || {};
+  const override = current[oldKey];
+  if (!override) {
+    return current;
+  }
+  const next = { ...current };
+  if (!keepOldKey) {
+    delete next[oldKey];
+  }
+  next[newKey] = {
+    ...override,
+    category: nextCategory,
+  };
+  return next;
 }
 
 export function splitEntitiesAtNewlines(sourceText, entities) {
@@ -378,6 +657,58 @@ export function removeEntityById(entities, entityId, entity = null) {
   return entities;
 }
 
+function entityMatchesIdentity(item, entity) {
+  if (!item || !entity) {
+    return false;
+  }
+  if (entity.id && item.id) {
+    return item.id === entity.id;
+  }
+  return (
+    item.start === entity.start &&
+    item.end === entity.end &&
+    item.label === entity.label &&
+    item.text === entity.text
+  );
+}
+
+/** Count spans that share category + surface form with the given entity. */
+export function countEntitiesMatchingValue(entities, category, entityText) {
+  const normalized = String(entityText || "").toLocaleLowerCase();
+  return (entities || []).filter(
+    (item) =>
+      item.label === category &&
+      String(item.text || "").toLocaleLowerCase() === normalized,
+  ).length;
+}
+
+/**
+ * Change the category of one clicked span, or every span with the same
+ * category + surface form (case-insensitive).
+ */
+export function retargetEntityCategory(entities, entity, nextLabel, scope = "single") {
+  if (!entity || !nextLabel || entity.label === nextLabel) {
+    return { entities: entities || [], changedCount: 0 };
+  }
+
+  const normalized = String(entity.text || "").toLocaleLowerCase();
+  let changedCount = 0;
+  const next = (entities || []).map((item) => {
+    const matchesSingle = entityMatchesIdentity(item, entity);
+    const matchesAll =
+      item.label === entity.label &&
+      String(item.text || "").toLocaleLowerCase() === normalized;
+    const shouldChange = scope === "all" ? matchesAll : matchesSingle;
+    if (!shouldChange) {
+      return item;
+    }
+    changedCount += 1;
+    return { ...item, label: nextLabel };
+  });
+
+  return { entities: next, changedCount };
+}
+
 /** Split out every span for a category + value (chip remove / restore). */
 export function extractEntitiesByValue(entities, category, entityText) {
   const normalized = String(entityText || "").toLocaleLowerCase();
@@ -416,20 +747,41 @@ export function mergeEntitiesBySpan(entities, toAdd) {
   return sortEntitiesBySpan([...(entities || []), ...toAdd]);
 }
 
+/**
+ * Unique values per category, ordered by first appearance in the source text
+ * (earliest start offset) so [PERSON_1] is the first name the reader sees.
+ */
 export function groupEntities(entities) {
-  return entities.reduce((groups, entity) => {
+  const earliestByCategory = new Map();
+
+  for (const entity of entities || []) {
     const category = entity.label || "misc";
-    const existing = groups[category] || [];
-
-    if (existing.some((item) => item.text.toLocaleLowerCase() === entity.text.toLocaleLowerCase())) {
-      return groups;
+    const valueKey = String(entity.text || "").toLocaleLowerCase();
+    if (!valueKey) {
+      continue;
     }
+    let byValue = earliestByCategory.get(category);
+    if (!byValue) {
+      byValue = new Map();
+      earliestByCategory.set(category, byValue);
+    }
+    const prev = byValue.get(valueKey);
+    const start = Number.isFinite(entity.start) ? entity.start : Number.POSITIVE_INFINITY;
+    if (!prev || start < prev.start) {
+      byValue.set(valueKey, entity);
+    }
+  }
 
-    return {
-      ...groups,
-      [category]: [...existing, entity],
-    };
-  }, {});
+  const groups = {};
+  for (const [category, byValue] of earliestByCategory) {
+    groups[category] = [...byValue.values()].sort(
+      (left, right) =>
+        (Number.isFinite(left.start) ? left.start : 0) -
+          (Number.isFinite(right.start) ? right.start : 0) ||
+        String(left.text || "").localeCompare(String(right.text || "")),
+    );
+  }
+  return groups;
 }
 
 export function createHighlightSegments(text, entities) {
@@ -609,6 +961,9 @@ export function buildAnonymizedPreviewModel(
     generalizationLadders = {},
     persons: personsOption,
     surfaceOverrides = {},
+    unifyPersonSurfaces = false,
+    distinctOccurrenceKeys = {},
+    linkedValueKeys = {},
   } = options;
 
   if (!text) {
@@ -623,18 +978,24 @@ export function buildAnonymizedPreviewModel(
     generalizationLadders,
   });
 
-  unifyPersonGraphReplacements(
-    replacementMap,
-    resolvePersonsForReplacement(text, entities, personsOption),
-    {
-      style,
-      categoryMethods,
-      customCategories,
-      salt,
-      generalizationLadders,
-      selectedCategories,
-    },
-  );
+  // Default: follow NER surfaces (Marie ≠ Marie Dupont). Opt-in alias merge only.
+  if (unifyPersonSurfaces) {
+    unifyPersonGraphReplacements(
+      replacementMap,
+      resolvePersonsForReplacement(text, entities, personsOption),
+      {
+        style,
+        categoryMethods,
+        customCategories,
+        salt,
+        generalizationLadders,
+        selectedCategories,
+      },
+    );
+  }
+
+  // Explicit same-code links (different spellings the user marked as one entity).
+  applyLinkedValueReplacements(replacementMap, linkedValueKeys);
 
   applySurfaceReplacementOverrides(replacementMap, surfaceOverrides, {
     customCategories,
@@ -642,6 +1003,19 @@ export function buildAnonymizedPreviewModel(
     generalizationLadders,
     groupedEntities,
   });
+
+  const occurrenceReplacements = buildDistinctOccurrenceReplacements(
+    replacementMap,
+    entities,
+    distinctOccurrenceKeys,
+    {
+      style,
+      categoryMethods,
+      customCategories,
+      salt,
+      generalizationLadders,
+    },
+  );
 
   const applicable = pickNonOverlappingEntities(
     entities.filter((entity) => isEntityActive(entity, selectedCategories, excludedEntityKeys)),
@@ -675,7 +1049,12 @@ export function buildAnonymizedPreviewModel(
     }
 
     const valueKey = getEntityValueKey(entity.label, entity.text);
-    const replacement = replacementMap.get(valueKey);
+    const replacement = resolveEntityReplacement(
+      entity,
+      replacementMap,
+      occurrenceReplacements,
+      distinctOccurrenceKeys,
+    );
     if (replacement == null) {
       const plain = text.slice(entity.start, entity.end);
       segments.push({

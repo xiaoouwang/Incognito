@@ -4,14 +4,15 @@
  * can be applied unambiguously.
  */
 
-import { buildBasicPersonGraph } from "./basicPersonGraph.js";
 import {
+  applyLinkedValueReplacements,
   applySurfaceReplacementOverrides,
+  buildDistinctOccurrenceReplacements,
   getCategoryLabel,
   getCategoryPrefix,
   getEntityValueKey,
   isEntityActive,
-  unifyPersonGraphReplacements,
+  resolveEntityReplacement,
 } from "./entityUtils.js";
 import {
   DEFAULT_REPLACEMENT_STYLE,
@@ -45,8 +46,19 @@ export function buildCorrespondenceRows({
   customCategories = {},
   replacementMap,
   surfaceOverrides = {},
+  distinctOccurrenceKeys = {},
+  occurrenceReplacements = null,
+  linkedValueKeys = {},
 }) {
   const rows = [];
+  const occMap =
+    occurrenceReplacements ||
+    buildDistinctOccurrenceReplacements(
+      replacementMap,
+      entities,
+      distinctOccurrenceKeys,
+      { customCategories },
+    );
   const sorted = [...(entities || [])].sort(
     (left, right) =>
       Number(left.start) - Number(right.start) ||
@@ -63,7 +75,12 @@ export function buildCorrespondenceRows({
     }
 
     const mapKey = getEntityValueKey(category, entity.text);
-    const mappedReplacement = replacementMap?.get(mapKey);
+    const mappedReplacement = resolveEntityReplacement(
+      entity,
+      replacementMap,
+      occMap,
+      distinctOccurrenceKeys,
+    );
     const uniqueIndex = uniqueIndexInCategory(groupedEntities, category, entity.text);
     const fallbackPlaceholder = `[${getCategoryPrefix(category, customCategories)}_${uniqueIndex + 1}]`;
     const replacement = selectedCategories[category]
@@ -135,6 +152,8 @@ export function buildCorrespondenceCsv({
   generalizationLadders = {},
   persons = null,
   surfaceOverrides = {},
+  distinctOccurrenceKeys = {},
+  linkedValueKeys = {},
 } = {}) {
   const replacementMap = buildReplacementMap(groupedEntities, selectedCategories, {
     style: replacementStyle,
@@ -143,26 +162,25 @@ export function buildCorrespondenceCsv({
     salt: text || "",
     generalizationLadders,
   });
-  const resolvedPersons =
-    Array.isArray(persons) && persons.length
-      ? persons
-      : text && entities?.length
-        ? buildBasicPersonGraph(text, entities, null).persons || []
-        : [];
-  unifyPersonGraphReplacements(replacementMap, resolvedPersons, {
-    style: replacementStyle,
-    categoryMethods,
-    customCategories,
-    salt: text || "",
-    generalizationLadders,
-    selectedCategories,
-  });
+  applyLinkedValueReplacements(replacementMap, linkedValueKeys);
   applySurfaceReplacementOverrides(replacementMap, surfaceOverrides, {
     customCategories,
     salt: text || "",
     generalizationLadders,
     groupedEntities,
   });
+  const occurrenceReplacements = buildDistinctOccurrenceReplacements(
+    replacementMap,
+    entities,
+    distinctOccurrenceKeys,
+    {
+      style: replacementStyle,
+      categoryMethods,
+      customCategories,
+      salt: text || "",
+      generalizationLadders,
+    },
+  );
 
   const rows = buildCorrespondenceRows({
     entities,
@@ -172,6 +190,9 @@ export function buildCorrespondenceCsv({
     customCategories,
     replacementMap,
     surfaceOverrides,
+    distinctOccurrenceKeys,
+    occurrenceReplacements,
+    linkedValueKeys,
   });
   return formatCorrespondenceCsv(rows);
 }

@@ -5,6 +5,7 @@ import {
   normalizeEntities,
 } from "./entityUtils.js";
 import { buildPersonGraphFromRelex } from "./glinerRelexPersonGraph.js";
+import { mergeEntities } from "./ruleDetection.js";
 import sampleDemoRelexFixture from "./sampleDemoRelexFixture.json";
 
 export const DEMO_MODEL_LABEL = "Sample demo (preloaded)";
@@ -76,7 +77,9 @@ const DEMO_ENTITY_SPECS = [
 export function buildSampleDemoState() {
   const seeded = DEMO_ENTITY_SPECS.map((entity) => ({ ...entity, source: "demo" }));
   const expanded = expandEntityValueOccurrences(SAMPLE_TEXT, seeded);
-  const entities = normalizeEntities(expanded, SAMPLE_TEXT);
+  // Same overlap resolution as a live model run (longer span wins: Marie Dupont
+  // keeps offset 0; nested "Marie" there is dropped). Keeps codes/highlights coherent.
+  const entities = normalizeEntities(mergeEntities(expanded), SAMPLE_TEXT);
 
   return {
     text: SAMPLE_TEXT,

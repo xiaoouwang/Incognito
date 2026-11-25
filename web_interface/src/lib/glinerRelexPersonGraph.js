@@ -189,24 +189,38 @@ function enforceExclusiveAttributeOwnership(persons, entities) {
  */
 export function buildPersonGraphFromRelex(text, entities = [], relations = [], options = {}) {
   const fillProximity = options.fillProximity !== false;
-  const base = buildBasicPersonGraph(text, entities, null);
+  const base = buildBasicPersonGraph(text, entities, null, {
+    distinctOccurrenceKeys: options.distinctOccurrenceKeys || {},
+  });
 
   // Person clusters from entities; linking comes from ReLex first.
   // (buildBasicPersonGraph drops mentions — rebuild them for distance scoring.)
   const persons = base.persons.map((person) => {
-    const nameKeys = new Set([
-      lower(person.name),
-      ...(person.aliases || []).map((alias) => lower(alias)),
-    ]);
-    const mentions = (entities || [])
-      .filter(
-        (entity) => isPersonLabel(entity.label) && nameKeys.has(lower(entity.text)),
-      )
-      .map((entity) => ({
-        start: entity.start,
-        end: entity.end,
-        text: entity.text,
+    // Prefer cluster mentions from basic merge so occurrence-level splits
+    // (distinct Marie vs Marie Dupont) keep their own spans for proximity.
+    const clusterMentions = Array.isArray(person.mentions) ? person.mentions : [];
+    let mentions = clusterMentions
+      .filter((mention) => Number.isFinite(mention?.start) && Number.isFinite(mention?.end))
+      .map((mention) => ({
+        start: mention.start,
+        end: mention.end,
+        text: mention.text,
       }));
+    if (!mentions.length) {
+      const nameKeys = new Set([
+        lower(person.name),
+        ...(person.aliases || []).map((alias) => lower(alias)),
+      ]);
+      mentions = (entities || [])
+        .filter(
+          (entity) => isPersonLabel(entity.label) && nameKeys.has(lower(entity.text)),
+        )
+        .map((entity) => ({
+          start: entity.start,
+          end: entity.end,
+          text: entity.text,
+        }));
+    }
     return {
       ...person,
       aliases: [...(person.aliases || [])],

@@ -15,7 +15,7 @@ abstract: >-
   the social sciences. Client-side browser interface (React, GLiNER2 / ONNX,
   optional Albert generative mode). Interactive NER review, batch processing,
   audit reports, and Label Studio export.
-version: 1.0.2
+version: 1.0.3
 date-released: 2026-11-24
 keywords:
   - anonymization

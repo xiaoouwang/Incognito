@@ -95,15 +95,16 @@ export default function AnonymizedSplitPreview({
   const [replacementEdit, setReplacementEdit] = useState(null);
 
   const activeCategories = useMemo(() => {
+    const present = new Set(
+      (entities || []).map((entity) => entity.label).filter(Boolean),
+    );
     const fromSelection = Object.keys(selectedCategories || {}).filter(
-      (category) => selectedCategories[category],
+      (category) => selectedCategories[category] && present.has(category),
     );
     if (fromSelection.length) {
       return sortReplacementCategories(fromSelection);
     }
-    return sortReplacementCategories([
-      ...new Set((entities || []).map((entity) => entity.label).filter(Boolean)),
-    ]);
+    return sortReplacementCategories([...present]);
   }, [selectedCategories, entities]);
 
   const selectionMap = useMemo(
