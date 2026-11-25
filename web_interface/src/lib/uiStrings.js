@@ -1,7 +1,7 @@
 export const UI_LOCALES = ["en", "fr"];
 
 const en = {
-  versionNumber: "1.0.2",
+  versionNumber: "1.0.3",
   privacyPromise:
     "Everything runs locally — your data never leaves your computer.",
   privacyDetailsLink: "Details here",
@@ -555,7 +555,7 @@ const en = {
 };
 
 const fr = {
-  versionNumber: "1.0.2",
+  versionNumber: "1.0.3",
   privacyPromise:
     "Tout s'exécute localement — vos données ne quittent pas votre ordinateur.",
   privacyDetailsLink: "Détails ici",

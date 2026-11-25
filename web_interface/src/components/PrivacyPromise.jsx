@@ -1,4 +1,7 @@
 import { useUiLocale } from "../context/UiLocaleContext.jsx";
+import packageJson from "../../package.json";
+
+const APP_VERSION = packageJson.version;
 
 export function PrivacyDetailsLink({ onOpen }) {
   const { t } = useUiLocale();
@@ -11,12 +14,10 @@ export function PrivacyDetailsLink({ onOpen }) {
 }
 
 export function PrivacyPromise({ className = "version-announcement" }) {
-  const { t } = useUiLocale();
-
   return (
     <p className={className}>
       <span className="version-announcement-badge" aria-hidden="true">
-        ✨ v{t("versionNumber")}
+        ✨ v{APP_VERSION}
       </span>
     </p>
   );
