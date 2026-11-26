@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://xiaoouwang.github.io/Incognito/sitemap.xml
