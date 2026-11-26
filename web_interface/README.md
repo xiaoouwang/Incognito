@@ -4,7 +4,7 @@
 
 **1.0.4 highlights** — batch remove respects All matching / this occurrence; add-menu word-match count skips emails and overlapping longer spans (e.g. Marie inside Marie Dupont).
 
-**Session save/open (Basic & Advanced)** — **Save session** / **Open session** download and restore an `incognito.session` JSON for the current document (entities, review toggles, overrides, person graph when Advanced). Separate from Label Studio export. Not yet for batch or generative modes.
+**Session save/open (Basic & Advanced, single document)** — **Save session** downloads an `incognito.session` JSON (text + review state; person graph in Advanced). **Open session** restores it so you can continue later. Separate from Label Studio export (LS JSON is rejected on open). **Not** for generative modes or batch / multi-file loads.
 
 **1.0.3 highlights** — change entity category (one/all + custom); same-code / distinct-occurrence controls; compact entity menu that stays on-screen; no duplicate category chips; NER-surface codes by first appearance; person-graph regenerate respects distinct occurrences.
 

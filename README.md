@@ -46,7 +46,8 @@ Disponibles dans l'interface web :
 - 🔍 **NER configurable** — **de base** (GLiNER2-multi ou GLiNER2-PII ONNX), **avancée** (GLiNER2 + ReLex), **générative locale** et **générative API** (Albert)
 - 🕸️ **Graphe de personnes** — aliases / attributs / relations ; vue **react-force-graph** ; soft-exclude ; export CSV
 - 📧 **Règles regex** — e-mails, URL, téléphones (prioritaires en mode avancé)
-- 🖍️ **Revue interactive** — surlignage, œil (anonymiser / garder), × / ↩ (retirer / rétablir une valeur), suppression / changement de catégorie (une occurrence ou toutes), codes liés / occurrences distinctes, pagination des longs textes ; **Save / Open session** (JSON de reprise Base / Avancé, distinct de Label Studio)
+- 🖍️ **Revue interactive** — surlignage, œil (anonymiser / garder), × / ↩ (retirer / rétablir une valeur), suppression / changement de catégorie (une occurrence ou toutes), codes liés / occurrences distinctes, pagination des longs textes
+- 💾 **Session (reprise)** — **Save session** / **Open session** : JSON `incognito.session` pour un **seul document** en **Base** ou **Avancé** (texte + état de relecture, graphe en Avancé). Pas encore les modes génératifs ni le lot multi-fichiers. Distinct de l’export Label Studio.
 - 📁 **Mode lot** — dossier ou fichiers choisis, vagues de traitement, ZIP ; fins de ligne CR/CRLF normalisées à l'import
 - 🏷️ **Label Studio** — pré-annotations + configuration XML
 - 📊 **Rapport d'audit** — provenance, positions de caractères (start/end) ; fenêtre de lecture pleine hauteur
@@ -154,12 +155,13 @@ Copyright (c) 2026 Xiaoou Wang
 
 ## 📝 Mises à jour
 
-### 2026-11-26 — v1.0.4 — suppression par lot & comptage des correspondances
+### 2026-11-26 — v1.0.4 — suppression par lot, comptage des correspondances, session
 
-Fixes [#7](https://github.com/xiaoouwang/Incognito/issues/7) (batch deletion ignored the “All matching detections” scope).
+Fixes [#7](https://github.com/xiaoouwang/Incognito/issues/7) (batch deletion ignored the “All matching detections” scope). Partial progress on [#6](https://github.com/xiaoouwang/Incognito/issues/6) (session JSON import/export).
 
 - **Suppression groupée** — le sélecteur de portée du menu d’entité s’applique aussi à **Remove** (une occurrence ou toutes les valeurs identiques), comme pour le changement de catégorie ; libellé du bouton adapté (`Remove all matching (N)`).
 - **Ajout / recomptage** — « All word matches » ne compte plus les faux positifs dans les e-mails (`marie.dupont@…`) ni les spans déjà couverts par une détection plus longue (ex. `Marie` dans `Marie Dupont`) ; l’ajout respecte la même liste.
+- **Save / Open session** — fichier JSON dédié (`incognito.session`), distinct de Label Studio : sauvegarde et restaure le document courant en **Base** / **Avancé** (entités, toggles, overrides, codes liés / distincts, graphe de personnes en Avancé). **Pas** les modes génératifs, **pas** le chargement multi-fichiers / lot. Usage : *Save session* pour télécharger la sauvegarde, *Open session* pour la rouvrir et continuer la relecture.
 
 ### 2026-11-25 — v1.0.3 — catégories, codes d’entité, menu de revue
 
