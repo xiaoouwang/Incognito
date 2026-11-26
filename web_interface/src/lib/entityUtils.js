@@ -1302,5 +1302,6 @@ export function buildBatchOutputFileNames(sourceFileName, modified = false) {
     personGraph: `${base}-person-graph${suffix}.csv`,
     personGraphByPerson: `${base}-person-graph-by-person${suffix}.csv`,
     labelStudio: `${base}-label-studio${suffix}.json`,
+    session: `${base}-incognito-session${suffix}.json`,
   };
 }

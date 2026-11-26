@@ -6,7 +6,7 @@ Outil pour les sciences humaines et sociales — entretiens, notes de terrain, r
 
 Développé par [Xiaoou Wang](https://xiaoouwang.github.io/) · Ingénieur en Humanités Numériques · [MSHS Sud-Est](https://mshs.univ-cotedazur.fr/) · [Université Côte d'Azur](https://univ-cotedazur.fr/)
 
-**Version actuelle : 1.0.4** (web)
+**Version actuelle : 1.0.5** (web)
 
 **Dépôt canonique** — [GitLab Huma-Num](https://gitlab.huma-num.fr/mshs-sud-est/incognito) · miroir public : [GitHub](https://github.com/xiaoouwang/Incognito)
 
@@ -47,7 +47,7 @@ Disponibles dans l'interface web :
 - 🕸️ **Graphe de personnes** — aliases / attributs / relations ; vue **react-force-graph** ; soft-exclude ; export CSV
 - 📧 **Règles regex** — e-mails, URL, téléphones (prioritaires en mode avancé)
 - 🖍️ **Revue interactive** — surlignage, œil (anonymiser / garder), × / ↩ (retirer / rétablir une valeur), suppression / changement de catégorie (une occurrence ou toutes), codes liés / occurrences distinctes, pagination des longs textes
-- 💾 **Session (reprise)** — **Save session** / **Open session** : JSON `incognito.session` pour un **seul document** en **Base** ou **Avancé** (texte + état de relecture, graphe en Avancé). Pas encore les modes génératifs ni le lot multi-fichiers. Distinct de l’export Label Studio.
+- 💾 **Session (reprise)** — **Save session** / **Open session** en **Base** / **Avancé**. Mono-document : JSON `incognito.session`. **Lot** : un JSON `incognito.session.batch` avec **tous** les fichiers (texte + relecture + graphe) ; le ZIP d’export inclut aussi `incognito-batch-session.json` et un session JSON par fichier. Réimport sans relancer l’anonymisation. Pas encore les modes génératifs. Distinct de Label Studio.
 - 📁 **Mode lot** — dossier ou fichiers choisis, vagues de traitement, ZIP ; fins de ligne CR/CRLF normalisées à l'import
 - 🏷️ **Label Studio** — pré-annotations + configuration XML
 - 📊 **Rapport d'audit** — provenance, positions de caractères (start/end) ; fenêtre de lecture pleine hauteur
@@ -103,7 +103,14 @@ npm run build          # → web_interface/dist/
 npm run preview
 ```
 
-Scripts utiles : `scripts/benchmark_albert.py` (latence Albert) · sidecar optionnel `web_interface/gliner2_pii_server/`.
+Tests (session round-trip, depuis `web_interface/`) :
+
+```bash
+cd web_interface
+npm test               # vitest — save → JSON → open
+```
+
+Détail : [`web_interface/README.md`](web_interface/README.md) (section *Tests*). Scripts utiles : `scripts/benchmark_albert.py` (latence Albert) · sidecar optionnel `web_interface/gliner2_pii_server/`.
 
 ### Déploiement
 
@@ -116,7 +123,7 @@ Les changements hors `web_interface/` (et hors les fichiers CI) ne redéploient 
 
 ## 📚 Citer cet outil
 
-> Wang, X. (2026). *Incognito: A privacy-first tool for reviewing and anonymizing qualitative texts in the social sciences* (Version 1.0.4) [Logiciel]. Maison des Sciences de l'Homme Sud-Est / Université Côte d'Azur. [https://gitlab.huma-num.fr/mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito)
+> Wang, X. (2026). *Incognito: A privacy-first tool for reviewing and anonymizing qualitative texts in the social sciences* (Version 1.0.5) [Logiciel]. Maison des Sciences de l'Homme Sud-Est / Université Côte d'Azur. [https://gitlab.huma-num.fr/mshs-sud-est/incognito](https://gitlab.huma-num.fr/mshs-sud-est/incognito)
 
 **BibTeX**
 
@@ -125,7 +132,7 @@ Les changements hors `web_interface/` (et hors les fichiers CI) ne redéploient 
   author  = {Wang, Xiaoou},
   title   = {{Incognito}: A privacy-first tool for reviewing and anonymizing qualitative texts in the social sciences},
   year    = {2026},
-  version = {1.0.4},
+  version = {1.0.5},
   url     = {https://gitlab.huma-num.fr/mshs-sud-est/incognito},
   note    = {Browser interface (React + GLiNER2 / Transformers.js).
              Maison des Sciences de l'Homme Sud-Est, Universit{\'e} C{\^o}te d'Azur.
@@ -155,13 +162,21 @@ Copyright (c) 2026 Xiaoou Wang
 
 ## 📝 Mises à jour
 
-### 2026-11-26 — v1.0.4 — suppression par lot, comptage des correspondances, session
+### 2026-11-26 — v1.0.5 — Save / Open session (Base & Avancé)
 
-Fixes [#7](https://github.com/xiaoouwang/Incognito/issues/7) (batch deletion ignored the “All matching detections” scope). Partial progress on [#6](https://github.com/xiaoouwang/Incognito/issues/6) (session JSON import/export).
+Progress on [#6](https://github.com/xiaoouwang/Incognito/issues/6) (import / reprise d’un travail d’anonymisation). **Non implémenté** pour les modes **génératifs**.
+
+- **Décision — un format de session Incognito, distinct de Label Studio** — Label Studio reste un export one-way pour d’autres outils. La reprise dans Incognito utilise un JSON versionné (`incognito.session` / `incognito.session.batch`) qui porte l’état de relecture (texte, entités, toggles, overrides, codes liés / distincts, graphe en Avancé). Les rapports d’audit et sorties anonymisées sont **régénérés à l’export**, pas stockés dans la session.
+- **Mono-document** — *Save session* / *Open session* en Base et Avancé.
+- **Lot** — *Save batch session* écrit un seul JSON couvrant **tous** les fichiers ; *Export anonymized data* inclut `incognito-batch-session.json` plus un `*-incognito-session.json` par fichier ; *Open session* restaure depuis ce JSON ou depuis le ZIP d’export, sans relancer le NER.
+- **Tests de round-trip** — Vitest (`npm test` dans `web_interface/`) : construire une session → `JSON.stringify` → parser → vérifier que les champs durables survivent. Voir le détail dans [`web_interface/README.md`](web_interface/README.md). Utile pour détecter un oubli quand on ajoute une fonction, mais **ne garantit pas** l’absence de bugs UI / d’intégration.
+
+### 2026-11-26 — v1.0.4 — suppression par lot & comptage des correspondances
+
+Fixes [#7](https://github.com/xiaoouwang/Incognito/issues/7) (batch deletion ignored the “All matching detections” scope).
 
 - **Suppression groupée** — le sélecteur de portée du menu d’entité s’applique aussi à **Remove** (une occurrence ou toutes les valeurs identiques), comme pour le changement de catégorie ; libellé du bouton adapté (`Remove all matching (N)`).
 - **Ajout / recomptage** — « All word matches » ne compte plus les faux positifs dans les e-mails (`marie.dupont@…`) ni les spans déjà couverts par une détection plus longue (ex. `Marie` dans `Marie Dupont`) ; l’ajout respecte la même liste.
-- **Save / Open session** — fichier JSON dédié (`incognito.session`), distinct de Label Studio : sauvegarde et restaure le document courant en **Base** / **Avancé** (entités, toggles, overrides, codes liés / distincts, graphe de personnes en Avancé). **Pas** les modes génératifs, **pas** le chargement multi-fichiers / lot. Usage : *Save session* pour télécharger la sauvegarde, *Open session* pour la rouvrir et continuer la relecture.
 
 ### 2026-11-25 — v1.0.3 — catégories, codes d’entité, menu de revue
 

@@ -5,6 +5,10 @@ import {
   downloadFile,
   formatBatchOutputTimestamp,
 } from "./entityUtils.js";
+import {
+  buildBatchSessionDocument,
+  buildSessionFromFileState,
+} from "./sessionDocument.js";
 
 function writeOutputFiles(root, names, outputs) {
   if (outputs.originalText != null) {
@@ -22,6 +26,9 @@ function writeOutputFiles(root, names, outputs) {
   if (outputs.personGraphByPersonCsv) {
     root.file(names.personGraphByPerson, outputs.personGraphByPersonCsv);
   }
+  if (outputs.sessionJson) {
+    root.file(names.session, outputs.sessionJson);
+  }
 }
 
 export async function downloadBatchZip({
@@ -35,12 +42,29 @@ export async function downloadBatchZip({
   generalizationLadders = {},
   includePersonGraph = true,
   surfaceOverrides = {},
+  workflow = "basic",
+  threshold = null,
+  activeLabels = null,
+  customDetectionLabels = null,
 }) {
   const folderName = outputLabel || `outputs-${formatBatchOutputTimestamp()}`;
   const zip = new JSZip();
   const root = zip.folder(folderName);
 
   root.file("label-studio-ner-config.xml", LABEL_STUDIO_NER_CONFIG);
+
+  const batchSession = buildBatchSessionDocument({
+    workflow,
+    label: folderName,
+    files,
+    fileStates,
+    nerEngine: nerBackend,
+    threshold,
+    categoryMethods,
+    activeLabels,
+    customDetectionLabels,
+  });
+  root.file("incognito-batch-session.json", JSON.stringify(batchSession, null, 2));
 
   for (const file of files) {
     const savedState = fileStates[file.id];
@@ -85,6 +109,16 @@ export async function downloadBatchZip({
       surfaceOverrides: fileSurfaceOverrides,
       includePersonGraph,
     });
+
+    const session = buildSessionFromFileState(file, savedState || {}, {
+      workflow,
+      nerEngine: nerBackend,
+      threshold,
+      categoryMethods,
+      activeLabels,
+      customDetectionLabels,
+    });
+    outputs.sessionJson = JSON.stringify(session, null, 2);
 
     const names = buildBatchOutputFileNames(file.name, modified);
     writeOutputFiles(root, names, outputs);

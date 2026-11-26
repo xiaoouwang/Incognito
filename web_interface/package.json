@@ -1,13 +1,15 @@
 {
   "name": "incognito-web",
   "private": true,
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Incognito Web — browser interface for qualitative text anonymization (Basic, Advanced, Generative) with person-graph review, companion to the Incognito desktop app.",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "gliner2-pii-server": "sh -c 'if [ -x .venv-gliner2/bin/python ]; then exec .venv-gliner2/bin/python gliner2_pii_server/server.py; else exec python3 gliner2_pii_server/server.py; fi'"
   },
   "dependencies": {
@@ -23,6 +25,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "vitest": "^3.2.4"
   }
 }

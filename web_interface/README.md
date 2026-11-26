@@ -1,10 +1,10 @@
 # Incognito Web
 
-**Version 1.0.4** — standalone, **client-side** web interface for qualitative text anonymization. Detection runs in the browser — no Electron, no Python server required for the core UI (optional Albert API in generative API mode; optional local GLiNER2-PII sidecar under `gliner2_pii_server/`).
+**Version 1.0.5** — standalone, **client-side** web interface for qualitative text anonymization. Detection runs in the browser — no Electron, no Python server required for the core UI (optional Albert API in generative API mode; optional local GLiNER2-PII sidecar under `gliner2_pii_server/`).
+
+**1.0.5 highlights** — **Save / Open session** for Basic & Advanced (single document + full batch). Session JSON is Incognito’s own format (not Label Studio). Batch export ZIP embeds the same session data. Round-trip Vitest coverage for session fields. **Not** implemented for generative modes.
 
 **1.0.4 highlights** — batch remove respects All matching / this occurrence; add-menu word-match count skips emails and overlapping longer spans (e.g. Marie inside Marie Dupont).
-
-**Session save/open (Basic & Advanced, single document)** — **Save session** downloads an `incognito.session` JSON (text + review state; person graph in Advanced). **Open session** restores it so you can continue later. Separate from Label Studio export (LS JSON is rejected on open). **Not** for generative modes or batch / multi-file loads.
 
 **1.0.3 highlights** — change entity category (one/all + custom); same-code / distinct-occurrence controls; compact entity menu that stays on-screen; no duplicate category chips; NER-surface codes by first appearance; person-graph regenerate respects distinct occurrences.
 
@@ -67,6 +67,42 @@ This is an **anonymization assistant**, not a guarantee of full anonymization. A
 
 - Interactive review, audit report, Label Studio, FR/EN UI
 - Sample corpora under [`samples/`](samples/)
+
+## Session save / open (Basic & Advanced)
+
+Incognito can pause and resume anonymization without re-running NER.
+
+| Mode | Save | Open |
+| ---- | ---- | ---- |
+| **Single document** | **Save session** → `incognito.session` JSON | **Open session** → restore that file |
+| **Batch** | **Save batch session** → one `incognito.session.batch` JSON with **every** file | **Open session** → restore the whole batch (or open an export ZIP that contains `incognito-batch-session.json`) |
+
+**What is stored:** source text, entities, removed spans, category toggles, exclusions, replacement methods, surface overrides, linked/distinct codes, optional anonymized-text override, and (Advanced) the person-graph snapshot.
+
+**What is not stored:** audit Markdown, anonymized `.txt`, correspondence CSV — those are **rebuilt on export** from the restored state.
+
+**Out of scope:** generative modes (local / Albert API). Label Studio JSON remains export-only.
+
+## Tests (session round-trip)
+
+From `web_interface/`:
+
+```bash
+npm test          # once
+npm run test:watch
+```
+
+The suite lives in [`src/lib/sessionDocument.roundtrip.test.js`](src/lib/sessionDocument.roundtrip.test.js).
+
+### What a round-trip test is
+
+1. Build a rich “live” review fixture (the maps and spans a user would have after annotating).
+2. Call `buildSessionDocument` / `buildBatchSessionDocument` (same builders as **Save session**).
+3. `JSON.stringify` — the download / disk boundary.
+4. Call `parseAnySessionDocument` (same path as **Open session**).
+5. Assert durable fields are still equal (categories, exclusions, linked codes, graph, etc.).
+
+If you add a new feature that must survive Save/Open, extend `makeReviewFixture()` and add an assertion. If the builder or parser forgets the field, the test fails. That catches **schema drift**; it does **not** prove the React UI wiring is bug-free.
 
 ## Quick start (local)
 

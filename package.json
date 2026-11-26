@@ -1,7 +1,7 @@
 {
   "name": "incognito",
   "private": true,
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Incognito — privacy-first qualitative text anonymization in the browser (web app only).",
   "author": {
     "name": "Xiaoou Wang",

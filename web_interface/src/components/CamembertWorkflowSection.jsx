@@ -14,9 +14,19 @@ import { createLabelStudioExport } from "../labelStudioExport.js";
 import { createAuditReport } from "../lib/auditReport.js";
 import { downloadBatchZip, downloadLabelStudioBundle, downloadSingleExportZip } from "../lib/batchZip.js";
 import { buildCorrespondenceCsv } from "../lib/correspondenceExport.js";
+import JSZip from "jszip";
 import {
+  BATCH_SESSION_FORMAT,
+  SESSION_VERSION,
+  buildBatchSessionDocument,
   buildSessionDocument,
+  downloadBatchSessionDocument,
   downloadSessionDocument,
+  batchSessionFileName,
+  fileStateFromSession,
+  matchSessionToBatchFile,
+  materializeBatchFromSession,
+  parseAnySessionDocument,
   parseSessionDocument,
   sessionFileName,
 } from "../lib/sessionDocument.js";
@@ -727,23 +737,51 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     [labelStudioExport],
   );
 
+  function buildLivePersonGraphSnapshot() {
+    if (!showPersonGraph) {
+      return null;
+    }
+    return {
+      persons,
+      excludedPlaceholders,
+      excludedSurfaces,
+      relationOverrides,
+      edgeLabelOverrides,
+      edgeValueOverrides,
+      note: personGraphNote,
+    };
+  }
+
   function persistCurrentFileState() {
     if (!batchMode || !currentFile) {
       return;
     }
 
+    const previous = fileStatesRef.current[currentFile.id] || {};
     fileStatesRef.current[currentFile.id] = {
+      ...previous,
       text,
       entities,
+      removedEntities,
       selectedCategories,
       excludedEntityKeys,
       modelName,
+      nerEngine: activeNerEngine,
+      threshold,
       customCategories,
+      categoryMethods,
+      surfaceOverrides,
+      distinctOccurrenceKeys,
+      linkedValueKeys,
+      anonymizedTextOverride,
+      activeLabels: [...activeLabels],
+      customDetectionLabels,
       outputsModified: currentFileOutputsModified,
-      relations: fileStatesRef.current[currentFile.id]?.relations || [],
+      relations: previous.relations || [],
+      personGraph: buildLivePersonGraphSnapshot(),
       excludedPlaceholders,
       excludedSurfaces,
-      surfaceOverrides,
+      sourceFile: currentFile.name,
     };
   }
 
@@ -753,10 +791,33 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     const nextText = savedState?.text ?? file.text;
     setText(nextText);
     setEntities(nextEntities);
-    setSelectedCategories(savedState?.selectedCategories ?? {});
+    setRemovedEntities(savedState?.removedEntities ?? []);
+    setSelectedCategories(
+      Object.keys(savedState?.selectedCategories || {}).length
+        ? savedState.selectedCategories
+        : createCategorySelectionFromEntities(nextEntities),
+    );
     setExcludedEntityKeys(savedState?.excludedEntityKeys ?? {});
+    setCategoryMethods(savedState?.categoryMethods ?? {});
+    setSurfaceOverrides(savedState?.surfaceOverrides ?? {});
+    setDistinctOccurrenceKeys(savedState?.distinctOccurrenceKeys ?? {});
+    setLinkedValueKeys(savedState?.linkedValueKeys ?? {});
+    setAnonymizedTextOverride(savedState?.anonymizedTextOverride ?? null);
     setModelName(savedState?.modelName ?? null);
+    if (savedState?.nerEngine) {
+      setNerEngine(savedState.nerEngine);
+    }
+    if (typeof savedState?.threshold === "number") {
+      setThreshold(savedState.threshold);
+    }
+    if (Array.isArray(savedState?.activeLabels) && savedState.activeLabels.length) {
+      setActiveLabels(new Set(savedState.activeLabels));
+    }
+    if (Array.isArray(savedState?.customDetectionLabels)) {
+      setCustomDetectionLabels(savedState.customDetectionLabels);
+    }
     setCurrentFileOutputsModified(savedState?.outputsModified ?? false);
+    setTextPageIndex(0);
 
     if (isBatchNavigation) {
       syncCustomCategories(resolveCustomCategoriesForBatch(nextEntities, savedState), true);
@@ -774,6 +835,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
 
     if (!showPersonGraph) {
       clearPersonGraph();
+    } else if (savedState?.personGraph?.persons?.length) {
+      restorePersonGraphSnapshot(savedState.personGraph);
     } else if (nextEntities.length && Array.isArray(savedState?.relations)) {
       applyRelexPersonGraph(nextText, nextEntities, savedState.relations, {
         resetExclusions: true,
@@ -931,12 +994,24 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
       fileStatesRef.current[file.id] = {
         text: file.text,
         entities: [],
+        removedEntities: [],
         selectedCategories: {},
         excludedEntityKeys: {},
         modelName: null,
+        nerEngine: null,
+        threshold: null,
         customCategories: {},
+        categoryMethods: {},
+        surfaceOverrides: {},
+        distinctOccurrenceKeys: {},
+        linkedValueKeys: {},
+        anonymizedTextOverride: null,
         outputsModified: false,
         relations: [],
+        personGraph: null,
+        excludedPlaceholders: {},
+        excludedSurfaces: {},
+        sourceFile: file.name,
       };
     }
   }
@@ -1320,19 +1395,10 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     }
 
     persistCurrentFileState();
-    if (currentFile) {
+    if (currentFile && fileStatesRef.current[currentFile.id]) {
       fileStatesRef.current[currentFile.id] = {
         ...fileStatesRef.current[currentFile.id],
-        text,
-        entities,
-        selectedCategories,
-        excludedEntityKeys,
-        modelName,
-        customCategories,
         outputsModified: true,
-        excludedPlaceholders,
-        excludedSurfaces,
-        surfaceOverrides,
       };
     }
 
@@ -1353,6 +1419,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     setStatus(t("buildingZip"));
 
     try {
+      const workflow = variant === "advanced" ? "advanced" : "basic";
       await downloadBatchZip({
         files: batchFiles,
         fileStates: fileStatesRef.current,
@@ -1362,6 +1429,10 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
         generalizationLadders,
         includePersonGraph: showPersonGraph,
         surfaceOverrides,
+        workflow,
+        threshold,
+        activeLabels: [...activeLabels],
+        customDetectionLabels,
       });
       setStatus(t("exportBatchDone"));
     } catch (caughtError) {
@@ -1522,16 +1593,39 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
   }
 
   function saveSessionDocument() {
+    const workflow = variant === "advanced" ? "advanced" : "basic";
+
     if (batchMode) {
-      setStatus(t("sessionSaveBatchBlocked"));
+      if (!batchFiles.length) {
+        setStatus(t("sessionSaveEmpty"));
+        return;
+      }
+      persistCurrentFileState();
+      const batchSession = buildBatchSessionDocument({
+        workflow,
+        label: batchOutputLabel || batchFolderLabel || null,
+        files: batchFiles,
+        fileStates: fileStatesRef.current,
+        nerEngine: activeNerEngine,
+        threshold,
+        categoryMethods,
+        activeLabels: [...activeLabels],
+        customDetectionLabels,
+      });
+      downloadBatchSessionDocument(
+        batchSession,
+        batchSessionFileName(workflow, new Date(), batchSession.label),
+      );
+      setStatus(t("sessionSavedBatch", { count: String(batchFiles.length) }));
+      setError("");
       return;
     }
+
     if (!String(text || "").trim() && !entities.length) {
       setStatus(t("sessionSaveEmpty"));
       return;
     }
 
-    const workflow = variant === "advanced" ? "advanced" : "basic";
     const session = buildSessionDocument({
       workflow,
       text,
@@ -1540,6 +1634,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
       modelName,
       nerEngine: activeNerEngine,
       threshold,
+      sourceFile: null,
       customCategories,
       selectedCategories,
       excludedEntityKeys,
@@ -1550,17 +1645,8 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
       anonymizedTextOverride,
       activeLabels: [...activeLabels],
       customDetectionLabels,
-      personGraph: showPersonGraph
-        ? {
-            persons,
-            excludedPlaceholders,
-            excludedSurfaces,
-            relationOverrides,
-            edgeLabelOverrides,
-            edgeValueOverrides,
-            note: personGraphNote,
-          }
-        : null,
+      relations: [],
+      personGraph: buildLivePersonGraphSnapshot(),
     });
     downloadSessionDocument(session, sessionFileName(workflow));
     setStatus(t("sessionSaved"));
@@ -1568,11 +1654,87 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
   }
 
   function openSessionPicker() {
-    if (batchMode) {
-      setStatus(t("sessionOpenBatchBlocked"));
+    sessionInputRef.current?.click();
+  }
+
+  async function readSessionTextFromUpload(file) {
+    const lower = String(file.name || "").toLocaleLowerCase();
+    if (!lower.endsWith(".zip")) {
+      return file.text();
+    }
+
+    const zip = await JSZip.loadAsync(await file.arrayBuffer());
+    const paths = Object.keys(zip.files).filter((path) => !zip.files[path].dir);
+    const batchPath =
+      paths.find((path) => path.split("/").pop() === "incognito-batch-session.json") ||
+      paths.find((path) => /incognito-batch-session/i.test(path));
+    if (batchPath) {
+      return zip.files[batchPath].async("string");
+    }
+
+    const sessionPaths = paths.filter(
+      (path) =>
+        /incognito-session/i.test(path) &&
+        path.toLocaleLowerCase().endsWith(".json") &&
+        !/label-studio/i.test(path),
+    );
+    if (sessionPaths.length === 1) {
+      return zip.files[sessionPaths[0]].async("string");
+    }
+    if (sessionPaths.length > 1) {
+      const documents = [];
+      for (const path of sessionPaths) {
+        const raw = await zip.files[path].async("string");
+        const parsed = parseSessionDocument(raw);
+        if (parsed.ok) {
+          documents.push(parsed.session);
+        }
+      }
+      if (documents.length) {
+        return JSON.stringify({
+          format: BATCH_SESSION_FORMAT,
+          version: SESSION_VERSION,
+          appVersion: null,
+          exportedAt: new Date().toISOString(),
+          workflow: variant === "advanced" ? "advanced" : "basic",
+          label: file.name.replace(/\.zip$/i, ""),
+          documents,
+        });
+      }
+    }
+
+    throw new Error(t("sessionImportZipNoSession"));
+  }
+
+  function applyBatchSession(batch) {
+    const { files, fileStates } = materializeBatchFromSession(batch);
+    if (!files.length) {
+      setStatus(t("sessionImportFailed"));
       return;
     }
-    sessionInputRef.current?.click();
+
+    fileStatesRef.current = fileStates;
+    batchCustomCategoriesRef.current = {};
+    for (const state of Object.values(fileStates)) {
+      if (state.customCategories && Object.keys(state.customCategories).length) {
+        mergeCustomCategories(state.customCategories);
+      }
+    }
+
+    setIsDemoMode(false);
+    setBatchMode(true);
+    setBatchFolderLabel(batch.label || t("sessionBatchRestoredLabel"));
+    setBatchOutputLabel(batch.label || null);
+    setBatchFiles(files);
+    setCurrentFileIndex(0);
+    setJumpFileNumber("1");
+    setJumpFileName("");
+    setEntityMenu(null);
+    setReportOpen(false);
+    setError("");
+    applyFileState(files[0], fileStates[files[0].id], { isBatchNavigation: true });
+    setSourceBodyKey((key) => key + 1);
+    setStatus(t("sessionOpenedBatch", { count: String(files.length) }));
   }
 
   function applySessionDocument(session) {
@@ -1626,6 +1788,10 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     if (showPersonGraph) {
       if (session.personGraph?.persons?.length) {
         restorePersonGraphSnapshot(session.personGraph);
+      } else if (doc.entities.length && Array.isArray(doc.relations) && doc.relations.length) {
+        applyRelexPersonGraph(doc.text, doc.entities, doc.relations, {
+          resetExclusions: true,
+        });
       } else if (doc.entities.length) {
         refreshPersonGraph(doc.text, doc.entities, { resetExclusions: true });
       } else {
@@ -1643,36 +1809,220 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     );
   }
 
+  function applyBatchSessions(matches) {
+    const usedIds = new Set();
+    let applied = 0;
+    for (const { file, session } of matches) {
+      if (!file || usedIds.has(file.id)) {
+        continue;
+      }
+      usedIds.add(file.id);
+      const nextState = {
+        ...fileStateFromSession(session, { outputsModified: true }),
+        sourceFile: file.name,
+      };
+      // Keep loaded corpus text unless the session carries an explicit rewrite.
+      if (!nextState.text) {
+        nextState.text = file.text;
+      }
+      fileStatesRef.current[file.id] = {
+        ...(fileStatesRef.current[file.id] || {}),
+        ...nextState,
+      };
+      if (Object.keys(nextState.customCategories || {}).length) {
+        mergeCustomCategories(nextState.customCategories);
+      }
+      applied += 1;
+    }
+
+    if (currentFile && fileStatesRef.current[currentFile.id]) {
+      applyFileState(currentFile, fileStatesRef.current[currentFile.id], {
+        isBatchNavigation: true,
+      });
+      setSourceBodyKey((key) => key + 1);
+    }
+    return applied;
+  }
+
   async function handleSessionFileChange(event) {
-    const file = event.target.files?.[0];
+    const picked = Array.from(event.target.files || []);
     event.target.value = "";
-    if (!file) {
+    if (!picked.length) {
       return;
     }
 
     try {
-      const raw = await file.text();
-      const parsed = parseSessionDocument(raw);
-      if (!parsed.ok) {
-        setError(
-          t(parsed.errorKey, {
-            version: parsed.errorDetail ? ` (${parsed.errorDetail})` : "",
-          }),
-        );
+      // Prefer a batch envelope / export ZIP when present.
+      if (picked.length === 1) {
+        const raw = await readSessionTextFromUpload(picked[0]);
+        const parsed = parseAnySessionDocument(raw);
+        if (!parsed.ok) {
+          setError(
+            t(parsed.errorKey, {
+              version: parsed.errorDetail ? ` (${parsed.errorDetail})` : "",
+            }),
+          );
+          setStatus(t("sessionImportFailed"));
+          return;
+        }
+
+        if (parsed.kind === "batch") {
+          if (
+            (batchMode || entities.length || String(text || "").trim()) &&
+            !window.confirm(
+              t("sessionImportBatchReplaceConfirm", {
+                count: String(parsed.batch.documents.length),
+              }),
+            )
+          ) {
+            setStatus(t("sessionImportCancelled"));
+            return;
+          }
+          applyBatchSession(parsed.batch);
+          return;
+        }
+
+        if (batchMode && batchFiles.length) {
+          if (!window.confirm(t("sessionImportBatchConfirm", { count: "1" }))) {
+            setStatus(t("sessionImportCancelled"));
+            return;
+          }
+          persistCurrentFileState();
+          const file = matchSessionToBatchFile(
+            parsed.session,
+            batchFiles,
+            new Set(),
+            picked[0].name,
+          );
+          if (!file) {
+            setError(
+              t("sessionImportBatchUnmatched", {
+                names: picked[0].name,
+              }),
+            );
+            setStatus(t("sessionImportFailed"));
+            return;
+          }
+          applyBatchSessions([{ file, session: parsed.session }]);
+          setStatus(
+            t("sessionImportBatchDone", {
+              applied: "1",
+              total: "1",
+            }),
+          );
+          return;
+        }
+
+        const hasWork =
+          Boolean(String(text || "").trim()) ||
+          entities.length > 0 ||
+          removedEntities.length > 0;
+        if (hasWork && !window.confirm(t("sessionImportConfirm"))) {
+          setStatus(t("sessionImportCancelled"));
+          return;
+        }
+        applySessionDocument(parsed.session);
+        return;
+      }
+
+      // Multiple single-document session files → merge into / onto the batch.
+      const parsedSessions = [];
+      const errors = [];
+      for (const file of picked) {
+        const raw = await readSessionTextFromUpload(file);
+        const parsed = parseAnySessionDocument(raw);
+        if (!parsed.ok) {
+          errors.push(
+            `${file.name}: ${t(parsed.errorKey, {
+              version: parsed.errorDetail ? ` (${parsed.errorDetail})` : "",
+            })}`,
+          );
+          continue;
+        }
+        if (parsed.kind === "batch") {
+          errors.push(`${file.name}: ${t("sessionImportBatchMixed")}`);
+          continue;
+        }
+        parsedSessions.push({ session: parsed.session, uploadName: file.name });
+      }
+
+      if (!parsedSessions.length) {
+        setError(errors[0] || t("sessionImportFailed"));
         setStatus(t("sessionImportFailed"));
         return;
       }
 
-      const hasWork =
-        Boolean(String(text || "").trim()) ||
-        entities.length > 0 ||
-        removedEntities.length > 0;
-      if (hasWork && !window.confirm(t("sessionImportConfirm"))) {
+      if (!batchMode || !batchFiles.length) {
+        if (
+          !window.confirm(
+            t("sessionImportBatchReplaceConfirm", {
+              count: String(parsedSessions.length),
+            }),
+          )
+        ) {
+          setStatus(t("sessionImportCancelled"));
+          return;
+        }
+        applyBatchSession({
+          format: BATCH_SESSION_FORMAT,
+          version: SESSION_VERSION,
+          workflow: variant === "advanced" ? "advanced" : "basic",
+          label: null,
+          documents: parsedSessions.map((item) => item.session),
+        });
+        if (errors.length) {
+          setError(errors.slice(0, 3).join(" · "));
+        }
+        return;
+      }
+
+      if (
+        !window.confirm(
+          t("sessionImportBatchConfirm", { count: String(parsedSessions.length) }),
+        )
+      ) {
         setStatus(t("sessionImportCancelled"));
         return;
       }
 
-      applySessionDocument(parsed.session);
+      persistCurrentFileState();
+      const usedIds = new Set();
+      const matches = [];
+      const unmatched = [];
+      for (const item of parsedSessions) {
+        const file = matchSessionToBatchFile(
+          item.session,
+          batchFiles,
+          usedIds,
+          item.uploadName,
+        );
+        if (!file) {
+          unmatched.push(item.uploadName || item.session.document?.sourceFile || "?");
+          continue;
+        }
+        usedIds.add(file.id);
+        matches.push({ file, session: item.session });
+      }
+
+      const applied = applyBatchSessions(matches);
+      setIsDemoMode(false);
+      if (errors.length) {
+        setError(errors.slice(0, 3).join(" · "));
+      } else if (unmatched.length) {
+        setError(
+          t("sessionImportBatchUnmatched", {
+            names: unmatched.slice(0, 5).join(", "),
+          }),
+        );
+      } else {
+        setError("");
+      }
+      setStatus(
+        t("sessionImportBatchDone", {
+          applied: String(applied),
+          total: String(parsedSessions.length),
+        }),
+      );
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : String(caughtError));
       setStatus(t("sessionImportFailed"));
@@ -2259,35 +2609,37 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
             {isDownloadingZip ? t("buildingZip") : t("exportAnonymizedData")}
           </button>
         )}
-        {!batchMode ? (
-          <>
-            <button
-              className="secondary"
-              type="button"
-              onClick={saveSessionDocument}
-              disabled={isDetecting || (!String(text || "").trim() && !entities.length)}
-              title={t("sessionSaveHint")}
-            >
-              {t("sessionSave")}
-            </button>
-            <button
-              className="secondary"
-              type="button"
-              onClick={openSessionPicker}
-              disabled={isDetecting || isBatchLoading}
-              title={t("sessionOpenHint")}
-            >
-              {t("sessionOpen")}
-            </button>
-            <input
-              ref={sessionInputRef}
-              type="file"
-              accept="application/json,.json"
-              hidden
-              onChange={(event) => void handleSessionFileChange(event)}
-            />
-          </>
-        ) : null}
+        <button
+          className="secondary"
+          type="button"
+          onClick={saveSessionDocument}
+          disabled={
+            isDetecting ||
+            (batchMode
+              ? !batchFiles.length
+              : !String(text || "").trim() && !entities.length)
+          }
+          title={batchMode ? t("sessionSaveBatchHint") : t("sessionSaveHint")}
+        >
+          {batchMode ? t("sessionSaveBatch") : t("sessionSave")}
+        </button>
+        <button
+          className="secondary"
+          type="button"
+          onClick={openSessionPicker}
+          disabled={isDetecting || isBatchLoading}
+          title={batchMode ? t("sessionOpenBatchHint") : t("sessionOpenHint")}
+        >
+          {batchMode ? t("sessionOpenBatch") : t("sessionOpen")}
+        </button>
+        <input
+          ref={sessionInputRef}
+          type="file"
+          accept="application/json,.json,application/zip,.zip"
+          multiple
+          hidden
+          onChange={(event) => void handleSessionFileChange(event)}
+        />
         {batchMode ? (
           <>
             <button

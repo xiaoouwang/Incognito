@@ -1,7 +1,7 @@
 export const UI_LOCALES = ["en", "fr"];
 
 const en = {
-  versionNumber: "1.0.4",
+  versionNumber: "1.0.5",
   privacyPromise:
     "Everything runs locally — your data never leaves your computer.",
   privacyDetailsLink: "Details here",
@@ -37,19 +37,35 @@ const en = {
     "Download a ZIP with original text, anonymized text, correspondence table, audit report, and person-graph CSVs when available",
   exportEverythingDone: "Downloaded export package.",
   exportBatchDone:
-    "Downloaded ZIP with original text, anonymized outputs, correspondence tables, audit reports, and person-graph CSVs.",
+    "Downloaded ZIP with originals, anonymized outputs, audit/correspondence, person-graph CSVs, and Incognito session JSON for every file (plus incognito-batch-session.json).",
   sessionSave: "Save session",
+  sessionSaveBatch: "Save batch session",
   sessionSaveHint:
     "Download an Incognito session JSON so you can resume this document later (review state, not Label Studio).",
+  sessionSaveBatchHint:
+    "Download one batch session JSON covering every file (full review state). Open it later to restore the batch without re-running anonymization. Export ZIP includes the same session data.",
   sessionOpen: "Open session",
+  sessionOpenBatch: "Open session",
   sessionOpenHint: "Restore a previously saved Incognito session JSON for this document.",
+  sessionOpenBatchHint:
+    "Open a batch session JSON, an export ZIP that contains incognito-batch-session.json, or one/more per-file session JSONs.",
   sessionSaved: "Session saved.",
+  sessionSavedBatch: "Batch session saved ({count} file(s)).",
   sessionSaveEmpty: "Nothing to save yet — paste or detect text first.",
-  sessionSaveBatchBlocked: "Leave batch mode to save a single-document session.",
-  sessionOpenBatchBlocked: "Leave batch mode before opening a session file.",
   sessionOpened: "Session opened ({workflow}) — {count} entity span(s) restored.",
+  sessionOpenedBatch: "Batch session opened — {count} file(s) restored.",
+  sessionBatchRestoredLabel: "Restored batch session",
   sessionImportConfirm:
     "Replace the current document and review state with this session file?",
+  sessionImportBatchConfirm:
+    "Apply {count} session file(s) to matching documents in the current batch?",
+  sessionImportBatchReplaceConfirm:
+    "Replace the current work with a batch session of {count} file(s)?",
+  sessionImportBatchDone: "Restored sessions for {applied} of {total} file(s).",
+  sessionImportBatchUnmatched: "No batch match for: {names}",
+  sessionImportBatchNoFiles: "Load a batch of documents before opening session files.",
+  sessionImportBatchMixed: "Don’t mix a full batch session with other files in one import.",
+  sessionImportZipNoSession: "No Incognito session JSON found inside that ZIP.",
   sessionImportCancelled: "Session import cancelled.",
   sessionImportFailed: "Could not open session file.",
   sessionImportInvalidJson: "That file is not valid JSON.",
@@ -579,7 +595,7 @@ const en = {
 };
 
 const fr = {
-  versionNumber: "1.0.4",
+  versionNumber: "1.0.5",
   privacyPromise:
     "Tout s'exécute localement — vos données ne quittent pas votre ordinateur.",
   privacyDetailsLink: "Détails ici",
@@ -615,19 +631,35 @@ const fr = {
     "Télécharger un ZIP avec le texte original, le texte anonymisé, la table de correspondance, le rapport d’audit et les CSV du graphe de personnes le cas échéant",
   exportEverythingDone: "Pack d’export téléchargé.",
   exportBatchDone:
-    "ZIP téléchargé avec texte original, sorties anonymisées, tables de correspondance, rapports d’audit et CSV du graphe de personnes.",
+    "ZIP téléchargé avec originaux, sorties anonymisées, audit/correspondance, CSV de graphe, et JSON de session Incognito par fichier (plus incognito-batch-session.json).",
   sessionSave: "Enregistrer la session",
+  sessionSaveBatch: "Enregistrer la session du lot",
   sessionSaveHint:
     "Télécharger un JSON de session Incognito pour reprendre ce document plus tard (état de relecture, pas Label Studio).",
+  sessionSaveBatchHint:
+    "Télécharger un JSON de session de lot couvrant tous les fichiers (état de relecture complet). Rouvrez-le plus tard pour restaurer le lot sans relancer l’anonymisation. Le ZIP d’export inclut les mêmes données de session.",
   sessionOpen: "Ouvrir une session",
+  sessionOpenBatch: "Ouvrir une session",
   sessionOpenHint: "Restaurer un JSON de session Incognito précédemment enregistré pour ce document.",
+  sessionOpenBatchHint:
+    "Ouvrir un JSON de session de lot, un ZIP d’export contenant incognito-batch-session.json, ou un/des JSON de session par fichier.",
   sessionSaved: "Session enregistrée.",
+  sessionSavedBatch: "Session de lot enregistrée ({count} fichier(s)).",
   sessionSaveEmpty: "Rien à enregistrer — collez ou détectez un texte d’abord.",
-  sessionSaveBatchBlocked: "Quittez le mode lot pour enregistrer une session mono-document.",
-  sessionOpenBatchBlocked: "Quittez le mode lot avant d’ouvrir un fichier de session.",
   sessionOpened: "Session ouverte ({workflow}) — {count} occurrence(s) restaurée(s).",
+  sessionOpenedBatch: "Session de lot ouverte — {count} fichier(s) restauré(s).",
+  sessionBatchRestoredLabel: "Session de lot restaurée",
   sessionImportConfirm:
     "Remplacer le document et l’état de relecture actuels par ce fichier de session ?",
+  sessionImportBatchConfirm:
+    "Appliquer {count} fichier(s) de session aux documents correspondants du lot courant ?",
+  sessionImportBatchReplaceConfirm:
+    "Remplacer le travail actuel par une session de lot de {count} fichier(s) ?",
+  sessionImportBatchDone: "Sessions restaurées pour {applied} fichier(s) sur {total}.",
+  sessionImportBatchUnmatched: "Aucune correspondance dans le lot pour : {names}",
+  sessionImportBatchNoFiles: "Chargez un lot de documents avant d’ouvrir des sessions.",
+  sessionImportBatchMixed: "Ne mélangez pas une session de lot complète avec d’autres fichiers dans le même import.",
+  sessionImportZipNoSession: "Aucun JSON de session Incognito trouvé dans ce ZIP.",
   sessionImportCancelled: "Import de session annulé.",
   sessionImportFailed: "Impossible d’ouvrir le fichier de session.",
   sessionImportInvalidJson: "Ce fichier n’est pas un JSON valide.",
