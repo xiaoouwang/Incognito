@@ -38,6 +38,28 @@ const en = {
   exportEverythingDone: "Downloaded export package.",
   exportBatchDone:
     "Downloaded ZIP with original text, anonymized outputs, correspondence tables, audit reports, and person-graph CSVs.",
+  sessionSave: "Save session",
+  sessionSaveHint:
+    "Download an Incognito session JSON so you can resume this document later (review state, not Label Studio).",
+  sessionOpen: "Open session",
+  sessionOpenHint: "Restore a previously saved Incognito session JSON for this document.",
+  sessionSaved: "Session saved.",
+  sessionSaveEmpty: "Nothing to save yet — paste or detect text first.",
+  sessionSaveBatchBlocked: "Leave batch mode to save a single-document session.",
+  sessionOpenBatchBlocked: "Leave batch mode before opening a session file.",
+  sessionOpened: "Session opened ({workflow}) — {count} entity span(s) restored.",
+  sessionImportConfirm:
+    "Replace the current document and review state with this session file?",
+  sessionImportCancelled: "Session import cancelled.",
+  sessionImportFailed: "Could not open session file.",
+  sessionImportInvalidJson: "That file is not valid JSON.",
+  sessionImportLabelStudio:
+    "That looks like a Label Studio export. Use Save session / Open session for Incognito backups — Label Studio JSON is export-only.",
+  sessionImportNotSession: "That JSON is not an Incognito session file.",
+  sessionImportUnsupportedVersion: "Unsupported session version{version}.",
+  sessionImportUnsupportedWorkflow:
+    "This session was saved for another workflow (Basic/Advanced only for now).",
+  sessionImportMissingDocument: "Session file is missing the document payload.",
   previousFile: "Previous file",
   nextFile: "Next file",
   closeBatch: "Close batch",
@@ -594,6 +616,28 @@ const fr = {
   exportEverythingDone: "Pack d’export téléchargé.",
   exportBatchDone:
     "ZIP téléchargé avec texte original, sorties anonymisées, tables de correspondance, rapports d’audit et CSV du graphe de personnes.",
+  sessionSave: "Enregistrer la session",
+  sessionSaveHint:
+    "Télécharger un JSON de session Incognito pour reprendre ce document plus tard (état de relecture, pas Label Studio).",
+  sessionOpen: "Ouvrir une session",
+  sessionOpenHint: "Restaurer un JSON de session Incognito précédemment enregistré pour ce document.",
+  sessionSaved: "Session enregistrée.",
+  sessionSaveEmpty: "Rien à enregistrer — collez ou détectez un texte d’abord.",
+  sessionSaveBatchBlocked: "Quittez le mode lot pour enregistrer une session mono-document.",
+  sessionOpenBatchBlocked: "Quittez le mode lot avant d’ouvrir un fichier de session.",
+  sessionOpened: "Session ouverte ({workflow}) — {count} occurrence(s) restaurée(s).",
+  sessionImportConfirm:
+    "Remplacer le document et l’état de relecture actuels par ce fichier de session ?",
+  sessionImportCancelled: "Import de session annulé.",
+  sessionImportFailed: "Impossible d’ouvrir le fichier de session.",
+  sessionImportInvalidJson: "Ce fichier n’est pas un JSON valide.",
+  sessionImportLabelStudio:
+    "Cela ressemble à un export Label Studio. Utilisez Enregistrer / Ouvrir une session pour les sauvegardes Incognito — le JSON Label Studio est export-only.",
+  sessionImportNotSession: "Ce JSON n’est pas un fichier de session Incognito.",
+  sessionImportUnsupportedVersion: "Version de session non prise en charge{version}.",
+  sessionImportUnsupportedWorkflow:
+    "Cette session appartient à un autre parcours (Base / Avancé uniquement pour l’instant).",
+  sessionImportMissingDocument: "Le fichier de session n’a pas de document.",
   previousFile: "Fichier précédent",
   nextFile: "Fichier suivant",
   closeBatch: "Fermer le lot",

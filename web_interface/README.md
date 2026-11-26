@@ -4,6 +4,8 @@
 
 **1.0.4 highlights** — batch remove respects All matching / this occurrence; add-menu word-match count skips emails and overlapping longer spans (e.g. Marie inside Marie Dupont).
 
+**Session save/open (Basic & Advanced)** — **Save session** / **Open session** download and restore an `incognito.session` JSON for the current document (entities, review toggles, overrides, person graph when Advanced). Separate from Label Studio export. Not yet for batch or generative modes.
+
 **1.0.3 highlights** — change entity category (one/all + custom); same-code / distinct-occurrence controls; compact entity menu that stays on-screen; no duplicate category chips; NER-surface codes by first appearance; person-graph regenerate respects distinct occurrences.
 
 **1.0.2 highlights** — NER/ReLex on Web Workers for long interviews; text pagination; chip **×** / **↩** (remove detection vs soft-exclude with eye); batch load normalizes classic Mac `\r` newlines; taller audit report window.

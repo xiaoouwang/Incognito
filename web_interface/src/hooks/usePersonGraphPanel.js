@@ -36,6 +36,10 @@ const ATTR_KEY_TO_CATEGORY = {
   misc: "misc",
 };
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 export function guessSurfaceCategory(entities, surface, attrKey = "") {
   const lower = String(surface || "").toLocaleLowerCase();
   const hit = entities.find((entity) => entity.text.toLocaleLowerCase() === lower);
@@ -728,6 +732,42 @@ export function usePersonGraphPanel({
     setPersonGraphNote("");
   }
 
+  /** Restore a saved person-graph snapshot (session import). */
+  function restorePersonGraphSnapshot(snapshot = null) {
+    if (!snapshot || !Array.isArray(snapshot.persons)) {
+      clearPersonGraph();
+      return;
+    }
+
+    const nextRelationOverrides = isPlainObject(snapshot.relationOverrides)
+      ? { ...snapshot.relationOverrides }
+      : {};
+    const nextEdgeLabelOverrides = isPlainObject(snapshot.edgeLabelOverrides)
+      ? { ...snapshot.edgeLabelOverrides }
+      : {};
+    const nextEdgeValueOverrides = isPlainObject(snapshot.edgeValueOverrides)
+      ? { ...snapshot.edgeValueOverrides }
+      : {};
+
+    relationOverridesRef.current = nextRelationOverrides;
+    setRelationOverrides(nextRelationOverrides);
+    edgeLabelOverridesRef.current = nextEdgeLabelOverrides;
+    setEdgeLabelOverrides(nextEdgeLabelOverrides);
+    edgeValueOverridesRef.current = nextEdgeValueOverrides;
+    setEdgeValueOverrides(nextEdgeValueOverrides);
+
+    setExcludedPlaceholders(
+      isPlainObject(snapshot.excludedPlaceholders) ? { ...snapshot.excludedPlaceholders } : {},
+    );
+    setExcludedSurfaces(
+      isPlainObject(snapshot.excludedSurfaces) ? { ...snapshot.excludedSurfaces } : {},
+    );
+    setPersons(snapshot.persons);
+    setPersonGraphNote(typeof snapshot.note === "string" ? snapshot.note : "");
+    setPinnedPersonPlaceholder(null);
+    setHoveredPersonPlaceholder(null);
+  }
+
   useEffect(() => {
     if (
       pinnedPersonPlaceholder &&
@@ -747,11 +787,14 @@ export function usePersonGraphPanel({
     focusedPersonPlaceholder,
     personFocusRanges,
     relationOverrides,
+    edgeLabelOverrides,
+    edgeValueOverrides,
     setHoveredPersonPlaceholder,
     setPinnedPersonPlaceholder,
     refreshPersonGraph,
     applyRelexPersonGraph,
     clearPersonGraph,
+    restorePersonGraphSnapshot,
     handleTogglePerson,
     handleToggleGraphSurface,
     syncEntityChipToGraph,

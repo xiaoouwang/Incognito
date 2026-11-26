@@ -15,6 +15,12 @@ import { createAuditReport } from "../lib/auditReport.js";
 import { downloadBatchZip, downloadLabelStudioBundle, downloadSingleExportZip } from "../lib/batchZip.js";
 import { buildCorrespondenceCsv } from "../lib/correspondenceExport.js";
 import {
+  buildSessionDocument,
+  downloadSessionDocument,
+  parseSessionDocument,
+  sessionFileName,
+} from "../lib/sessionDocument.js";
+import {
   buildPersonGraphByPersonCsv,
   buildPersonGraphCsv,
 } from "../lib/personGraphCsv.js";
@@ -109,6 +115,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
   const showPersonGraph = variant === "advanced";
   const folderInputRef = useRef(null);
   const filesInputRef = useRef(null);
+  const sessionInputRef = useRef(null);
   const fileStatesRef = useRef({});
   const batchCustomCategoriesRef = useRef({});
   const entityMenuRef = useRef(null);
@@ -183,11 +190,15 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     pinnedPersonPlaceholder,
     focusedPersonPlaceholder,
     personFocusRanges,
+    relationOverrides,
+    edgeLabelOverrides,
+    edgeValueOverrides,
     setHoveredPersonPlaceholder,
     setPinnedPersonPlaceholder,
     refreshPersonGraph,
     applyRelexPersonGraph,
     clearPersonGraph,
+    restorePersonGraphSnapshot,
     handleTogglePerson,
     handleToggleGraphSurface,
     syncEntityChipToGraph,
@@ -1510,6 +1521,164 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     setError("");
   }
 
+  function saveSessionDocument() {
+    if (batchMode) {
+      setStatus(t("sessionSaveBatchBlocked"));
+      return;
+    }
+    if (!String(text || "").trim() && !entities.length) {
+      setStatus(t("sessionSaveEmpty"));
+      return;
+    }
+
+    const workflow = variant === "advanced" ? "advanced" : "basic";
+    const session = buildSessionDocument({
+      workflow,
+      text,
+      entities,
+      removedEntities,
+      modelName,
+      nerEngine: activeNerEngine,
+      threshold,
+      customCategories,
+      selectedCategories,
+      excludedEntityKeys,
+      categoryMethods,
+      surfaceOverrides,
+      distinctOccurrenceKeys,
+      linkedValueKeys,
+      anonymizedTextOverride,
+      activeLabels: [...activeLabels],
+      customDetectionLabels,
+      personGraph: showPersonGraph
+        ? {
+            persons,
+            excludedPlaceholders,
+            excludedSurfaces,
+            relationOverrides,
+            edgeLabelOverrides,
+            edgeValueOverrides,
+            note: personGraphNote,
+          }
+        : null,
+    });
+    downloadSessionDocument(session, sessionFileName(workflow));
+    setStatus(t("sessionSaved"));
+    setError("");
+  }
+
+  function openSessionPicker() {
+    if (batchMode) {
+      setStatus(t("sessionOpenBatchBlocked"));
+      return;
+    }
+    sessionInputRef.current?.click();
+  }
+
+  function applySessionDocument(session) {
+    const doc = session.document;
+    setIsDemoMode(false);
+    setBatchMode(false);
+    setBatchFolderLabel(null);
+    setBatchOutputLabel(null);
+    setBatchFiles([]);
+    setCurrentFileIndex(0);
+    setCurrentFileOutputsModified(false);
+    fileStatesRef.current = {};
+    batchCustomCategoriesRef.current = {};
+
+    setText(doc.text);
+    setEntities(doc.entities);
+    setRemovedEntities(doc.removedEntities);
+    setModelName(doc.modelName);
+    if (doc.nerEngine) {
+      setNerEngine(doc.nerEngine);
+    }
+    if (typeof doc.threshold === "number") {
+      setThreshold(doc.threshold);
+    }
+    setCustomCategories(doc.customCategories);
+    setSelectedCategories(
+      Object.keys(doc.selectedCategories || {}).length
+        ? doc.selectedCategories
+        : createCategorySelectionFromEntities(doc.entities),
+    );
+    setExcludedEntityKeys(doc.excludedEntityKeys);
+    setCategoryMethods(doc.categoryMethods);
+    setSurfaceOverrides(doc.surfaceOverrides);
+    setDistinctOccurrenceKeys(doc.distinctOccurrenceKeys);
+    setLinkedValueKeys(doc.linkedValueKeys);
+    setAnonymizedTextOverride(doc.anonymizedTextOverride);
+    if (Array.isArray(doc.activeLabels) && doc.activeLabels.length) {
+      setActiveLabels(new Set(doc.activeLabels));
+    }
+    if (Array.isArray(doc.customDetectionLabels)) {
+      setCustomDetectionLabels(doc.customDetectionLabels);
+    }
+
+    setEntityMenu(null);
+    setReportOpen(false);
+    setError("");
+    setIsEditingSource(doc.entities.length === 0);
+    setTextPageIndex(0);
+    setSourceBodyKey((key) => key + 1);
+
+    if (showPersonGraph) {
+      if (session.personGraph?.persons?.length) {
+        restorePersonGraphSnapshot(session.personGraph);
+      } else if (doc.entities.length) {
+        refreshPersonGraph(doc.text, doc.entities, { resetExclusions: true });
+      } else {
+        clearPersonGraph();
+      }
+    } else {
+      clearPersonGraph();
+    }
+
+    setStatus(
+      t("sessionOpened", {
+        count: String(doc.entities.length),
+        workflow: session.workflow,
+      }),
+    );
+  }
+
+  async function handleSessionFileChange(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    try {
+      const raw = await file.text();
+      const parsed = parseSessionDocument(raw);
+      if (!parsed.ok) {
+        setError(
+          t(parsed.errorKey, {
+            version: parsed.errorDetail ? ` (${parsed.errorDetail})` : "",
+          }),
+        );
+        setStatus(t("sessionImportFailed"));
+        return;
+      }
+
+      const hasWork =
+        Boolean(String(text || "").trim()) ||
+        entities.length > 0 ||
+        removedEntities.length > 0;
+      if (hasWork && !window.confirm(t("sessionImportConfirm"))) {
+        setStatus(t("sessionImportCancelled"));
+        return;
+      }
+
+      applySessionDocument(parsed.session);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : String(caughtError));
+      setStatus(t("sessionImportFailed"));
+    }
+  }
+
   function toggleAutoRunNer(enabled) {
     setAutoRunNer(enabled);
 
@@ -2090,6 +2259,35 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
             {isDownloadingZip ? t("buildingZip") : t("exportAnonymizedData")}
           </button>
         )}
+        {!batchMode ? (
+          <>
+            <button
+              className="secondary"
+              type="button"
+              onClick={saveSessionDocument}
+              disabled={isDetecting || (!String(text || "").trim() && !entities.length)}
+              title={t("sessionSaveHint")}
+            >
+              {t("sessionSave")}
+            </button>
+            <button
+              className="secondary"
+              type="button"
+              onClick={openSessionPicker}
+              disabled={isDetecting || isBatchLoading}
+              title={t("sessionOpenHint")}
+            >
+              {t("sessionOpen")}
+            </button>
+            <input
+              ref={sessionInputRef}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={(event) => void handleSessionFileChange(event)}
+            />
+          </>
+        ) : null}
         {batchMode ? (
           <>
             <button

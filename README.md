@@ -46,7 +46,7 @@ Disponibles dans l'interface web :
 - 🔍 **NER configurable** — **de base** (GLiNER2-multi ou GLiNER2-PII ONNX), **avancée** (GLiNER2 + ReLex), **générative locale** et **générative API** (Albert)
 - 🕸️ **Graphe de personnes** — aliases / attributs / relations ; vue **react-force-graph** ; soft-exclude ; export CSV
 - 📧 **Règles regex** — e-mails, URL, téléphones (prioritaires en mode avancé)
-- 🖍️ **Revue interactive** — surlignage, œil (anonymiser / garder), × / ↩ (retirer / rétablir une valeur), suppression / changement de catégorie (une occurrence ou toutes), codes liés / occurrences distinctes, pagination des longs textes
+- 🖍️ **Revue interactive** — surlignage, œil (anonymiser / garder), × / ↩ (retirer / rétablir une valeur), suppression / changement de catégorie (une occurrence ou toutes), codes liés / occurrences distinctes, pagination des longs textes ; **Save / Open session** (JSON de reprise Base / Avancé, distinct de Label Studio)
 - 📁 **Mode lot** — dossier ou fichiers choisis, vagues de traitement, ZIP ; fins de ligne CR/CRLF normalisées à l'import
 - 🏷️ **Label Studio** — pré-annotations + configuration XML
 - 📊 **Rapport d'audit** — provenance, positions de caractères (start/end) ; fenêtre de lecture pleine hauteur
