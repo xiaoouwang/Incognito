@@ -1,6 +1,8 @@
 # Incognito Web
 
-**Version 1.0.3** — standalone, **client-side** web interface for qualitative text anonymization. Detection runs in the browser — no Electron, no Python server required for the core UI (optional Albert API in generative API mode; optional local GLiNER2-PII sidecar under `gliner2_pii_server/`).
+**Version 1.0.4** — standalone, **client-side** web interface for qualitative text anonymization. Detection runs in the browser — no Electron, no Python server required for the core UI (optional Albert API in generative API mode; optional local GLiNER2-PII sidecar under `gliner2_pii_server/`).
+
+**1.0.4 highlights** — batch remove respects All matching / this occurrence; add-menu word-match count skips emails and overlapping longer spans (e.g. Marie inside Marie Dupont).
 
 **1.0.3 highlights** — change entity category (one/all + custom); same-code / distinct-occurrence controls; compact entity menu that stays on-screen; no duplicate category chips; NER-surface codes by first appearance; person-graph regenerate respects distinct occurrences.
 

@@ -59,12 +59,12 @@ import {
   createCustomCategoryId,
   createHighlightSegments,
   finalizeDetectedEntities,
-  findAllOccurrenceRanges,
+  findAddableOccurrenceRanges,
   getEntityValueKey,
   groupEntities,
   inferCustomCategoriesFromEntities,
   isEntityActive,
-  removeEntityById,
+  removeEntitiesByScope,
   retargetEntityCategory,
   extractEntitiesByValue,
   mergeEntitiesBySpan,
@@ -723,7 +723,7 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
     const spans =
       scope === "single"
         ? [{ start: menu.start, end: menu.end, text: menu.text }]
-        : findAllOccurrenceRanges(text, menu.text);
+        : findAddableOccurrenceRanges(text, menu.text, entities);
 
     const next = addEntitySpans(entities, spans, categoryId, text);
     setEntities(next);
@@ -752,12 +752,56 @@ export default function GenerativeWorkflowSection({ variant = "basic" }) {
   }
 
   function handleRemoveEntity() {
-    if (!entityMenu || entityMenu.mode !== "remove") return;
-    const next = removeEntityById(entities, entityMenu.entity.id, entityMenu.entity);
+    const menu = entityMenuRef.current;
+    if (!menu || menu.mode !== "remove" || !menu.entity) {
+      return;
+    }
+
+    const scope = menu.scope === "single" ? "single" : "all";
+    const entityText = menu.entity.text;
+    const category = menu.entity.label;
+    const { entities: next, removed } = removeEntitiesByScope(entities, menu.entity, scope);
+    if (!removed.length) {
+      closeEntityMenu();
+      return;
+    }
+
+    const key = getEntityValueKey(category, entityText);
     setEntities(next);
+    setRemovedEntities((current) => mergeEntitiesBySpan(current, removed));
+    setExcludedEntityKeys((current) => {
+      if (!current[key]) {
+        return current;
+      }
+      const stillPresent = next.some(
+        (entity) =>
+          entity.label === category &&
+          String(entity.text || "").toLocaleLowerCase() ===
+            String(entityText || "").toLocaleLowerCase(),
+      );
+      if (stillPresent) {
+        return current;
+      }
+      const updated = { ...current };
+      delete updated[key];
+      return updated;
+    });
+    setSelectedCategories((current) => {
+      if (next.some((entity) => entity.label === category)) {
+        return current;
+      }
+      const updated = { ...current };
+      delete updated[category];
+      return updated;
+    });
     clearAlbertOutputs();
     closeEntityMenu();
-    setStatus(t("generativeStatusRemoved", { text: entityMenu.entity.text }));
+    setStatus(
+      t("entityMenuRemoveStatus", {
+        text: entityText,
+        count: removed.length,
+      }),
+    );
   }
 
   function handleToggleDistinctOccurrence() {

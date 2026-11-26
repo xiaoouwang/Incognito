@@ -547,13 +547,23 @@ export function buildWordBasedSearchPattern(searchText) {
   return words.map(escapeRegExp).join("\\s+");
 }
 
+/**
+ * Characters that continue an identifier token for whole-word search.
+ * Letters/digits plus connectors so "Marie" does not match inside
+ * "marie.dupont@example.com" or "Marie-Claire".
+ */
+const WORD_BOUNDARY_CONTINUE = String.raw`[\p{L}\p{N}._@\-]`;
+
 export function findAllOccurrenceRanges(text, searchText) {
   const pattern = buildWordBasedSearchPattern(searchText);
   if (!text || !pattern) {
     return [];
   }
 
-  const regex = new RegExp(`(?<![\\p{L}\\p{N}])${pattern}(?![\\p{L}\\p{N}])`, "giu");
+  const regex = new RegExp(
+    `(?<!${WORD_BOUNDARY_CONTINUE})${pattern}(?!${WORD_BOUNDARY_CONTINUE})`,
+    "giu",
+  );
   const ranges = [];
   let match;
 
@@ -571,6 +581,20 @@ export function findAllOccurrenceRanges(text, searchText) {
   }
 
   return ranges;
+}
+
+/**
+ * Word matches that can still be added — skips ranges that overlap an
+ * existing detection (e.g. "Marie" inside an annotated "Marie Dupont").
+ */
+export function findAddableOccurrenceRanges(text, searchText, existingEntities = []) {
+  const ranges = findAllOccurrenceRanges(text, searchText);
+  if (!ranges.length || !existingEntities?.length) {
+    return ranges;
+  }
+  return ranges.filter(
+    (span) => !existingEntities.some((entity) => spansOverlap(entity, span)),
+  );
 }
 
 /** Repeat each entity span for every matching value occurrence in the source text. */
@@ -730,6 +754,35 @@ export function extractEntitiesByValue(entities, category, entityText) {
 /** Remove every span for a category + value (chip delete). */
 export function removeEntitiesByValue(entities, category, entityText) {
   return extractEntitiesByValue(entities, category, entityText).kept;
+}
+
+/**
+ * Remove one clicked span, or every span with the same category + surface
+ * (same scopes as retargetEntityCategory / the entity menu).
+ */
+export function removeEntitiesByScope(entities, entity, scope = "single") {
+  if (!entity) {
+    return { entities: entities || [], removed: [] };
+  }
+  if (scope === "all") {
+    const { kept, extracted } = extractEntitiesByValue(
+      entities,
+      entity.label,
+      entity.text,
+    );
+    return { entities: kept, removed: extracted };
+  }
+
+  const removed = [];
+  const next = [];
+  for (const item of entities || []) {
+    if (entityMatchesIdentity(item, entity)) {
+      removed.push(item);
+    } else {
+      next.push(item);
+    }
+  }
+  return { entities: next, removed };
 }
 
 function sortEntitiesBySpan(entities) {
@@ -1148,7 +1201,10 @@ export function countEntitySpans(entities, category, value) {
   ).length;
 }
 
-export function countOccurrences(text, value) {
+export function countOccurrences(text, value, existingEntities) {
+  if (existingEntities) {
+    return findAddableOccurrenceRanges(text, value, existingEntities).length;
+  }
   return findAllOccurrenceRanges(text, value).length;
 }
 

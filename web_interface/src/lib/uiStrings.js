@@ -1,7 +1,7 @@
 export const UI_LOCALES = ["en", "fr"];
 
 const en = {
-  versionNumber: "1.0.3",
+  versionNumber: "1.0.4",
   privacyPromise:
     "Everything runs locally — your data never leaves your computer.",
   privacyDetailsLink: "Details here",
@@ -327,8 +327,10 @@ const en = {
   entityMenuUnrelatedStatus: "Removed relation of \"{text}\" from {person}.",
   entityMenuAliasStatus: "Set \"{text}\" as an alias of {person}.",
   entityMenuUnaliasStatus: "Removed \"{text}\" as an alias of {person}.",
-  entityMenuRemoveHint: "Or remove this detected span from the review.",
-  entityMenuRemove: "Remove entity",
+  entityMenuRemoveHint: "Removes detections from the review (respects the scope above).",
+  entityMenuRemove: "Remove this occurrence",
+  entityMenuRemoveAll: "Remove all matching ({count})",
+  entityMenuRemoveStatus: "Removed “{text}” ({count}).",
   entityMenuSameCodeSection: "Same code as",
   entityMenuSameCodeHint:
     "Share one anonymization code with another detected value (different spelling).",
@@ -347,11 +349,11 @@ const en = {
   entityMenuDistinctStatusOff: "“{text}” at this position shares a code with the same spelling again.",
   entityMenuDistinctOnlyOne: "Only one detection uses this wording — nothing to split.",
   entityMenuChangeCategory: "Change category",
-  entityMenuChangeScopeLabel: "Category change scope",
+  entityMenuChangeScopeLabel: "Apply to",
   entityMenuChangeAll: "All matching detections ({count})",
   entityMenuChangeSingle: "This occurrence only",
   entityMenuChangeScopeHint:
-    "Moves detections that share this exact value in the current category.",
+    "Applies to category changes and removal for detections that share this exact value.",
   entityMenuChangeSingleOnly: "1 detection with this value in the current category.",
   entityMenuCategories: "Categories",
   entityMenuNewCategory: "New category",
@@ -555,7 +557,7 @@ const en = {
 };
 
 const fr = {
-  versionNumber: "1.0.3",
+  versionNumber: "1.0.4",
   privacyPromise:
     "Tout s'exécute localement — vos données ne quittent pas votre ordinateur.",
   privacyDetailsLink: "Détails ici",
@@ -892,8 +894,10 @@ const fr = {
   entityMenuUnrelatedStatus: "Relation de « {text} » retirée de {person}.",
   entityMenuAliasStatus: "« {text} » défini comme alias de {person}.",
   entityMenuUnaliasStatus: "Alias « {text} » retiré de {person}.",
-  entityMenuRemoveHint: "Ou retirez cette occurrence de la relecture.",
-  entityMenuRemove: "Retirer l'entité",
+  entityMenuRemoveHint: "Retire les détections de la relecture (respecte la portée ci-dessus).",
+  entityMenuRemove: "Retirer cette occurrence",
+  entityMenuRemoveAll: "Retirer toutes les correspondances ({count})",
+  entityMenuRemoveStatus: "« {text} » retiré ({count}).",
   entityMenuSameCodeSection: "Même code que",
   entityMenuSameCodeHint:
     "Partager un seul code d’anonymisation avec une autre valeur détectée (orthographe différente).",
@@ -912,11 +916,11 @@ const fr = {
   entityMenuDistinctStatusOff: "« {text} » à cet emplacement partage à nouveau un code avec le même libellé.",
   entityMenuDistinctOnlyOne: "Une seule détection utilise ce libellé — rien à séparer.",
   entityMenuChangeCategory: "Changer de catégorie",
-  entityMenuChangeScopeLabel: "Portée du changement de catégorie",
+  entityMenuChangeScopeLabel: "Appliquer à",
   entityMenuChangeAll: "Toutes les détections correspondantes ({count})",
   entityMenuChangeSingle: "Cette occurrence seulement",
   entityMenuChangeScopeHint:
-    "Déplace les détections qui partagent exactement cette valeur dans la catégorie actuelle.",
+    "S’applique au changement de catégorie et à la suppression pour les détections qui partagent exactement cette valeur.",
   entityMenuChangeSingleOnly: "1 détection avec cette valeur dans la catégorie actuelle.",
   entityMenuCategories: "Catégories",
   entityMenuNewCategory: "Nouvelle catégorie",

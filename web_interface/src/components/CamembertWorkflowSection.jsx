@@ -67,7 +67,7 @@ import {
   createCustomCategoryId,
   createHighlightSegments,
   downloadFile,
-  findAllOccurrenceRanges,
+  findAddableOccurrenceRanges,
   findBatchFileIndex,
   formatBatchOutputTimestamp,
   getCategoryLabel,
@@ -76,7 +76,7 @@ import {
   inferCustomCategoriesFromEntities,
   isEntityActive,
   finalizeDetectedEntities,
-  removeEntityById,
+  removeEntitiesByScope,
   retargetEntityCategory,
   extractEntitiesByValue,
   mergeEntitiesBySpan,
@@ -1723,7 +1723,7 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
     const spans =
       scope === "single"
         ? [{ start: menu.start, end: menu.end, text: menu.text }]
-        : findAllOccurrenceRanges(text, menu.text);
+        : findAddableOccurrenceRanges(text, menu.text, entities);
 
     const previousKeys = new Set(
       entities.map((entity) => `${entity.start}:${entity.end}:${entity.label}`),
@@ -1783,15 +1783,59 @@ export default function CamembertWorkflowSection({ variant = "advanced" }) {
   }
 
   function handleRemoveEntity() {
-    if (!entityMenu || entityMenu.mode !== "remove") return;
+    const menu = entityMenuRef.current;
+    if (!menu || menu.mode !== "remove" || !menu.entity) {
+      return;
+    }
 
-    const next = removeEntityById(entities, entityMenu.entity.id, entityMenu.entity);
+    const scope = menu.scope === "single" ? "single" : "all";
+    const entityText = menu.entity.text;
+    const category = menu.entity.label;
+    const { entities: next, removed } = removeEntitiesByScope(entities, menu.entity, scope);
+    if (!removed.length) {
+      closeEntityMenu();
+      return;
+    }
+
+    const key = getEntityValueKey(category, entityText);
     setEntities(next);
+    setRemovedEntities((current) => mergeEntitiesBySpan(current, removed));
+    setExcludedEntityKeys((current) => {
+      if (!current[key]) {
+        return current;
+      }
+      const stillPresent = next.some(
+        (entity) =>
+          entity.label === category &&
+          String(entity.text || "").toLocaleLowerCase() ===
+            String(entityText || "").toLocaleLowerCase(),
+      );
+      if (stillPresent) {
+        return current;
+      }
+      const updated = { ...current };
+      delete updated[key];
+      return updated;
+    });
+    setSelectedCategories((current) => {
+      if (next.some((entity) => entity.label === category)) {
+        return current;
+      }
+      const updated = { ...current };
+      delete updated[category];
+      return updated;
+    });
+    setAnonymizedTextOverride(null);
     if (showPersonGraph) {
       refreshPersonGraph(text, next, { resetExclusions: false });
     }
     closeEntityMenu();
-    setStatus(`Removed entity "${entityMenu.entity.text}".`);
+    setStatus(
+      t("entityMenuRemoveStatus", {
+        text: entityText,
+        count: removed.length,
+      }),
+    );
   }
 
   function changeEntityCategory(categoryId, displayLabel = null) {

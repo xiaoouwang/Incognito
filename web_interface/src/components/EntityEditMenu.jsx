@@ -48,8 +48,10 @@ export default function EntityEditMenu({
       return 0;
     }
 
-    return countOccurrences(sourceText, menu.text);
-  }, [isAdd, menu.text, sourceText]);
+    // Exclude spans that already overlap detections (e.g. "Marie" inside
+    // "Marie Dupont") so the count matches what "add all" will actually insert.
+    return countOccurrences(sourceText, menu.text, entities);
+  }, [isAdd, menu.text, sourceText, entities]);
 
   const matchingValueCount = useMemo(() => {
     if (!isEdit) {
@@ -265,7 +267,8 @@ export default function EntityEditMenu({
                   </button>
                 </div>
                 <p className="entity-menu-hint">
-                  Word matches are whole words/phrases, case-insensitive.
+                  Whole words/phrases, case-insensitive. Spans that already
+                  overlap a detection are left unchanged.
                 </p>
               </>
             ) : (
@@ -321,38 +324,38 @@ export default function EntityEditMenu({
               {categoryLabels[menu.entity.label] || formatCategoryDisplayName(menu.entity.label)}
             </p>
             <p className="entity-menu-selection">&quot;{menu.entity.text}&quot;</p>
+            {matchingValueCount > 1 ? (
+              <div
+                className="entity-menu-scope"
+                role="radiogroup"
+                aria-label={t("entityMenuChangeScopeLabel")}
+                title={t("entityMenuChangeScopeHint")}
+              >
+                <button
+                  className={`entity-menu-scope-option ${scope === "all" ? "active" : ""}`}
+                  type="button"
+                  role="radio"
+                  aria-checked={scope === "all"}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => onScopeChange("all")}
+                >
+                  {t("entityMenuChangeAll", { count: matchingValueCount })}
+                </button>
+                <button
+                  className={`entity-menu-scope-option ${scope === "single" ? "active" : ""}`}
+                  type="button"
+                  role="radio"
+                  aria-checked={scope === "single"}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => onScopeChange("single")}
+                >
+                  {t("entityMenuChangeSingle")}
+                </button>
+              </div>
+            ) : null}
             {canChangeCategory ? (
               <>
                 <p className="entity-menu-section-label">{t("entityMenuChangeCategory")}</p>
-                {matchingValueCount > 1 ? (
-                  <div
-                    className="entity-menu-scope"
-                    role="radiogroup"
-                    aria-label={t("entityMenuChangeScopeLabel")}
-                    title={t("entityMenuChangeScopeHint")}
-                  >
-                    <button
-                      className={`entity-menu-scope-option ${scope === "all" ? "active" : ""}`}
-                      type="button"
-                      role="radio"
-                      aria-checked={scope === "all"}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => onScopeChange("all")}
-                    >
-                      {t("entityMenuChangeAll", { count: matchingValueCount })}
-                    </button>
-                    <button
-                      className={`entity-menu-scope-option ${scope === "single" ? "active" : ""}`}
-                      type="button"
-                      role="radio"
-                      aria-checked={scope === "single"}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => onScopeChange("single")}
-                    >
-                      {t("entityMenuChangeSingle")}
-                    </button>
-                  </div>
-                ) : null}
                 <div className="entity-menu-columns">
                   <div className="entity-menu-main">
                     <p className="entity-menu-section-label">{t("entityMenuCategories")}</p>
@@ -539,7 +542,9 @@ export default function EntityEditMenu({
               title={t("entityMenuRemoveHint")}
               onClick={onRemove}
             >
-              {t("entityMenuRemove")}
+              {scope === "all" && matchingValueCount > 1
+                ? t("entityMenuRemoveAll", { count: matchingValueCount })
+                : t("entityMenuRemove")}
             </button>
           </>
         ) : null}
