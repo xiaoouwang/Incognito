@@ -127,7 +127,22 @@ The `dist/` folder can be served by any static file host.
 
 ## Deploy
 
-`vite.config.js` uses `base: "./"` so asset paths work under both `/incognito/` (Huma-Num GitLab) and `/Incognito/` (GitHub mirror) subpaths. The Albert CORS Worker allowlists both Pages origins.
+`vite.config.js` uses `base: "./"` so asset paths work under `/incognito/` (Huma-Num), `/Incognito/` (GitHub mirror), **and** frozen version paths like `/incognito/v1.0.5/`. The Albert CORS Worker allowlists both Pages origins.
+
+### Versioned Pages paths
+
+Each CI deploy publishes:
+
+| Path | Meaning |
+| ---- | ------- |
+| `/` (site root) | Latest build |
+| `/vX.Y.Z/` | Frozen snapshot of that app version |
+| `/versions.html` | Human index of frozen versions |
+| `/versions.json` | Machine-readable list |
+
+Older `/v*` folders are carried forward from the previous Pages tree (GitLab: last `pages` artifact; GitHub: `gh-pages` branch mirror), so colleagues can fall back in the browser if a new release breaks something — no local install.
+
+Assembler: [`scripts/assembleVersionedPages.mjs`](scripts/assembleVersionedPages.mjs).
 
 ### Huma-Num GitLab Pages (canonical)
 

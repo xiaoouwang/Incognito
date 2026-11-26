@@ -1,8 +1,13 @@
 # GitLab Pages — build Incognito Web and publish under
 # https://mshs-sud-est.gitpages.huma-num.fr/incognito/
 #
-# Mirrors .github/workflows/deploy-web.yml: only rebuild when the web app
-# (or this file) changes. Manual runs: CI/CD → Pipelines → Run pipeline.
+# Each deploy publishes:
+#   /           → latest build
+#   /vX.Y.Z/    → frozen copy of that version (kept across deploys)
+#   /versions.html → index of frozen versions
+#
+# Previous /v* folders are restored from the last successful `pages` artifacts
+# when available, so older builds stay openable in the browser.
 
 stages:
   - deploy
@@ -26,14 +31,35 @@ pages:
         - web_interface/**/*
         - .gitlab-ci.yml
   script:
+    - apt-get update -qq && apt-get install -y -qq unzip >/dev/null
+    - mkdir -p .previous-pages
+    # Best-effort: reuse /v* trees from the previous Pages job so old versions remain.
+    - |
+      set +e
+      curl --fail --silent --show-error \
+        --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+        --output pages-prev.zip \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/jobs/artifacts/download?job_name=pages&ref=${CI_DEFAULT_BRANCH}"
+      STATUS=$?
+      set -e
+      if [ "$STATUS" -eq 0 ] && [ -f pages-prev.zip ]; then
+        unzip -q pages-prev.zip -d .previous-pages-unpack
+        if [ -d .previous-pages-unpack/public ]; then
+          cp -a .previous-pages-unpack/public/. .previous-pages/
+        else
+          cp -a .previous-pages-unpack/. .previous-pages/
+        fi
+        echo "Restored previous Pages tree for version retention."
+      else
+        echo "No previous Pages artifact available (first deploy or download failed)."
+      fi
     - cd web_interface
     - npm ci
     # Optional CI/CD variable VITE_ALBERT_BASE_URL overrides the default
     # Albert CORS proxy URL baked into the build.
     - npm run build
+    - node scripts/assembleVersionedPages.mjs --dist dist --out ../public --previous ../.previous-pages
     - cd ..
-    - rm -rf public
-    - mv web_interface/dist public
   artifacts:
     paths:
       - public

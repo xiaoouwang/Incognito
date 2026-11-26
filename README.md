@@ -119,6 +119,18 @@ Détail : [`web_interface/README.md`](web_interface/README.md) (section *Tests*)
 
 Les changements hors `web_interface/` (et hors les fichiers CI) ne redéploient pas le site.
 
+### Versions figées (repli navigateur)
+
+Chaque déploiement publie la build courante à la **racine** et une copie sous **`/vX.Y.Z/`** (ex. `/v1.0.5/`). Les dossiers des versions précédentes sont **conservés** d’un déploiement à l’autre, pour pouvoir rouvrir une version qui marchait sans installer quoi que ce soit.
+
+| | Huma-Num (canonique) | GitHub (miroir) |
+| --- | --- | --- |
+| Dernière | […/incognito/](https://mshs-sud-est.gitpages.huma-num.fr/incognito/) | […/Incognito/](https://xiaoouwang.github.io/Incognito/) |
+| Index des versions | […/versions.html](https://mshs-sud-est.gitpages.huma-num.fr/incognito/versions.html) | […/versions.html](https://xiaoouwang.github.io/Incognito/versions.html) |
+| Ex. v1.0.5 | […/v1.0.5/](https://mshs-sud-est.gitpages.huma-num.fr/incognito/v1.0.5/) | […/v1.0.5/](https://xiaoouwang.github.io/Incognito/v1.0.5/) |
+
+Assemblage CI : `web_interface/scripts/assembleVersionedPages.mjs` (`base: "./"` dans Vite, donc les sous-chemins fonctionnent).
+
 ---
 
 ## 📚 Citer cet outil
@@ -161,6 +173,10 @@ Copyright (c) 2026 Xiaoou Wang
 ---
 
 ## 📝 Mises à jour
+
+### 2026-11-26 — Versions figées sur Pages
+
+- **Décision — garder les builds précédentes ouvrables dans le navigateur** — chaque déploiement publie la version courante à la racine et sous `/vX.Y.Z/`, en conservant les dossiers des versions antérieures (repli sans installation locale). Index : `/versions.html`.
 
 ### 2026-11-26 — v1.0.5 — Save / Open session (Base & Avancé)
 

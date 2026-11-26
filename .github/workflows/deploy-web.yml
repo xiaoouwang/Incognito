@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -24,6 +24,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Restore previous published tree (for /vX.Y.Z/ retention)
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: .previous-pages
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -43,10 +50,22 @@ jobs:
           # Optional override; default is ALBERT_CORS_PROXY_BASE_URL in albertConstants.js
           VITE_ALBERT_BASE_URL: ${{ vars.VITE_ALBERT_BASE_URL }}
 
+      - name: Assemble latest + versioned snapshots
+        run: node scripts/assembleVersionedPages.mjs --dist dist --out ../public --previous ../.previous-pages
+        working-directory: web_interface
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: web_interface/dist
+          path: public
+
+      - name: Mirror assembled site to gh-pages (next deploy can keep old /v*)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: public
+          force_orphan: false
+          commit_message: "Publish Incognito Web (versioned Pages tree)"
 
   deploy:
     needs: build
